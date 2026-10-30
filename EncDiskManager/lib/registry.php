@@ -201,6 +201,11 @@ function edm_registry_load($registryPath)
 
     edm_registry_assert_directory(dirname($registryPath));
 
+    // Check explicitly before file_exists(), which returns false for broken links.
+    if (is_link($registryPath)) {
+        throw new RuntimeException('Registry file must not be a symbolic link.');
+    }
+
     if (!file_exists($registryPath)) {
         return edm_registry_empty();
     }
@@ -227,6 +232,11 @@ function edm_registry_save($registryPath, $registry)
 
     $directory = dirname($registryPath);
     edm_registry_assert_directory($directory);
+
+    // Reject dangling symbolic links as well as links to existing targets.
+    if (is_link($registryPath)) {
+        throw new RuntimeException('Registry file must not be a symbolic link.');
+    }
 
     if (file_exists($registryPath)) {
         edm_registry_assert_file($registryPath, 'Registry file');
