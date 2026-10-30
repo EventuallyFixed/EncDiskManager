@@ -119,3 +119,102 @@ function edm_registry_encode($registry)
 
     return $json . "\n";
 }
+
+/**
+ * Load the registry. A missing registry is treated as a new empty registry.
+ * The caller must supply the trusted, absolute path from the app configuration.
+ */
+function edm_registry_load($registryPath)
+{
+    if (!is_string($registryPath) || $registryPath === '' || $registryPath[0] !== '/') {
+        throw new RuntimeException('Registry path must be an absolute path.');
+    }
+
+    if (is_link($registryPath)) {
+        throw new RuntimeException('Registry file must not be a symbolic link.');
+    }
+
+    if (!file_exists($registryPath)) {
+        return edm_registry_empty();
+    }
+
+    if (!is_file($registryPath) || !is_readable($registryPath)) {
+        throw new RuntimeException('Registry file is not a readable regular file.');
+    }
+
+    $json = file_get_contents($registryPath);
+    if ($json === false) {
+        throw new RuntimeException('Registry file could not be read.');
+    }
+
+    return edm_registry_decode($json);
+}
+
+/**
+ * Save using an exclusive lock and same-directory atomic rename.
+ * The containing data directory must already exist and be secured by init.sh.
+ */
+function edm_registry_save($registryPath, $registry)
+{
+    if (!is_string($registryPath) || $registryPath === '' || $registryPath[0] !== '/') {
+        throw new RuntimeException('Registry path must be an absolute path.');
+    }
+
+    $directory = dirname($registryPath);
+    if (!is_dir($directory) || is_link($directory) || !is_writable($directory)) {
+        throw new RuntimeException('Registry data directory is unavailable or unsafe.');
+    }
+
+    if (is_link($registryPath)) {
+        throw new RuntimeException('Registry file must not be a symbolic link.');
+    }
+
+    $json = edm_registry_encode($registry);
+    $lockPath = $registryPath . '.lock';
+    if (is_link($lockPath)) {
+        throw new RuntimeException('Registry lock file must not be a symbolic link.');
+    }
+
+    $lock = fopen($lockPath, 'c');
+    if ($lock === false) {
+        throw new RuntimeException('Registry lock file could not be opened.');
+    }
+
+    $temporaryPath = null;
+    try {
+        if (!flock($lock, LOCK_EX)) {
+            throw new RuntimeException('Registry could not be locked.');
+        }
+
+        $temporaryPath = tempnam($directory, '.encdiskmanager-registry-');
+        if ($temporaryPath === false) {
+            throw new RuntimeException('Temporary registry file could not be created.');
+        }
+
+        $written = file_put_contents($temporaryPath, $json, LOCK_EX);
+        if ($written === false || $written !== strlen($json)) {
+            throw new RuntimeException('Registry could not be written completely.');
+        }
+
+        if (!chmod($temporaryPath, 0600)) {
+            throw new RuntimeException('Registry permissions could not be secured.');
+        }
+
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            if (!chown($temporaryPath, 0) || !chgrp($temporaryPath, 0)) {
+                throw new RuntimeException('Registry ownership could not be secured.');
+            }
+        }
+
+        if (!rename($temporaryPath, $registryPath)) {
+            throw new RuntimeException('Registry could not be replaced atomically.');
+        }
+        $temporaryPath = null;
+    } finally {
+        if ($temporaryPath !== null && file_exists($temporaryPath)) {
+            unlink($temporaryPath);
+        }
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
