@@ -1,0 +1,66 @@
+#!/bin/sh
+# Fixed-purpose LUKS USB helper for EncDiskManager.
+set -eu
+
+EXPECTED_UUID='b71a85a8-2a28-4e44-aeac-ef2cb1f5da17'
+KEYFILE='/shares/docker/bin/luks/backupdisk_keyfile'
+MAPPER='backupdisk'
+MAPPER_DEVICE='/dev/mapper/backupdisk'
+MOUNTPOINT='/mnt/backupdisk'
+CRYPTSETUP='/usr/local/modules/usr/sbin/cryptsetup'
+
+fail() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+[ "$(id -u)" = 0 ] || fail 'Must run as root.'
+
+case "${1:-}" in
+    unlock)
+        [ "$#" -eq 1 ] || fail 'Invalid arguments.'
+        [ -x "$CRYPTSETUP" ] || fail 'cryptsetup is unavailable.'
+        [ -r "$KEYFILE" ] || fail 'Configured keyfile is unavailable.'
+
+        DEVICE="$(/usr/bin/blkid -U "$EXPECTED_UUID" 2>/dev/null || true)"
+        [ -n "$DEVICE" ] || fail 'Expected encrypted partition not found.'
+        [ -b "$DEVICE" ] || fail 'Detected device is not a block device.'
+
+        ACTUAL_UUID="$("$CRYPTSETUP" luksUUID "$DEVICE" 2>/dev/null || true)"
+        [ "$ACTUAL_UUID" = "$EXPECTED_UUID" ] ||
+            fail 'Partition UUID does not match the configured backup disk.'
+
+        [ ! -e "$MAPPER_DEVICE" ] ||
+            fail 'Mapper already exists; no change made.'
+
+        "$CRYPTSETUP" luksOpen --key-file "$KEYFILE" "$DEVICE" "$MAPPER"
+        echo 'Disk unlocked; it has not been mounted.'
+        ;;
+
+    mount)
+        [ "$#" -eq 1 ] || fail 'Invalid arguments.'
+        [ -x "$CRYPTSETUP" ] || fail 'cryptsetup is unavailable.'
+        [ -b "$MAPPER_DEVICE" ] || fail 'Backup mapper is not open.'
+
+        SOURCE="$("$CRYPTSETUP" status "$MAPPER" 2>/dev/null |
+            sed -n 's/^[[:space:]]*device:[[:space:]]*//p' | head -n 1)"
+        [ -n "$SOURCE" ] && [ -b "$SOURCE" ] ||
+            fail 'Could not identify the mapper source device.'
+
+        ACTUAL_UUID="$("$CRYPTSETUP" luksUUID "$SOURCE" 2>/dev/null || true)"
+        [ "$ACTUAL_UUID" = "$EXPECTED_UUID" ] ||
+            fail 'Mapper source is not the configured backup disk.'
+
+        if awk -v target="$MOUNTPOINT" '$2 == target { found=1 } END { exit !found }' /proc/mounts; then
+            fail 'Backup mountpoint is already mounted; no change made.'
+        fi
+
+        mkdir -p "$MOUNTPOINT"
+        /bin/mount "$MAPPER_DEVICE" "$MOUNTPOINT"
+        echo 'Backup disk mounted. No filesystem repair was run.'
+        ;;
+
+    *)
+        fail 'Usage: encdiskmanager-helper {unlock|mount}'
+        ;;
+esac

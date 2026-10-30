@@ -1,0 +1,10 @@
+Package: EncDiskManager
+Version: 0.4.0
+Packager: Local
+Description: Safely discover and manage LUKS-encrypted USB storage on WD My Cloud OS5
+Icon: logo.svg
+AddonShowName: EncDiskManager
+AddonIndexPage: index.php
+CenterType: 0
+UserControl: 1
+MinFWVer: 5.27.157
