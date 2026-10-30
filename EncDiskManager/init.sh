@@ -50,18 +50,19 @@ if [ -d "${APP_PATH}" ]; then
     fi
 fi
 
-# Create the persistent registry directory outside APP_PATH so registrations
-# survive application removal and reinstallation. Never replace existing data.
-REGISTRY_DIR="/mnt/HD/HD_a2/Nas_Prog/EncDiskManager_Reg"
+# Create a private registry directory inside the application tree.
+# It is deliberately outside web/ and is removed on uninstall/reinstall;
+# users should download a configuration backup before removing the app.
+REGISTRY_DIR="${APP_PATH}/data"
 if [ -L "${REGISTRY_DIR}" ]; then
-    log "ERROR: Registry directory must not be a symbolic link: ${REGISTRY_DIR}"
+    log "ERROR: Registry data directory must not be a symbolic link: ${REGISTRY_DIR}"
     exit 1
 fi
 
 if mkdir -p "${REGISTRY_DIR}" &&
     chown root:root "${REGISTRY_DIR}" &&
     chmod 700 "${REGISTRY_DIR}"; then
-    log "Secured persistent registry directory at ${REGISTRY_DIR}"
+    log "Secured private app-local registry directory at ${REGISTRY_DIR}"
 else
     log "ERROR: Could not create or secure registry directory: ${REGISTRY_DIR}"
     exit 1
