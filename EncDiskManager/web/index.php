@@ -373,6 +373,19 @@ unset($device);
         gap: 16px;
     }
     header img { width: 58px; height: 58px; object-fit: contain; }
+    .header-actions { margin-left: auto; }
+    .backup-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 11px;
+        border: 1px solid #aebac1;
+        border-radius: 5px;
+        color: #075f91;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .backup-link:hover { background: #f3f7f9; }
     h1 { margin: 0; font-size: 1.45rem; }
     main { max-width: 1050px; margin: 24px auto; padding: 0 18px; }
     .panel {
@@ -454,8 +467,23 @@ unset($device);
         <h1>EncDiskManager</h1>
         <div class="muted">USB storage · LUKS inventory</div>
     </div>
+    <div class="header-actions">
+        <a class="backup-link" href="download.php"
+           title="Download encrypted-disk configuration backup"
+           aria-label="Download configuration backup">
+            <span class="material-symbol" aria-hidden="true">download</span>
+            <span>Backup config</span>
+        </a>
+    </div>
 </header>
 <main>
+    <section class="panel safe-note">
+        <strong>Before uninstalling or reinstalling:</strong>
+        download a configuration backup using the header button.
+        The registry is stored inside this application and will be deleted
+        when the app is removed. The backup contains disk UUIDs and mount
+        settings only; it does not contain encryption passphrases.
+    </section>
     <section class="panel">
         <h2>Backup USB controls</h2>
         <p class="muted">
