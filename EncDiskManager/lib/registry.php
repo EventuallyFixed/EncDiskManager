@@ -43,7 +43,12 @@ function edm_registry_assert_directory($directory)
 
         $permissions = $stat['mode'] & 07777;
         $isStickyDirectory = (($permissions & 01000) !== 0);
-        if (($permissions & 0022) !== 0 && !$isStickyDirectory) {
+        // WD OS5 installs applications beneath this root-owned, world-writable
+        // directory. Trust only this exact vendor-managed parent; the app tree
+        // and its data directory are still checked separately and must be
+        // root-owned. Do not generalise this exception to other ancestors.
+        $trustedWdAppParent = ($current === '/mnt/HD/HD_a2/Nas_Prog');
+        if (($permissions & 0022) !== 0 && !$isStickyDirectory && !$trustedWdAppParent) {
             throw new RuntimeException('Registry path contains an ancestor writable by group or others.');
         }
     }
