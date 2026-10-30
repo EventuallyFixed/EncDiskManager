@@ -1,0 +1,378 @@
+#!/bin/sh
+# Backup Disk Manager storage helper for WD OS5.
+# Normal mount/unmount never run filesystem repair.
+set -u
+umask 077
+
+EXPECTED_UUID='b71a85a8-2a28-4e44-aeac-ef2cb1f5da17'
+MAPPER='backupdisk'
+MAPPER_DEVICE='/dev/mapper/backupdisk'
+CRYPTSETUP='/usr/sbin/cryptsetup'
+BLKID='/usr/bin/blkid'
+MOUNT='/bin/mount'
+UMOUNT='/bin/umount'
+SYNC='/usr/sbin/sync'
+RMDIR='/bin/rmdir'
+E2FSCK='/usr/bin/e2fsck'
+STATE_FILE='/run/backupdiskmanager.mountpoint-created'
+
+fail() {
+    printf 'ERROR: %s\n' "$*" >&2
+    return 1
+}
+
+[ "$(id -u)" -eq 0 ] || { fail 'This operation must run as root.'; exit 1; }
+[ -x "$CRYPTSETUP" ] || { fail 'cryptsetup is unavailable.'; exit 1; }
+[ -x "$BLKID" ] || { fail 'blkid is unavailable.'; exit 1; }
+
+is_mounted_at() {
+    awk -v target="$1" '$2 == target { found=1 } END { exit !found }' /proc/mounts
+}
+
+resolved_device() {
+    readlink -f "$1" 2>/dev/null
+}
+
+mapper_source() {
+    "$CRYPTSETUP" status "$1" 2>/dev/null |
+        sed -n 's/^[[:space:]]*device:[[:space:]]*//p' |
+        head -n 1
+}
+
+verify_named_mapping() {
+    VM_NAME="$1"
+    VM_PATH="/dev/mapper/$VM_NAME"
+    [ -b "$VM_PATH" ] || { fail 'The encrypted mapping is not a block device.'; return 1; }
+    VM_SOURCE="$(mapper_source "$VM_NAME")"
+    [ -n "$VM_SOURCE" ] && [ -b "$VM_SOURCE" ] || {
+        fail 'Cannot verify the source of the open encrypted mapping.'; return 1;
+    }
+    VM_UUID="$("$CRYPTSETUP" luksUUID "$VM_SOURCE" 2>/dev/null)" || {
+        fail 'Cannot read the LUKS UUID of the mapping source.'; return 1;
+    }
+    [ "$VM_UUID" = "$EXPECTED_UUID" ] || {
+        fail 'The open mapping is not the configured backup disk.'; return 1;
+    }
+}
+
+verify_backup_mapping() {
+    verify_named_mapping "$MAPPER"
+}
+
+# Resolve the configured LUKS partition and validate the passphrase from stdin.
+validate_configured_passphrase() {
+    VP_DEVICE="$("$BLKID" -U "$EXPECTED_UUID" 2>/dev/null || true)"
+    [ -n "$VP_DEVICE" ] && [ -b "$VP_DEVICE" ] || {
+        fail 'Configured encrypted USB partition was not found.'; return 1;
+    }
+    VP_UUID="$("$CRYPTSETUP" luksUUID "$VP_DEVICE" 2>/dev/null)" || {
+        fail 'Cannot read the configured partition LUKS UUID.'; return 1;
+    }
+    [ "$VP_UUID" = "$EXPECTED_UUID" ] || {
+        fail 'Partition UUID does not match the configured backup disk.'; return 1;
+    }
+    if ! "$CRYPTSETUP" open --test-passphrase --key-file=- "$VP_DEVICE"; then
+        fail 'Passphrase validation failed. Check the passphrase and disk connection.'
+        return 1
+    fi
+    return 0
+}
+
+# Mount validates explicitly if already unlocked; otherwise luksOpen validates.
+validate_passphrase_if_mapping_open() {
+    [ -e "$MAPPER_DEVICE" ] || return 0
+    verify_backup_mapping || return 1
+    validate_configured_passphrase
+}
+
+open_configured_disk() {
+    O_DEVICE="$("$BLKID" -U "$EXPECTED_UUID" 2>/dev/null || true)"
+    [ -n "$O_DEVICE" ] && [ -b "$O_DEVICE" ] || {
+        fail 'Configured encrypted USB partition was not found.'; return 1;
+    }
+    O_UUID="$("$CRYPTSETUP" luksUUID "$O_DEVICE" 2>/dev/null)" || {
+        fail 'Cannot read the configured partition LUKS UUID.'; return 1;
+    }
+    [ "$O_UUID" = "$EXPECTED_UUID" ] || {
+        fail 'Partition UUID does not match the configured backup disk.'; return 1;
+    }
+
+    if [ -e "$MAPPER_DEVICE" ]; then
+        verify_backup_mapping
+        return $?
+    fi
+
+    # The passphrase is supplied on this process's standard input. It is never
+    # included in argv, written to a file, or printed to output.
+    if ! "$CRYPTSETUP" luksOpen --key-file=- "$O_DEVICE" "$MAPPER"; then
+        fail 'Unlock failed. Check the passphrase and disk connection.'
+        return 1
+    fi
+    verify_backup_mapping || {
+        fail 'The new mapping could not be verified; it has been left open for inspection.'
+        return 1
+    }
+    OPENED_BY_THIS_REQUEST=1
+    return 0
+}
+
+validate_mount_path() {
+    VP_TARGET="$1"
+    case "$VP_TARGET" in
+        /mnt/*) ;;
+        *) fail 'Mount folder must be inside /mnt.'; return 1 ;;
+    esac
+    case "$VP_TARGET" in
+        *'/../'*|*/..|*'/./'*|*/.)
+            fail 'Mount folder cannot contain . or .. path components.'; return 1 ;;
+        *'//'*) fail 'Mount folder contains an empty path component.'; return 1 ;;
+        *[!A-Za-z0-9_./-]*)
+            fail 'Mount folder may contain only letters, numbers, dot, underscore, slash and hyphen.'; return 1 ;;
+    esac
+    [ "$VP_TARGET" != '/mnt' ] || { fail 'The /mnt directory itself cannot be used as a mountpoint.'; return 1; }
+
+    VP_REST="${VP_TARGET#/mnt/}"
+    [ -n "$VP_REST" ] || { fail 'Mount folder is empty.'; return 1; }
+    VP_CURRENT='/mnt'
+    VP_OLD_IFS="$IFS"
+    IFS='/'
+    # Wildcards and whitespace are rejected above before this split.
+    set -- $VP_REST
+    IFS="$VP_OLD_IFS"
+    [ "$#" -gt 0 ] || { fail 'Mount folder is empty.'; return 1; }
+    for VP_PART in "$@"; do
+        [ -n "$VP_PART" ] && [ "$VP_PART" != '.' ] && [ "$VP_PART" != '..' ] || {
+            fail 'Mount folder contains an invalid path component.'; return 1;
+        }
+        VP_CURRENT="$VP_CURRENT/$VP_PART"
+        [ ! -L "$VP_CURRENT" ] || { fail 'Mount folder cannot traverse a symbolic link.'; return 1; }
+        if [ -e "$VP_CURRENT" ] && [ ! -d "$VP_CURRENT" ]; then
+            fail 'A mount folder path component exists but is not a directory.'
+            return 1
+        fi
+    done
+    return 0
+}
+
+verify_resolved_mount_path() {
+    VR_TARGET="$1"
+    validate_mount_path "$VR_TARGET" || return 1
+    VR_RESOLVED="$(resolved_device "$VR_TARGET")"
+    case "$VR_RESOLVED" in
+        /mnt/*) ;;
+        *) fail 'Resolved mount folder is outside /mnt; refusing to continue.'; return 1 ;;
+    esac
+    [ ! -L "$VR_TARGET" ] || { fail 'Mount folder became a symbolic link; refusing to continue.'; return 1; }
+    [ -d "$VR_TARGET" ] || { fail 'Mount folder is not a directory.'; return 1; }
+    return 0
+}
+
+# Returns success if any mount source belongs to a mapping opened from the
+# configured LUKS partition, including a differently named device-mapper node.
+expected_disk_has_mounted_mapping() {
+    for EM_PATH in /dev/mapper/*; do
+        [ -b "$EM_PATH" ] || continue
+        EM_NAME="${EM_PATH##*/}"
+        EM_SOURCE="$(mapper_source "$EM_NAME")"
+        [ -n "$EM_SOURCE" ] && [ -b "$EM_SOURCE" ] || continue
+        EM_UUID="$("$CRYPTSETUP" luksUUID "$EM_SOURCE" 2>/dev/null || true)"
+        [ "$EM_UUID" = "$EXPECTED_UUID" ] || continue
+        EM_RESOLVED="$(resolved_device "$EM_PATH")"
+        [ -n "$EM_RESOLVED" ] || continue
+        while IFS=' ' read -r EM_MOUNT_SOURCE EM_MOUNT_TARGET EM_REST; do
+            [ -n "$EM_MOUNT_SOURCE" ] || continue
+            case "$EM_MOUNT_SOURCE" in /dev/*) ;; *) continue ;; esac
+            EM_MOUNT_RESOLVED="$(resolved_device "$EM_MOUNT_SOURCE")"
+            if [ -n "$EM_MOUNT_RESOLVED" ] && [ "$EM_MOUNT_RESOLVED" = "$EM_RESOLVED" ]; then
+                return 0
+            fi
+        done < /proc/mounts
+    done
+    return 1
+}
+
+cleanup_created_mountpoint() {
+    CC_TARGET="$1"
+    CC_CREATED="$2"
+    [ "$CC_CREATED" -eq 1 ] || return 0
+    [ ! -L "$CC_TARGET" ] || return 0
+    if "$RMDIR" "$CC_TARGET" 2>/dev/null; then
+        return 0
+    fi
+    # Non-empty folders are deliberately preserved.
+    return 0
+}
+
+do_mount() {
+    [ "$#" -eq 1 ] || { fail 'Usage: backupdiskmanager-helper mount /mnt/folder'; return 1; }
+    DM_TARGET="$1"
+    validate_mount_path "$DM_TARGET" || return 1
+    [ ! -e "$STATE_FILE" ] && [ ! -L "$STATE_FILE" ] || {
+        fail 'A previous mount cleanup is pending; inspect the existing mount and state before retrying.'; return 1;
+    }
+    if is_mounted_at "$DM_TARGET"; then
+        fail 'That folder is already mounted.'; return 1
+    fi
+    validate_passphrase_if_mapping_open || return 1
+
+    OPENED_BY_THIS_REQUEST=0
+    if ! open_configured_disk; then
+        return 1
+    fi
+
+    DM_CREATED=0
+    if [ ! -d "$DM_TARGET" ]; then
+        mkdir -p "$DM_TARGET" || { fail 'Could not create the requested mount folder.'; return 1; }
+        DM_CREATED=1
+    fi
+    if ! verify_resolved_mount_path "$DM_TARGET"; then
+        cleanup_created_mountpoint "$DM_TARGET" "$DM_CREATED"
+        return 1
+    fi
+
+    if [ "$DM_CREATED" -eq 1 ]; then
+        printf '%s\n' "$DM_TARGET" > "$STATE_FILE" || {
+            cleanup_created_mountpoint "$DM_TARGET" "$DM_CREATED"
+            fail 'Could not record the helper-created mount folder; refusing to mount.'
+            return 1
+        }
+    fi
+
+    # Re-check the destination immediately before mounting.
+    if ! verify_resolved_mount_path "$DM_TARGET" || is_mounted_at "$DM_TARGET"; then
+        if [ "$DM_CREATED" -eq 1 ]; then rm -f "$STATE_FILE"; fi
+        cleanup_created_mountpoint "$DM_TARGET" "$DM_CREATED"
+        fail 'Mount destination changed or became mounted; refusing to mount.'
+        return 1
+    fi
+    if ! "$MOUNT" "$MAPPER_DEVICE" "$DM_TARGET"; then
+        if [ "$DM_CREATED" -eq 1 ]; then rm -f "$STATE_FILE"; fi
+        cleanup_created_mountpoint "$DM_TARGET" "$DM_CREATED"
+        fail 'Mount failed. The encrypted mapping was left open for inspection; no filesystem repair was run.'
+        return 1
+    fi
+    printf 'Mounted successfully at %s. No filesystem repair was run.\n' "$DM_TARGET"
+    return 0
+}
+
+do_unmount() {
+    [ "$#" -eq 1 ] || { fail 'Usage: backupdiskmanager-helper unmount /mnt/folder'; return 1; }
+    DU_TARGET="$1"
+    validate_mount_path "$DU_TARGET" || return 1
+    is_mounted_at "$DU_TARGET" || { fail 'The requested folder is not currently mounted.'; return 1; }
+    verify_backup_mapping || return 1
+
+    DU_SOURCE="$(awk -v target="$DU_TARGET" '$2 == target { print $1; exit }' /proc/mounts)"
+    [ -n "$DU_SOURCE" ] || { fail 'Could not identify the mounted device; refusing to unmount.'; return 1; }
+    DU_EXPECTED_RESOLVED="$(resolved_device "$MAPPER_DEVICE")"
+    DU_SOURCE_RESOLVED="$(resolved_device "$DU_SOURCE")"
+    [ -n "$DU_EXPECTED_RESOLVED" ] && [ "$DU_SOURCE_RESOLVED" = "$DU_EXPECTED_RESOLVED" ] || {
+        fail 'The requested mountpoint is not the configured backup encrypted mapping.'; return 1;
+    }
+
+    "$SYNC" || { fail 'sync failed; unmount cancelled.'; return 1; }
+    "$UMOUNT" "$DU_TARGET" || { fail 'Unmount failed. The mapping remains open.'; return 1; }
+    # Do not close the mapper if any other mount of this configured disk remains.
+    if expected_disk_has_mounted_mapping; then
+        fail 'This mount was removed, but another mount of the configured encrypted disk remains; the mapping was left open.'
+        return 1
+    fi
+    # Re-check the fixed mapping identity before closing it.
+    verify_backup_mapping || {
+        fail 'Filesystem was unmounted, but mapping identity could not be re-verified; it was not closed.'
+        return 1
+    }
+    "$CRYPTSETUP" close "$MAPPER" || {
+        fail 'Filesystem was unmounted, but closing the encrypted mapping failed. Inspect before retrying.'
+        return 1
+    }
+
+    if [ -f "$STATE_FILE" ] && [ ! -L "$STATE_FILE" ]; then
+        DU_RECORDED="$(cat "$STATE_FILE" 2>/dev/null || true)"
+        if [ "$DU_RECORDED" = "$DU_TARGET" ] && [ ! -L "$DU_TARGET" ]; then
+            if "$RMDIR" "$DU_TARGET" 2>/dev/null; then
+                rm -f "$STATE_FILE"
+                printf 'Unmounted and closed. Removed the now-empty helper-created folder %s.\n' "$DU_TARGET"
+            else
+                printf 'Unmounted and closed. Folder %s was left in place; cleanup state is preserved for a later retry.\n' "$DU_TARGET"
+            fi
+        else
+            printf 'Unmounted and closed. No folder was removed because the recorded path did not match.\n'
+        fi
+    else
+        printf 'Unmounted and closed. Existing mount folder %s was left in place.\n' "$DU_TARGET"
+    fi
+    return 0
+}
+
+do_repair() {
+    [ "$#" -eq 1 ] && [ "$1" = 'CONFIRM' ] || {
+        fail 'Repair requires explicit confirmation.'; return 1;
+    }
+    [ -x "$E2FSCK" ] || { fail 'e2fsck is unavailable; repair cannot proceed.'; return 1; }
+
+    OPENED_BY_THIS_REQUEST=0
+    # Refuse repair on a mounted filesystem before handling the passphrase.
+    if [ -e "$MAPPER_DEVICE" ]; then
+        verify_backup_mapping || return 1
+    fi
+    if expected_disk_has_mounted_mapping; then
+        fail 'The configured encrypted filesystem is mounted through a device-mapper mapping. Unmount it before repair.'
+        return 1
+    fi
+
+    # An existing mapping requires validation of the newly submitted passphrase.
+    # If closed, luksOpen validates it directly from stdin without a second read.
+    if [ -e "$MAPPER_DEVICE" ]; then
+        validate_configured_passphrase || return 1
+    fi
+    if ! open_configured_disk; then
+        return 1
+    fi
+    if expected_disk_has_mounted_mapping; then
+        fail 'The configured encrypted filesystem is mounted. Repair was not run.'
+        return 1
+    fi
+
+    DR_TYPE="$("$BLKID" -o value -s TYPE "$MAPPER_DEVICE" 2>/dev/null || true)"
+    case "$DR_TYPE" in
+        ext2|ext3|ext4) ;;
+        *) fail "Filesystem type '$DR_TYPE' is unknown or unsupported; repair was not run."; return 1 ;;
+    esac
+
+    printf 'Running conservative ext filesystem repair on the unmounted backup volume.\n'
+    "$E2FSCK" -p "$MAPPER_DEVICE"
+    DR_STATUS=$?
+    case "$DR_STATUS" in
+        0|1) ;;
+        2|3)
+            fail "e2fsck returned status $DR_STATUS, indicating that further inspection or a reboot is required. The mapping was left open; do not mount the filesystem until it has been reviewed."
+            return 1
+            ;;
+        *)
+            fail "e2fsck stopped with exit status $DR_STATUS. The mapping was left open for inspection; review the filesystem before retrying."
+            return 1
+            ;;
+    esac
+
+    if [ "$OPENED_BY_THIS_REQUEST" -eq 1 ]; then
+        "$CRYPTSETUP" close "$MAPPER" || {
+            fail 'Repair finished, but the mapping opened for this request could not be closed; inspect it before retrying.'
+            return 1
+        }
+    fi
+    case "$DR_STATUS" in
+        0) printf 'Filesystem check completed; no repair was needed.\n' ;;
+        1) printf 'Filesystem errors were corrected.\n' ;;
+    esac
+    return 0
+}
+
+ACTION="${1:-}"
+shift 2>/dev/null || true
+case "$ACTION" in
+    mount)   do_mount "$@" || exit 1 ;;
+    unmount) do_unmount "$@" || exit 1 ;;
+    repair)  do_repair "$@" || exit 1 ;;
+    *) fail 'Usage: backupdiskmanager-helper {mount /mnt/folder|unmount /mnt/folder|repair CONFIRM}'; exit 1 ;;
+esac

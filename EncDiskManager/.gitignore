@@ -1,0 +1,10 @@
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary development output
+*.tmp
+*.log
