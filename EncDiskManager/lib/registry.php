@@ -2,9 +2,54 @@
 /**
  * EncDiskManager registry schema and validation.
  *
- * This file validates registry data only. It does not read or write disks,
- * mount filesystems, invoke cryptsetup, or persist the registry.
+ * This file validates and persists registry metadata only. It does not read
+ * or write disk contents, mount filesystems, or invoke cryptsetup.
  */
+
+/**
+ * Registry operations are privileged and rely on a root-owned private directory.
+ * The fixed registry directory is created and secured by init.sh.
+ */
+function edm_registry_require_root()
+{
+    if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
+        throw new RuntimeException('Registry operations must run as root.');
+    }
+}
+
+function edm_registry_assert_directory($directory)
+{
+    edm_registry_require_root();
+
+    if (!is_string($directory) || $directory === '' || $directory[0] !== '/'
+        || is_link($directory)) {
+        throw new RuntimeException('Registry data directory path is invalid or unsafe.');
+    }
+
+    $stat = @lstat($directory);
+    if ($stat === false
+        || (($stat['mode'] & 0170000) !== 0040000)
+        || $stat['uid'] !== 0
+        || (($stat['mode'] & 0777) !== 0700)
+        || realpath($directory) !== $directory) {
+        throw new RuntimeException('Registry data directory must be a canonical root-owned directory with mode 0700.');
+    }
+}
+
+function edm_registry_assert_file($path, $label)
+{
+    if (is_link($path)) {
+        throw new RuntimeException($label . ' must not be a symbolic link.');
+    }
+
+    $stat = @lstat($path);
+    if ($stat === false
+        || (($stat['mode'] & 0170000) !== 0100000)
+        || $stat['uid'] !== 0
+        || (($stat['mode'] & 0777) !== 0600)) {
+        throw new RuntimeException($label . ' must be a root-owned regular file with mode 0600.');
+    }
+}
 
 function edm_registry_empty()
 {
@@ -154,17 +199,13 @@ function edm_registry_load($registryPath)
         throw new RuntimeException('Registry path must be an absolute path.');
     }
 
-    if (is_link($registryPath)) {
-        throw new RuntimeException('Registry file must not be a symbolic link.');
-    }
+    edm_registry_assert_directory(dirname($registryPath));
 
     if (!file_exists($registryPath)) {
         return edm_registry_empty();
     }
 
-    if (!is_file($registryPath) || !is_readable($registryPath)) {
-        throw new RuntimeException('Registry file is not a readable regular file.');
-    }
+    edm_registry_assert_file($registryPath, 'Registry file');
 
     $json = file_get_contents($registryPath);
     if ($json === false) {
@@ -185,12 +226,10 @@ function edm_registry_save($registryPath, $registry)
     }
 
     $directory = dirname($registryPath);
-    if (!is_dir($directory) || is_link($directory) || !is_writable($directory)) {
-        throw new RuntimeException('Registry data directory is unavailable or unsafe.');
-    }
+    edm_registry_assert_directory($directory);
 
-    if (is_link($registryPath)) {
-        throw new RuntimeException('Registry file must not be a symbolic link.');
+    if (file_exists($registryPath)) {
+        edm_registry_assert_file($registryPath, 'Registry file');
     }
 
     $json = edm_registry_encode($registry);
@@ -206,6 +245,20 @@ function edm_registry_save($registryPath, $registry)
 
     $temporaryPath = null;
     try {
+        if (!chmod($lockPath, 0600)
+            || !chown($lockPath, 0)
+            || !chgrp($lockPath, 0)) {
+            throw new RuntimeException('Registry lock file ownership or permissions could not be secured.');
+        }
+
+        $lockStat = fstat($lock);
+        if ($lockStat === false
+            || (($lockStat['mode'] & 0170000) !== 0100000)
+            || $lockStat['uid'] !== 0
+            || (($lockStat['mode'] & 0777) !== 0600)) {
+            throw new RuntimeException('Registry lock file is not a secure root-owned regular file.');
+        }
+
         if (!flock($lock, LOCK_EX)) {
             throw new RuntimeException('Registry could not be locked.');
         }
@@ -220,14 +273,10 @@ function edm_registry_save($registryPath, $registry)
             throw new RuntimeException('Registry could not be written completely.');
         }
 
-        if (!chmod($temporaryPath, 0600)) {
-            throw new RuntimeException('Registry permissions could not be secured.');
-        }
-
-        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
-            if (!chown($temporaryPath, 0) || !chgrp($temporaryPath, 0)) {
-                throw new RuntimeException('Registry ownership could not be secured.');
-            }
+        if (!chown($temporaryPath, 0)
+            || !chgrp($temporaryPath, 0)
+            || !chmod($temporaryPath, 0600)) {
+            throw new RuntimeException('Registry ownership or permissions could not be secured.');
         }
 
         if (!rename($temporaryPath, $registryPath)) {
