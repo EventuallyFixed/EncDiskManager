@@ -100,12 +100,36 @@ function edm_registry_decode($json)
         throw new RuntimeException('Registry content must be text.');
     }
 
-    $registry = json_decode($json, true);
+    // Decode as objects first so JSON objects cannot be confused with arrays.
+    $decoded = json_decode($json);
     if (json_last_error() !== JSON_ERROR_NONE) {
         throw new RuntimeException('Registry JSON is malformed: ' . json_last_error_msg());
     }
 
-    return edm_registry_validate($registry);
+    if (!($decoded instanceof stdClass)) {
+        throw new RuntimeException('Registry root must be a JSON object.');
+    }
+
+    $root = get_object_vars($decoded);
+    $rootKeys = array_keys($root);
+    sort($rootKeys);
+    if ($rootKeys !== array('disks', 'version')
+        || !is_array($root['disks'])) {
+        throw new RuntimeException('Registry must contain only version and a disks array.');
+    }
+
+    $disks = array();
+    foreach ($root['disks'] as $index => $diskObject) {
+        if (!($diskObject instanceof stdClass)) {
+            throw new RuntimeException('Registry disk entry ' . $index . ' must be a JSON object.');
+        }
+        $disks[] = get_object_vars($diskObject);
+    }
+
+    return edm_registry_validate(array(
+        'version' => $root['version'],
+        'disks' => $disks
+    ));
 }
 
 function edm_registry_encode($registry)
