@@ -147,6 +147,25 @@ try {
     unlink($danglingLink);
     $passed += 3;
 
+    // A symlink in an ancestor path must be rejected.
+    $realParent = $temporaryRoot . '/real-parent';
+    edm_test_assert(mkdir($realParent, 0700), 'real parent created');
+    $linkedParent = $temporaryRoot . '/linked-parent';
+    edm_test_assert(symlink($realParent, $linkedParent), 'parent symlink created');
+    edm_test_throws(function () use ($linkedParent) {
+        edm_registry_load($linkedParent . '/disks.json');
+    }, 'symlinked parent directory is rejected');
+    $passed += 3;
+
+    // A group/world-writable non-sticky ancestor must be rejected.
+    $writableParent = $temporaryRoot . '/writable-parent';
+    edm_test_assert(mkdir($writableParent, 0777), 'writable parent created');
+    chmod($writableParent, 0777);
+    edm_test_throws(function () use ($writableParent) {
+        edm_registry_load($writableParent . '/disks.json');
+    }, 'writable ancestor directory is rejected');
+    $passed += 2;
+
     // A directory with broader permissions must not be accepted.
     $looseDirectory = $temporaryRoot . '/loose';
     edm_test_assert(mkdir($looseDirectory, 0755), 'loose test directory created');
