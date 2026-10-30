@@ -26,13 +26,33 @@ function edm_registry_assert_directory($directory)
         throw new RuntimeException('Registry data directory path is invalid or unsafe.');
     }
 
-    $stat = @lstat($directory);
-    if ($stat === false
-        || (($stat['mode'] & 0170000) !== 0040000)
-        || $stat['uid'] !== 0
-        || (($stat['mode'] & 0777) !== 0700)
+    // Walk every component. realpath() alone follows symlinks, so inspect
+    // each component with lstat() before accepting the canonical path.
+    $components = explode('/', trim($directory, '/'));
+    $current = '';
+    foreach ($components as $component) {
+        if ($component === '') {
+            continue;
+        }
+        $current .= '/' . $component;
+        $stat = @lstat($current);
+        if ($stat === false || (($stat['mode'] & 0170000) !== 0040000)
+            || $stat['uid'] !== 0) {
+            throw new RuntimeException('Every registry path component must be a root-owned real directory.');
+        }
+
+        $permissions = $stat['mode'] & 07777;
+        $isStickyDirectory = (($permissions & 01000) !== 0);
+        if (($permissions & 0022) !== 0 && !$isStickyDirectory) {
+            throw new RuntimeException('Registry path contains an ancestor writable by group or others.');
+        }
+    }
+
+    $finalStat = @lstat($directory);
+    if ($finalStat === false
+        || (($finalStat['mode'] & 0777) !== 0700)
         || realpath($directory) !== $directory) {
-        throw new RuntimeException('Registry data directory must be a canonical root-owned directory with mode 0700.');
+        throw new RuntimeException('Registry data directory must be canonical and have mode 0700.');
     }
 }
 
