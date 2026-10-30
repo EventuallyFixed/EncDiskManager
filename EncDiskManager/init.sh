@@ -50,6 +50,23 @@ if [ -d "${APP_PATH}" ]; then
     fi
 fi
 
+# Create the persistent registry directory outside APP_PATH so registrations
+# survive application removal and reinstallation. Never replace existing data.
+REGISTRY_DIR="/mnt/HD/HD_a2/Nas_Prog/EncDiskManager_Reg"
+if [ -L "${REGISTRY_DIR}" ]; then
+    log "ERROR: Registry directory must not be a symbolic link: ${REGISTRY_DIR}"
+    exit 1
+fi
+
+if mkdir -p "${REGISTRY_DIR}" &&
+    chown root:root "${REGISTRY_DIR}" &&
+    chmod 700 "${REGISTRY_DIR}"; then
+    log "Secured persistent registry directory at ${REGISTRY_DIR}"
+else
+    log "ERROR: Could not create or secure registry directory: ${REGISTRY_DIR}"
+    exit 1
+fi
+
 # Write private runtime configuration using the actual WD installation path.
 CONFIG_FILE="${APP_PATH}/encdiskmanager.conf"
 CONFIG_TMP="${APP_PATH}/.encdiskmanager.conf.$$"
