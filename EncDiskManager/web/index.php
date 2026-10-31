@@ -65,6 +65,8 @@ try {
         $pageTitle = $setupMode ? 'Set up administrator' : 'Administrator sign in';
         $csrf = htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8');
         $errorHtml = ($authError === '') ? '' : '<p class="error">' . htmlspecialchars($authError, ENT_QUOTES, 'UTF-8') . '</p>';
+        $httpsConnection = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== ''
+            && strtolower((string)$_SERVER['HTTPS']) !== 'off';
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         ?><!doctype html>
@@ -77,9 +79,13 @@ try {
         input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #aebac1;border-radius:5px;font:inherit}
         button{margin-top:20px;padding:10px 16px;border:0;border-radius:5px;background:#075f91;color:#fff;font:inherit;cursor:pointer}
         .error{padding:10px;background:#fff0ed;border-left:4px solid #b23b2b;color:#842719}
+        .warning{padding:10px;background:#fff8e7;border-left:4px solid #b7791f;color:#704b0b}
         </style></head><body><main>
         <h1>Encrypted Disk Manager</h1><p><?php echo $setupMode ? 'Enter the one-time setup code from the NAS, then create the administrator password.' : 'Sign in to manage encrypted disks.'; ?></p>
         <?php echo $errorHtml; ?>
+        <?php if (!$httpsConnection): ?>
+        <p class="warning">This connection is not using HTTPS. Use the NAS's HTTPS address before entering your administrator password.</p>
+        <?php endif; ?>
         <form method="post" autocomplete="on">
         <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
         <input type="hidden" name="auth_action" value="<?php echo $setupMode ? 'setup' : 'login'; ?>">
@@ -109,6 +115,8 @@ try {
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: same-origin');
 
 function h($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
