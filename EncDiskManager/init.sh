@@ -98,7 +98,7 @@ if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
                 log "ERROR: Upgrade backup file failed ownership or permission checks: $SOURCE"
                 exit 1
             fi
-            TEMP_FILE="$REGISTRY_DIR/.$FILE.restore.$"
+            TEMP_FILE="$REGISTRY_DIR/.$FILE.restore.$$"
             if ! cp "$SOURCE" "$TEMP_FILE" ||
                 ! chown root:root "$TEMP_FILE" ||
                 ! chmod 600 "$TEMP_FILE" ||
