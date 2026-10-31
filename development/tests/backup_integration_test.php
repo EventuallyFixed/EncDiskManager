@@ -135,7 +135,7 @@ try {
         'created_at' => time()
     );
     $rollbackRegistry = array('version' => 1, 'disks' => array());
-    edm_backup_write_private_file($data . '/admin.json', json_encode($rollbackAdmin, JSON_PRETTY_PRINT) . "\\n");
+    edm_backup_write_private_file($data . '/admin.json', json_encode($rollbackAdmin, JSON_PRETTY_PRINT) . "\n");
     edm_registry_save($data . '/disks.json', $rollbackRegistry);
     unlink($data . '/auth-epoch.lock');
     if (!symlink($base . '/missing-lock-target', $data . '/auth-epoch.lock')) {
@@ -167,7 +167,7 @@ try {
 
     unlink($data . '/auth-epoch.lock');
 
-    echo "PASS: {$passed} backup integration checks completed.\\n";
+    echo "PASS: {$passed} backup integration checks completed.\n";
 } catch (Throwable $exception) {
     fwrite(STDERR, $exception->getMessage() . "\n");
     exit(1);
