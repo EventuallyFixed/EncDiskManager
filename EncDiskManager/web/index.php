@@ -97,6 +97,7 @@ try {
         </form></main></body></html><?php
         exit;
     }
+    edm_auth_require_login();
 } catch (Throwable $exception) {
     error_log('EncDiskManager authentication error: ' . $exception->getMessage());
     http_response_code(500);
