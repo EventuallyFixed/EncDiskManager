@@ -89,6 +89,17 @@ function edm_auth_read_session_epoch()
 function edm_auth_rotate_session_epoch()
 {
     $dataPath = edm_auth_data_path();
+    $epochPath = $dataPath . '/auth-epoch';
+    if (is_link($epochPath)) {
+        throw new RuntimeException('Authentication session epoch must not be a symbolic link.');
+    }
+    if (file_exists($epochPath)) {
+        $epochStat = @lstat($epochPath);
+        if ($epochStat === false || (($epochStat['mode'] & 0170000) !== 0100000)
+            || $epochStat['uid'] !== 0 || (($epochStat['mode'] & 0777) !== 0600)) {
+            throw new RuntimeException('Existing authentication session epoch is not secure.');
+        }
+    }
     $lockPath = $dataPath . '/auth-epoch.lock';
     if (is_link($lockPath)) {
         throw new RuntimeException('Authentication epoch lock must not be a symbolic link.');
