@@ -181,6 +181,44 @@ if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
     log "Previous private configuration restored successfully; temporary backup removed."
 fi
 
+# Maintain a root-only session epoch. Restore and permanent configuration
+# deletion rotate it, invalidating sessions in every browser.
+AUTH_EPOCH_FILE="$REGISTRY_DIR/auth-epoch"
+if [ -L "$AUTH_EPOCH_FILE" ]; then
+    log "ERROR: Authentication session epoch must not be a symbolic link."
+    exit 1
+elif [ -e "$AUTH_EPOCH_FILE" ]; then
+    if [ ! -f "$AUTH_EPOCH_FILE" ] ||
+        [ "$(stat -c %u "$AUTH_EPOCH_FILE")" != "0" ] ||
+        [ "$(stat -c %a "$AUTH_EPOCH_FILE")" != "600" ]; then
+        log "ERROR: Authentication session epoch ownership or permissions are unsafe."
+        exit 1
+    fi
+    AUTH_EPOCH="$(cat "$AUTH_EPOCH_FILE")"
+    case "$AUTH_EPOCH" in
+        *[!a-f0-9]*|'') log "ERROR: Authentication session epoch is invalid."; exit 1 ;;
+    esac
+    if [ "${#AUTH_EPOCH}" -ne 64 ]; then
+        log "ERROR: Authentication session epoch has an invalid length."
+        exit 1
+    fi
+else
+    AUTH_EPOCH_TMP="$REGISTRY_DIR/.auth-epoch.$"
+    AUTH_EPOCH="$(php -r 'echo bin2hex(random_bytes(32));')"
+    case "$AUTH_EPOCH" in
+        *[!a-f0-9]*|'') log "ERROR: Could not generate a valid authentication session epoch."; exit 1 ;;
+    esac
+    if [ "${#AUTH_EPOCH}" -ne 64 ] ||
+        ! printf '%s\n' "$AUTH_EPOCH" > "$AUTH_EPOCH_TMP" ||
+        ! chown root:root "$AUTH_EPOCH_TMP" ||
+        ! chmod 600 "$AUTH_EPOCH_TMP" ||
+        ! mv "$AUTH_EPOCH_TMP" "$AUTH_EPOCH_FILE"; then
+        rm -f "$AUTH_EPOCH_TMP"
+        log "ERROR: Could not securely create the authentication session epoch."
+        exit 1
+    fi
+fi
+
 # Create a one-time setup code only while no administrator account exists.
 # Retrieve it over SSH from: $REGISTRY_DIR/setup-token
 ADMIN_FILE="$REGISTRY_DIR/admin.json"
