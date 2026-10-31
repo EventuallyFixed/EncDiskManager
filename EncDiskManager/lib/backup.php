@@ -278,6 +278,9 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
         }
         $registryInstalled = true;
 
+        // Invalidate sessions in every browser after replacing credentials.
+        edm_auth_rotate_session_epoch();
+
         foreach (array('setup-token', 'login-attempts.json') as $ephemeral) {
             $path = $dataPath . '/' . $ephemeral;
             if (is_link($path)) {
@@ -333,7 +336,7 @@ function edm_backup_delete_configuration()
     $dataPath = edm_auth_data_path();
     $known = array(
         'admin.json', 'disks.json', 'setup-token', 'login-attempts.json',
-        'admin.lock', 'disks.json.lock', 'restore.lock'
+        'admin.lock', 'disks.json.lock', 'restore.lock', 'auth-epoch', 'auth-epoch.lock'
     );
 
     // Validate every known entry before deleting any of them, so an unsafe
@@ -371,4 +374,6 @@ function edm_backup_delete_configuration()
     if (!rename($temporaryToken, $dataPath . '/setup-token')) {
         throw new RuntimeException('Configuration was deleted but a new setup token could not be installed.');
     }
+    // Invalidate any other browser sessions even if they were still active.
+    edm_auth_rotate_session_epoch();
 }
