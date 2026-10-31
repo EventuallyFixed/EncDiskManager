@@ -280,8 +280,14 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
             if (is_link($path)) {
                 throw new RuntimeException('Unexpected symbolic link in private configuration directory.');
             }
+        }
+        // The installed admin.json disables setup mode even if an obsolete
+        // token cannot be unlinked. Cleanup must not trigger a destructive
+        // rollback after both replacement files have been committed.
+        foreach (array('setup-token', 'login-attempts.json') as $ephemeral) {
+            $path = $dataPath . '/' . $ephemeral;
             if (file_exists($path) && !@unlink($path)) {
-                throw new RuntimeException('Could not clear obsolete setup or login state.');
+                error_log('EncDiskManager: could not remove obsolete ' . $ephemeral . ' after restore.');
             }
         }
     } catch (Throwable $exception) {
