@@ -39,11 +39,55 @@ if (!mkdir($base, 0700) || !mkdir($app, 0700) || !mkdir($lib, 0700)
 
 $passed = 0;
 
+// Test-only fault injection for the isolated backup.php copy.
+$GLOBALS['edm_backup_test_failures'] = array();
+function edm_backup_test_rename($from, $to)
+{
+    $failures = &$GLOBALS['edm_backup_test_failures']['rename'];
+    if (is_array($failures)) {
+        foreach ($failures as &$failure) {
+            if (is_array($failure)
+                && (!isset($failure['from']) || $failure['from'] === $from)
+                && (!isset($failure['from_basename']) || basename($from) === $failure['from_basename'])
+                && (!isset($failure['to']) || $failure['to'] === $to)
+                && $failure['remaining'] > 0) {
+                $failure['remaining']--;
+                unset($failure);
+                return false;
+            }
+        }
+        unset($failure);
+    }
+    return rename($from, $to);
+}
+function edm_backup_test_unlink($path)
+{
+    $failure = &$GLOBALS['edm_backup_test_failures']['unlink'];
+    if (is_array($failure) && $failure['path'] === $path && $failure['remaining'] > 0) {
+        $failure['remaining']--;
+        return false;
+    }
+    return unlink($path);
+}
+
 try {
-    foreach (array('auth.php', 'registry.php', 'backup.php') as $file) {
+    foreach (array('auth.php', 'registry.php') as $file) {
         if (!copy(__DIR__ . '/../../lib/' . $file, $lib . '/' . $file)) {
             throw new RuntimeException('Could not stage library file: ' . $file);
         }
+    }
+
+    // Route filesystem mutations in this disposable copy of backup.php through
+    // wrappers so failure paths can be tested deterministically. Production
+    // source files and the real filesystem functions remain unchanged.
+    $backupSource = file_get_contents(__DIR__ . '/../../lib/backup.php');
+    if (!is_string($backupSource)) {
+        throw new RuntimeException('Could not read backup library for isolated test staging.');
+    }
+    $backupSource = str_replace(array('rename(', 'unlink('),
+        array('edm_backup_test_rename(', 'edm_backup_test_unlink('), $backupSource);
+    if (file_put_contents($lib . '/backup.php', $backupSource) !== strlen($backupSource)) {
+        throw new RuntimeException('Could not stage instrumented backup library.');
     }
 
     require_once $lib . '/backup.php';
@@ -166,6 +210,75 @@ try {
     $passed += 2;
 
     unlink($data . '/auth-epoch.lock');
+
+    // Fail specifically when the restored registry is installed. The
+    // one-shot failure allows the normal rollback renames to succeed.
+    $_SESSION['auth_epoch'] = trim(file_get_contents($data . '/auth-epoch'));
+    $installFailureAdmin = array(
+        'password_hash' => password_hash('integration-install-failure-password', PASSWORD_DEFAULT),
+        'created_at' => time()
+    );
+    $installFailureRegistry = array('version' => 1, 'disks' => array());
+    edm_backup_write_private_file($data . '/admin.json', json_encode($installFailureAdmin, JSON_PRETTY_PRINT) . "\n");
+    edm_registry_save($data . '/disks.json', $installFailureRegistry);
+    $GLOBALS['edm_backup_test_failures']['rename'] = array(array(
+        'to' => $data . '/disks.json',
+        'remaining' => 1
+    ));
+    $installFailureMessage = null;
+    try {
+        edm_backup_restore_archive($archive, true);
+    } catch (Throwable $exception) {
+        $installFailureMessage = $exception->getMessage();
+    }
+    $GLOBALS['edm_backup_test_failures'] = array();
+    edm_backup_integration_assert($installFailureMessage === 'Could not install restored disk registry.',
+        'restore reports a deliberately induced registry-install failure');
+    $passed++;
+    edm_backup_integration_assert(
+        edm_auth_read_admin()['password_hash'] === $installFailureAdmin['password_hash']
+            && edm_registry_load($data . '/disks.json') === $installFailureRegistry,
+        'rollback restores both original files after registry installation fails');
+    $passed++;
+
+    // Fail the registry install and then fail restoration of the previous
+    // administrator file. The old administrator must remain in the private
+    // staging directory for manual recovery.
+    $_SESSION['auth_epoch'] = trim(file_get_contents($data . '/auth-epoch'));
+    $incompleteAdmin = array(
+        'password_hash' => password_hash('integration-incomplete-rollback-password', PASSWORD_DEFAULT),
+        'created_at' => time()
+    );
+    $incompleteRegistry = array('version' => 1, 'disks' => array());
+    edm_backup_write_private_file($data . '/admin.json', json_encode($incompleteAdmin, JSON_PRETTY_PRINT) . "\n");
+    edm_registry_save($data . '/disks.json', $incompleteRegistry);
+    $GLOBALS['edm_backup_test_failures'] = array(
+        'rename' => array(
+            array('to' => $data . '/disks.json', 'remaining' => 1),
+            array('from_basename' => 'previous-admin.json', 'to' => $data . '/admin.json', 'remaining' => 1)
+        )
+    );
+
+    $incompleteFailureMessage = null;
+    try {
+        edm_backup_restore_archive($archive, true);
+    } catch (Throwable $exception) {
+        $incompleteFailureMessage = $exception->getMessage();
+    }
+    $GLOBALS['edm_backup_test_failures'] = array();
+    edm_backup_integration_assert($incompleteFailureMessage === 'Could not install restored disk registry.',
+        'restore reports the registry-install failure that triggers incomplete rollback');
+    $passed++;
+    $recoveryStages = glob($data . '/.restore-*', GLOB_ONLYDIR);
+    $recoveryStage = (is_array($recoveryStages) && count($recoveryStages) === 1)
+        ? $recoveryStages[0] : null;
+    edm_backup_integration_assert($recoveryStage !== null
+        && is_file($recoveryStage . '/previous-admin.json'),
+        'incomplete rollback retains the previous administrator in its recovery directory');
+    $passed++;
+    edm_backup_integration_assert(edm_registry_load($data . '/disks.json') === $incompleteRegistry,
+        'incomplete rollback still restores the previous registry where possible');
+    $passed++;
 
     echo "PASS: {$passed} backup integration checks completed.\n";
 } catch (Throwable $exception) {
