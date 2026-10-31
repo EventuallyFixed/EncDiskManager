@@ -148,6 +148,10 @@ if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
                 exit 1
             fi
             DEST="$REGISTRY_DIR/$FILE"
+            if [ -L "$DEST" ]; then
+                log "ERROR: Persistent configuration path is a symbolic link: $DEST"
+                exit 1
+            fi
             if [ -e "$DEST" ]; then
                 if [ ! -f "$DEST" ] || [ "$(stat -c %u "$DEST")" != "0" ] ||
                     [ "$(stat -c %a "$DEST")" != "600" ] || ! cmp -s "$SOURCE" "$DEST"; then
