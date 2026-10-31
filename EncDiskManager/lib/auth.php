@@ -111,8 +111,11 @@ function edm_auth_consume_setup_token($providedToken)
         return false;
     }
     $path = edm_auth_data_path() . '/setup-token';
-    if (!unlink($path)) {
-        throw new RuntimeException('Initial setup token could not be removed.');
+    // The administrator file is written first and permanently disables
+    // setup mode. If unlink fails, the leftover token cannot create another
+    // account; init.sh will remove it on the next start.
+    if (!@unlink($path)) {
+        error_log('EncDiskManager: administrator created but setup-token cleanup failed.');
     }
     return true;
 }
