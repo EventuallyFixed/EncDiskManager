@@ -379,6 +379,9 @@ unset($device);
         color: #075f91;
         text-decoration: none;
         white-space: nowrap;
+        background: #fff;
+        font: inherit;
+        cursor: pointer;
     }
     .backup-link:hover { background: #f3f7f9; }
     h1 { margin: 0; font-size: 1.45rem; }
