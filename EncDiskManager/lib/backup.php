@@ -354,8 +354,9 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
             }
             $adminMoved = true;
         }
+        // Load even when file_exists() is false so a dangling symlink is rejected.
+        edm_registry_load($registryPath);
         if (file_exists($registryPath)) {
-            edm_registry_load($registryPath);
             if (!rename($registryPath, $oldRegistry)) {
                 throw new RuntimeException('Could not stage the existing disk registry.');
             }
