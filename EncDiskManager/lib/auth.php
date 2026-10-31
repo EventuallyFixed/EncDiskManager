@@ -216,6 +216,13 @@ function edm_auth_write_admin($password)
     if (is_link($path) || is_link($lockPath)) {
         throw new RuntimeException('Authentication files must not be symbolic links.');
     }
+    if (file_exists($lockPath)) {
+        $lockStat = @lstat($lockPath);
+        if ($lockStat === false || (($lockStat['mode'] & 0170000) !== 0100000)
+            || $lockStat['uid'] !== 0) {
+            throw new RuntimeException('Authentication lock must be a root-owned regular file.');
+        }
+    }
 
     $lock = fopen($lockPath, 'c');
     if ($lock === false) {
@@ -349,6 +356,13 @@ function edm_auth_login($password)
     if (is_link($lockPath) || is_link($attemptsPath)) {
         throw new RuntimeException('Login rate-limit files must not be symbolic links.');
     }
+    if (file_exists($lockPath)) {
+        $lockStat = @lstat($lockPath);
+        if ($lockStat === false || (($lockStat['mode'] & 0170000) !== 0100000)
+            || $lockStat['uid'] !== 0) {
+            throw new RuntimeException('Login lock must be a root-owned regular file.');
+        }
+    }
 
     $lock = fopen($lockPath, 'c');
     if ($lock === false) {
@@ -356,6 +370,7 @@ function edm_auth_login($password)
     }
 
     $valid = false;
+    $sessionEpoch = '';
     try {
         if (!chown($lockPath, 0) || !chgrp($lockPath, 0) || !chmod($lockPath, 0600)
             || !flock($lock, LOCK_EX)) {
@@ -408,6 +423,9 @@ function edm_auth_login($password)
         $admin = edm_auth_read_admin();
         $valid = ($admin !== null && password_verify($password, $admin['password_hash']));
         if ($valid) {
+            // Capture the epoch while admin.lock is held. If a restore starts
+            // immediately after unlock, this session will carry the old epoch.
+            $sessionEpoch = edm_auth_read_session_epoch();
             unset($attemptsByAddress[$addressKey]);
         } else {
             $recentAttempts[] = $now;
@@ -448,7 +466,7 @@ function edm_auth_login($password)
     $_SESSION['authenticated'] = true;
     $_SESSION['created_at'] = time();
     $_SESSION['last_activity'] = time();
-    $_SESSION['auth_epoch'] = edm_auth_read_session_epoch();
+    $_SESSION['auth_epoch'] = $sessionEpoch;
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     return true;
 }
