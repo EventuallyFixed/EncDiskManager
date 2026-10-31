@@ -100,6 +100,17 @@ try {
     unlink($root . '/unexpected.txt');
     $passed++;
 
+    // Duplicate archive paths are rejected rather than allowing a later
+    // entry to silently override an earlier administrator or registry file.
+    $duplicate = edm_backup_test_tar($base, $base . '/duplicate.tgz', array(
+        'encdiskmanager-backup/metadata.json',
+        'encdiskmanager-backup/metadata.json',
+        'encdiskmanager-backup/data/admin.json',
+        'encdiskmanager-backup/data/disks.json'
+    ));
+    edm_backup_test_rejects($duplicate, 'duplicate archive path is rejected');
+    $passed++;
+
     // Symbolic links are rejected, even when their target is within the archive.
     rename($root . '/metadata.json', $root . '/metadata.real');
     symlink('metadata.real', $root . '/metadata.json');
