@@ -3,7 +3,20 @@
  * Download a validated EncDiskManager registry backup.
  * The JSON contains disk identifiers and mount settings only; no passphrases.
  */
+require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/registry.php';
+
+try {
+    edm_auth_start_session();
+    edm_auth_require_login();
+} catch (Throwable $exception) {
+    error_log('EncDiskManager backup authentication error: ' . $exception->getMessage());
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo "Configuration backup is unavailable.\n";
+    exit;
+}
 
 try {
     $scriptPath = realpath(__FILE__);
