@@ -142,14 +142,19 @@ try {
         throw new RuntimeException('Could not prepare the isolated restore-failure fixture.');
     }
 
-    $restoreFailed = false;
+    $restoreFailureMessage = null;
     try {
         edm_backup_restore_archive($archive, true);
-    } catch (RuntimeException $exception) {
-        $restoreFailed = (strpos($exception->getMessage(), 'Authentication epoch lock must not be a symbolic link') !== false);
+    } catch (Throwable $exception) {
+        $restoreFailureMessage = $exception->getMessage();
     }
-    edm_backup_integration_assert($restoreFailed,
-        'restore reports the deliberately induced post-install epoch-lock failure');
+    edm_backup_integration_assert(
+        is_string($restoreFailureMessage)
+            && strpos($restoreFailureMessage, 'Authentication epoch lock must not be a symbolic link') !== false,
+        'restore reports the deliberately induced post-install epoch-lock failure'
+            . ($restoreFailureMessage === null ? ' (restore unexpectedly returned successfully)'
+                : ' (actual exception: ' . $restoreFailureMessage . ')')
+    );
     $passed++;
 
     $afterRollbackAdmin = edm_auth_read_admin();
