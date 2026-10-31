@@ -317,6 +317,13 @@ function edm_auth_is_authenticated()
     if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
         return false;
     }
+    // A session is never valid without a currently configured administrator,
+    // even if a partial filesystem failure prevented epoch rotation.
+    if (edm_auth_read_admin() === null) {
+        $_SESSION = array();
+        session_regenerate_id(true);
+        return false;
+    }
     $currentEpoch = edm_auth_read_session_epoch();
     $sessionEpoch = isset($_SESSION['auth_epoch']) ? (string)$_SESSION['auth_epoch'] : '';
     if ($sessionEpoch === '' || !hash_equals($currentEpoch, $sessionEpoch)) {
