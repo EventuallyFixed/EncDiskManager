@@ -12,6 +12,13 @@ if [ ! -e "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ]; then
     exit 0
 fi
 
+# Mark the upgrade before inspecting or copying data. remove.sh will refuse
+# deletion unless a complete, validated handover backup is present.
+umask 077
+printf '%s\n' "pending" > "$APP_PATH/.edm-upgrade-preserve"
+chown root:root "$APP_PATH/.edm-upgrade-preserve"
+chmod 600 "$APP_PATH/.edm-upgrade-preserve"
+
 if [ -L "$DATA_DIR" ] || [ ! -d "$DATA_DIR" ]; then
     log "ERROR: Existing private data path is not a real directory; refusing upgrade."
     exit 1
@@ -21,22 +28,15 @@ if [ "$(stat -c %u "$DATA_DIR")" != "0" ] || [ "$(stat -c %a "$DATA_DIR")" != "7
     exit 1
 fi
 
-# Never reuse or overwrite an earlier backup. It may be the only recoverable copy.
+# Never reuse or overwrite an earlier backup. Invalidate the marker so a
+# stale backup cannot be mistaken for the current application's configuration.
 if [ -e "$BACKUP_DIR" ] || [ -L "$BACKUP_DIR" ]; then
-    umask 077
     printf '%s\n' "blocked" > "$APP_PATH/.edm-upgrade-preserve"
     chown root:root "$APP_PATH/.edm-upgrade-preserve"
     chmod 600 "$APP_PATH/.edm-upgrade-preserve"
     log "ERROR: A previous upgrade backup already exists at $BACKUP_DIR; refusing to overwrite it or remove the old application."
     exit 1
 fi
-
-# This marker tells remove.sh that deletion is part of an upgrade and
-# must not proceed unless the handover backup is complete.
-umask 077
-printf '%s\n' "pending" > "$APP_PATH/.edm-upgrade-preserve"
-chown root:root "$APP_PATH/.edm-upgrade-preserve"
-chmod 600 "$APP_PATH/.edm-upgrade-preserve"
 
 if ! mkdir "$BACKUP_DIR"; then
     log "ERROR: Could not create temporary upgrade backup directory."
