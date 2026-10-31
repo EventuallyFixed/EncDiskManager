@@ -431,6 +431,10 @@ function edm_backup_delete_configuration()
 
     $temporaryToken = null;
     try {
+        if (edm_auth_read_admin() === null || !edm_auth_is_authenticated()) {
+            throw new RuntimeException('Your administrator session is no longer valid; sign in again before deleting configuration.');
+        }
+
         $known = array(
             'admin.json', 'disks.json', 'setup-token', 'login-attempts.json',
             'disks.json.lock'
