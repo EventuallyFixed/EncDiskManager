@@ -110,7 +110,9 @@ function edm_backup_read_archive($compressed)
     }
 
     $metadata = json_decode($files['encdiskmanager-backup/metadata.json'], true);
-    if (!is_array($metadata) || array_keys($metadata) !== array('format_version', 'application', 'created_at')
+    $metadataKeys = is_array($metadata) ? array_keys($metadata) : array();
+    sort($metadataKeys);
+    if (!is_array($metadata) || $metadataKeys !== array('application', 'created_at', 'format_version')
         || $metadata['format_version'] !== 1
         || $metadata['application'] !== 'Encrypted Disk Manager'
         || !is_int($metadata['created_at']) || $metadata['created_at'] <= 0) {
@@ -151,7 +153,7 @@ function edm_backup_create_archive()
     $base = rtrim(sys_get_temp_dir(), '/') . '/edm-backup-' . bin2hex(random_bytes(12));
     $root = $base . '/encdiskmanager-backup';
     $data = $root . '/data';
-    $archive = $base . '.tgz';
+    $archive = $base . '/backup.tgz';
     if (!mkdir($base, 0700) || !mkdir($root, 0700) || !mkdir($data, 0700)) {
         throw new RuntimeException('Could not create a private temporary backup directory.');
     }
