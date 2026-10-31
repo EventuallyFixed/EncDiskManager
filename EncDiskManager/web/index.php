@@ -103,6 +103,9 @@ try {
         <?php endif; ?>
         <button type="submit"><?php echo $setupMode ? 'Create administrator' : 'Sign in'; ?></button>
         </form>
+        <?php if ($setupMode): ?>
+        <p><a href="settings.php">Restore configuration from a .tgz backup</a></p>
+        <?php endif; ?>
         <?php endif; ?>
         </main></body></html><?php
         exit;
@@ -458,6 +461,7 @@ unset($device);
             <span class="material-symbol" aria-hidden="true">download</span>
             <span>Backup config</span>
         </a>
+        <a class="backup-link" href="settings.php" title="Restore or permanently delete saved configuration">Settings</a>
         <form method="post" style="display:inline-block;margin-left:8px">
             <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['csrf_token']); ?>">
             <input type="hidden" name="auth_action" value="logout">
@@ -469,9 +473,10 @@ unset($device);
     <section class="panel safe-note">
         <strong>Before uninstalling or reinstalling:</strong>
         download a configuration backup using the header button.
-        Normal upgrades preserve the registered-disk configuration and administrator
-        account automatically. A complete uninstall removes local configuration;
-        the downloaded backup contains disk UUIDs and mount settings only, never passphrases.
+        Normal upgrades and ordinary app removal preserve the administrator account
+        and registered-disk configuration in WD's persistent app-data directory.
+        Use Settings to restore a .tgz backup or explicitly delete saved configuration.
+        Backups contain a password hash and disk settings, never plaintext passwords or LUKS passphrases.
     </section>
     <section class="panel">
         <h2>Detected USB partitions</h2>
