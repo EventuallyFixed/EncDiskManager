@@ -10,6 +10,28 @@ function edm_auth_app_path()
     if ($path === false || !is_dir($path)) {
         throw new RuntimeException('Application path is unavailable.');
     }
+
+    // Verify every path component without following symlinks. WD OS5's
+    // application parent is the one known vendor-managed writable exception.
+    $components = explode('/', trim($path, '/'));
+    $current = '';
+    foreach ($components as $component) {
+        if ($component === '') {
+            continue;
+        }
+        $current .= '/' . $component;
+        $stat = @lstat($current);
+        if ($stat === false || (($stat['mode'] & 0170000) !== 0040000)
+            || $stat['uid'] !== 0) {
+            throw new RuntimeException('Application path components must be real root-owned directories.');
+        }
+        $permissions = $stat['mode'] & 07777;
+        $stickyDirectory = (($permissions & 01000) !== 0);
+        $trustedWdParent = ($current === '/mnt/HD/HD_a2/Nas_Prog');
+        if (($permissions & 0022) !== 0 && !$stickyDirectory && !$trustedWdParent) {
+            throw new RuntimeException('Application path contains a directory writable by group or others.');
+        }
+    }
     return $path;
 }
 
