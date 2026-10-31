@@ -59,6 +59,10 @@ for FILE in disks.json admin.json; do
         cp -p "$SOURCE" "$BACKUP_DIR/$FILE"
         chown root:root "$BACKUP_DIR/$FILE"
         chmod 600 "$BACKUP_DIR/$FILE"
+        if ! cmp -s "$SOURCE" "$BACKUP_DIR/$FILE"; then
+            log "ERROR: Backup verification failed for $SOURCE; refusing to continue."
+            exit 1
+        fi
     fi
 done
 
