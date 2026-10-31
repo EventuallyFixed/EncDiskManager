@@ -159,7 +159,7 @@ if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
                     exit 1
                 fi
             else
-                TEMP_FILE="$REGISTRY_DIR/.$FILE.restore.$"
+                TEMP_FILE="$REGISTRY_DIR/.$FILE.restore.$$"
                 if ! cp "$SOURCE" "$TEMP_FILE" ||
                     ! chown root:root "$TEMP_FILE" ||
                     ! chmod 600 "$TEMP_FILE" ||
