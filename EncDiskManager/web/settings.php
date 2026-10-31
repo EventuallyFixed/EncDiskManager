@@ -114,6 +114,8 @@ p{color:#58656d}.warning{padding:11px;background:#fff8e7;border-left:4px solid #
 label{display:block;font-weight:bold;margin:14px 0 5px}
 input[type=file],input[type=text],input[type=password]{box-sizing:border-box;width:100%;padding:10px;border:1px solid #aebac1;border-radius:4px;font:inherit}
 button{margin-top:16px;padding:10px 15px;border:0;border-radius:5px;background:#075f91;color:white;font:inherit;cursor:pointer}
+.button-link{display:inline-block;margin-top:8px;padding:10px 15px;border-radius:5px;background:#075f91;color:#fff;text-decoration:none}
+.button-link:hover{background:#064d75}
 .danger button{background:#9b2c2c}a{color:#075f91}
 .small{font-size:.92rem}
 </style>
@@ -124,8 +126,15 @@ button{margin-top:16px;padding:10px 15px;border:0;border-radius:5px;background:#
 <p><a href="index.php">← Return to Encrypted Disk Manager</a></p>
 <?php if ($error !== ''): ?><p class="error"><?php echo edm_settings_h($error); ?></p><?php endif; ?>
 <?php if (!$https): ?>
-<section class="panel warning">Configuration restore and deletion are disabled over HTTP. Open this page using the NAS HTTPS address.</section>
+<section class="panel warning">Configuration backup, restore and deletion are disabled over HTTP. Open this page using the NAS HTTPS address.</section>
 <?php else: ?>
+<?php if (!$isSetup): ?>
+<section class="panel">
+<h2>Backup configuration</h2>
+<p>Download a .tgz archive containing the administrator password hash and registered-disk settings. It does not contain plaintext passwords, LUKS passphrases or disk contents. Store the archive somewhere secure.</p>
+<a class="button-link" href="download.php">Download configuration backup (.tgz)</a>
+</section>
+<?php endif; ?>
 <section class="panel">
 <h2><?php echo $isSetup ? 'Restore an existing backup' : 'Restore configuration'; ?></h2>
 <p>A backup contains the administrator password hash and registered-disk settings. It does not contain plaintext passwords, LUKS passphrases or disk contents. Treat the file as sensitive.</p>
