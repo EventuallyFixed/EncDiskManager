@@ -1,57 +1,39 @@
 <?php
 /*
- * Download a validated EncDiskManager registry backup.
- * The JSON contains disk identifiers and mount settings only; no passphrases.
+ * Download a validated, encrypted-disk configuration and administrator backup.
+ * The archive includes the administrator password hash, never plaintext
+ * credentials or LUKS passphrases.
  */
 require_once __DIR__ . '/../lib/auth.php';
-require_once __DIR__ . '/../lib/registry.php';
+require_once __DIR__ . '/../lib/backup.php';
 
 try {
     edm_auth_start_session();
     edm_auth_require_login();
 } catch (Throwable $exception) {
     error_log('EncDiskManager backup authentication error: ' . $exception->getMessage());
-    http_response_code(500);
+    http_response_code(401);
     header('Content-Type: text/plain; charset=utf-8');
     header('Cache-Control: no-store');
-    echo "Configuration backup is unavailable.\n";
+    echo "Authentication required.\n";
     exit;
 }
 
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: same-origin');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 try {
-    $scriptPath = realpath(__FILE__);
-    $appPath = ($scriptPath === false) ? false : realpath(dirname($scriptPath) . '/..');
-    if ($appPath === false || !is_dir($appPath)) {
-        throw new RuntimeException('Application path could not be resolved.');
-    }
-
-    $configFile = $appPath . '/encdiskmanager.conf';
-    if (is_link($configFile) || !is_file($configFile) || !is_readable($configFile)) {
-        throw new RuntimeException('Application configuration is missing or inaccessible.');
-    }
-    $configuredPath = trim((string)file_get_contents($configFile));
-    if ($configuredPath !== $appPath) {
-        throw new RuntimeException('Application configuration does not match its installation path.');
-    }
-
-    $registryPath = $appPath . '/data/disks.json';
-    $registry = edm_registry_load($registryPath);
-    $payload = edm_registry_encode($registry);
-
-    header('Content-Type: application/json; charset=utf-8');
-    header('Content-Disposition: attachment; filename="encdiskmanager-config.json"');
-    header('Content-Length: ' . strlen($payload));
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-    header('Pragma: no-cache');
-    header('X-Content-Type-Options: nosniff');
-    echo $payload;
+    $archive = edm_backup_create_archive();
+    header('Content-Type: application/gzip');
+    header('Content-Disposition: attachment; filename="encdiskmanager-backup.tgz"');
+    header('Content-Length: ' . strlen($archive));
+    echo $archive;
 } catch (Throwable $exception) {
+    error_log('EncDiskManager backup creation failed: ' . $exception->getMessage());
     http_response_code(500);
     header('Content-Type: text/plain; charset=utf-8');
-    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-    echo "Configuration backup is unavailable. Check the EncDiskManager installation and registry permissions.\\n";
+    echo "Configuration backup is unavailable. Check the persistent data directory and permissions.\n";
 }
