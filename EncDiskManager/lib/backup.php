@@ -359,6 +359,11 @@ function edm_backup_delete_configuration()
     foreach ($known as $name) {
         $path = $dataPath . '/' . $name;
         if (file_exists($path) && !@unlink($path)) {
+            // If the administrator file was already removed, install the
+            // staged token so the owner can still complete a fresh setup.
+            if (!file_exists($dataPath . '/admin.json')) {
+                @rename($temporaryToken, $dataPath . '/setup-token');
+            }
             error_log('EncDiskManager: could not delete saved configuration file ' . $name);
             throw new RuntimeException('Could not delete saved configuration file: ' . $name);
         }
