@@ -120,9 +120,22 @@ fi
 # Retrieve it over SSH from: $APP_PATH/data/setup-token
 ADMIN_FILE="$APP_PATH/data/admin.json"
 SETUP_TOKEN_FILE="$APP_PATH/data/setup-token"
+if [ -L "$ADMIN_FILE" ] || [ -L "$SETUP_TOKEN_FILE" ]; then
+    log "ERROR: Authentication data must not be stored in symbolic links."
+    exit 1
+fi
 if [ -f "$ADMIN_FILE" ]; then
+    if [ "$(stat -c %u "$ADMIN_FILE")" != "0" ] || [ "$(stat -c %a "$ADMIN_FILE")" != "600" ]; then
+        log "ERROR: Administrator credential file ownership or permissions are unsafe."
+        exit 1
+    fi
     rm -f "$SETUP_TOKEN_FILE"
-elif [ ! -e "$SETUP_TOKEN_FILE" ]; then
+elif [ -e "$SETUP_TOKEN_FILE" ]; then
+    if [ ! -f "$SETUP_TOKEN_FILE" ] || [ "$(stat -c %u "$SETUP_TOKEN_FILE")" != "0" ] || [ "$(stat -c %a "$SETUP_TOKEN_FILE")" != "600" ]; then
+        log "ERROR: One-time setup code ownership or permissions are unsafe."
+        exit 1
+    fi
+else
     SETUP_TOKEN_TMP="$APP_PATH/data/.setup-token.$$"
     SETUP_TOKEN="$(php -r 'echo bin2hex(random_bytes(32));')"
     case "$SETUP_TOKEN" in
