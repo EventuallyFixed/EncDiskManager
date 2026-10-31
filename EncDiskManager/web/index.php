@@ -1,8 +1,100 @@
 <?php
-/*
- * EncDiskManager - read-only USB/LUKS inventory.
- * No unlock, mount, unmount, or repair operations are performed here.
- */
+require_once __DIR__ . '/../lib/auth.php';
+
+try {
+    edm_auth_start_session();
+    $admin = edm_auth_read_admin();
+    $authError = '';
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $postedToken = isset($_POST['csrf_token']) ? (string)$_POST['csrf_token'] : '';
+        if (!hash_equals((string)$_SESSION['csrf_token'], $postedToken)) {
+            http_response_code(403);
+            $authError = 'Your security token expired. Please reload and try again.';
+        } else {
+            $authAction = isset($_POST['auth_action']) ? (string)$_POST['auth_action'] : '';
+            if ($authAction === 'setup' && $admin === null) {
+                $password = isset($_POST['password']) ? (string)$_POST['password'] : '';
+                $confirm = isset($_POST['confirm_password']) ? (string)$_POST['confirm_password'] : '';
+                if (strlen($password) < 12) {
+                    $authError = 'Choose a password with at least 12 characters.';
+                } elseif (!hash_equals($password, $confirm)) {
+                    $authError = 'The password confirmation does not match.';
+                } else {
+                    edm_auth_write_admin($password);
+                    unset($password, $confirm);
+                    if (!edm_auth_login((string)$_POST['password'])) {
+                        throw new RuntimeException('Administrator account was created, but automatic sign-in failed. Please sign in.');
+                    }
+                    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+                    exit;
+                }
+                unset($password, $confirm);
+            } elseif ($authAction === 'login' && $admin !== null) {
+                $password = isset($_POST['password']) ? (string)$_POST['password'] : '';
+                $ok = edm_auth_login($password);
+                unset($password);
+                if ($ok) {
+                    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+                    exit;
+                }
+                $authError = 'The password was not recognised.';
+            } elseif ($authAction === 'logout' && edm_auth_is_authenticated()) {
+                edm_auth_logout();
+                header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+                exit;
+            } else {
+                http_response_code(400);
+                $authError = 'That request is not available.';
+            }
+        }
+        unset($_POST['password'], $_POST['confirm_password']);
+    }
+
+    if (!edm_auth_is_authenticated()) {
+        $setupMode = ($admin === null);
+        $pageTitle = $setupMode ? 'Set up administrator' : 'Administrator sign in';
+        $csrf = htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8');
+        $errorHtml = ($authError === '') ? '' : '<p class="error">' . htmlspecialchars($authError, ENT_QUOTES, 'UTF-8') . '</p>';
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        ?><!doctype html>
+        <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+        <title><?php echo htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8'); ?> · Encrypted Disk Manager</title>
+        <style>
+        body{margin:0;background:#f3f5f6;color:#20272c;font:16px/1.5 Arial,Helvetica,sans-serif;display:grid;min-height:100vh;place-items:center}
+        main{box-sizing:border-box;width:min(440px,calc(100% - 32px));background:#fff;border:1px solid #d9dfe2;border-radius:9px;padding:28px}
+        h1{font-size:1.45rem;margin:0 0 5px}p{color:#58656d}.field{display:block;font-weight:bold;margin:17px 0 5px}
+        input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #aebac1;border-radius:5px;font:inherit}
+        button{margin-top:20px;padding:10px 16px;border:0;border-radius:5px;background:#075f91;color:#fff;font:inherit;cursor:pointer}
+        .error{padding:10px;background:#fff0ed;border-left:4px solid #b23b2b;color:#842719}
+        </style></head><body><main>
+        <h1>Encrypted Disk Manager</h1><p><?php echo $setupMode ? 'Create the one administrator password for this application.' : 'Sign in to manage encrypted disks.'; ?></p>
+        <?php echo $errorHtml; ?>
+        <form method="post" autocomplete="on">
+        <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+        <input type="hidden" name="auth_action" value="<?php echo $setupMode ? 'setup' : 'login'; ?>">
+        <label class="field" for="password">Administrator password</label>
+        <input id="password" name="password" type="password" required autocomplete="<?php echo $setupMode ? 'new-password' : 'current-password'; ?>" <?php echo $setupMode ? 'minlength="12"' : ''; ?>>
+        <?php if ($setupMode): ?>
+        <label class="field" for="confirm-password">Confirm password</label>
+        <input id="confirm-password" name="confirm_password" type="password" required minlength="12" autocomplete="new-password">
+        <?php endif; ?>
+        <button type="submit"><?php echo $setupMode ? 'Create administrator' : 'Sign in'; ?></button>
+        </form></main></body></html><?php
+        exit;
+    }
+} catch (Throwable $exception) {
+    error_log('EncDiskManager authentication error: ' . $exception->getMessage());
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo "Authentication is temporarily unavailable. Check the private application data permissions.\n";
+    exit;
+}
+
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('X-Content-Type-Options: nosniff');
 
 function h($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
