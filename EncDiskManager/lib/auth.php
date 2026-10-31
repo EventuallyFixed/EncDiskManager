@@ -207,8 +207,104 @@ function edm_auth_is_authenticated()
 
 function edm_auth_login($password)
 {
-    $admin = edm_auth_read_admin();
-    if ($admin === null || !password_verify($password, $admin['password_hash'])) {
+    $dataPath = edm_auth_data_path();
+    $lockPath = $dataPath . '/admin.lock';
+    $attemptsPath = $dataPath . '/login-attempts.json';
+    if (is_link($lockPath) || is_link($attemptsPath)) {
+        throw new RuntimeException('Login rate-limit files must not be symbolic links.');
+    }
+
+    $lock = fopen($lockPath, 'c');
+    if ($lock === false) {
+        throw new RuntimeException('Could not open login rate-limit lock.');
+    }
+
+    $valid = false;
+    try {
+        if (!chown($lockPath, 0) || !chgrp($lockPath, 0) || !chmod($lockPath, 0600)
+            || !flock($lock, LOCK_EX)) {
+            throw new RuntimeException('Could not secure login rate-limit lock.');
+        }
+
+        $attemptsByAddress = array();
+        if (file_exists($attemptsPath)) {
+            $stat = @lstat($attemptsPath);
+            if ($stat === false || (($stat['mode'] & 0170000) !== 0100000)
+                || $stat['uid'] !== 0 || (($stat['mode'] & 0777) !== 0600)) {
+                throw new RuntimeException('Login rate-limit file permissions are invalid.');
+            }
+            $raw = file_get_contents($attemptsPath);
+            $decoded = ($raw === false) ? null : json_decode($raw, true);
+            if (!is_array($decoded)) {
+                throw new RuntimeException('Login rate-limit data is invalid.');
+            }
+            $attemptsByAddress = $decoded;
+        }
+
+        $now = time();
+        $cutoff = $now - 900;
+        foreach ($attemptsByAddress as $addressKey => $timestamps) {
+            if (!preg_match('/^[a-f0-9]{64}$/', (string)$addressKey) || !is_array($timestamps)) {
+                unset($attemptsByAddress[$addressKey]);
+                continue;
+            }
+            $recent = array();
+            foreach ($timestamps as $timestamp) {
+                if (is_int($timestamp) && $timestamp > $cutoff && $timestamp <= $now) {
+                    $recent[] = $timestamp;
+                }
+            }
+            if ($recent) {
+                $attemptsByAddress[$addressKey] = $recent;
+            } else {
+                unset($attemptsByAddress[$addressKey]);
+            }
+        }
+
+        $remoteAddress = isset($_SERVER['REMOTE_ADDR']) ? (string)$_SERVER['REMOTE_ADDR'] : 'unknown';
+        $addressKey = hash('sha256', $remoteAddress);
+        $recentAttempts = isset($attemptsByAddress[$addressKey])
+            ? $attemptsByAddress[$addressKey] : array();
+        if (count($recentAttempts) >= 5) {
+            return false;
+        }
+
+        $admin = edm_auth_read_admin();
+        $valid = ($admin !== null && password_verify($password, $admin['password_hash']));
+        if ($valid) {
+            unset($attemptsByAddress[$addressKey]);
+        } else {
+            $recentAttempts[] = $now;
+            $attemptsByAddress[$addressKey] = $recentAttempts;
+        }
+
+        $json = json_encode($attemptsByAddress, JSON_UNESCAPED_SLASHES);
+        if ($json === false) {
+            throw new RuntimeException('Login rate-limit data could not be encoded.');
+        }
+        $temporary = tempnam($dataPath, '.login-attempts-');
+        if ($temporary === false) {
+            throw new RuntimeException('Could not create temporary login rate-limit file.');
+        }
+        try {
+            $written = file_put_contents($temporary, $json . "\n", LOCK_EX);
+            if ($written === false || $written !== strlen($json . "\n")
+                || !chown($temporary, 0) || !chgrp($temporary, 0)
+                || !chmod($temporary, 0600)
+                || !rename($temporary, $attemptsPath)) {
+                throw new RuntimeException('Could not safely save login rate-limit data.');
+            }
+        } finally {
+            if (file_exists($temporary)) {
+                @unlink($temporary);
+            }
+        }
+    } finally {
+        @flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+
+    if (!$valid) {
         return false;
     }
     session_regenerate_id(true);
