@@ -60,6 +60,41 @@ function edm_auth_read_admin()
     return $data;
 }
 
+function edm_auth_read_setup_token()
+{
+    $path = edm_auth_data_path() . '/setup-token';
+    if (is_link($path)) {
+        throw new RuntimeException('Initial setup token must not be a symbolic link.');
+    }
+    if (!file_exists($path)) {
+        return null;
+    }
+    $stat = @lstat($path);
+    if ($stat === false || (($stat['mode'] & 0170000) !== 0100000)
+        || $stat['uid'] !== 0 || (($stat['mode'] & 0777) !== 0600)) {
+        throw new RuntimeException('Initial setup token permissions are invalid.');
+    }
+    $token = trim((string)file_get_contents($path));
+    if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
+        throw new RuntimeException('Initial setup token is invalid.');
+    }
+    return $token;
+}
+
+function edm_auth_consume_setup_token($providedToken)
+{
+    $expected = edm_auth_read_setup_token();
+    if ($expected === null || !is_string($providedToken)
+        || !hash_equals($expected, $providedToken)) {
+        return false;
+    }
+    $path = edm_auth_data_path() . '/setup-token';
+    if (!unlink($path)) {
+        throw new RuntimeException('Initial setup token could not be removed.');
+    }
+    return true;
+}
+
 function edm_auth_write_admin($password)
 {
     $dataPath = edm_auth_data_path();
