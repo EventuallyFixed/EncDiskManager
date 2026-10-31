@@ -141,73 +141,122 @@ function edm_backup_read_archive($compressed)
     );
 }
 
+function edm_backup_acquire_lock($dataPath, $name)
+{
+    if (!preg_match('/^[a-z0-9.-]+$/', $name)) {
+        throw new RuntimeException('Internal configuration lock name is invalid.');
+    }
+    $path = $dataPath . '/' . $name;
+    if (is_link($path)) {
+        throw new RuntimeException('Configuration lock must not be a symbolic link: ' . $name);
+    }
+    if (file_exists($path)) {
+        $stat = @lstat($path);
+        if ($stat === false || (($stat['mode'] & 0170000) !== 0100000) || $stat['uid'] !== 0) {
+            throw new RuntimeException('Configuration lock must be a root-owned regular file: ' . $name);
+        }
+    }
+    $lock = fopen($path, 'c');
+    if ($lock === false || !chown($path, 0) || !chgrp($path, 0)
+        || !chmod($path, 0600) || !flock($lock, LOCK_EX)) {
+        if (is_resource($lock)) {
+            fclose($lock);
+        }
+        throw new RuntimeException('Could not secure configuration lock: ' . $name);
+    }
+    return $lock;
+}
+
+function edm_backup_release_lock($lock)
+{
+    if (is_resource($lock)) {
+        @flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
 function edm_backup_create_archive()
 {
     $dataPath = edm_auth_data_path();
-    $admin = edm_auth_read_admin();
-    if ($admin === null) {
-        throw new RuntimeException('No administrator account exists to back up.');
-    }
-    $registry = edm_registry_load($dataPath . '/disks.json');
-
-    $base = rtrim(sys_get_temp_dir(), '/') . '/edm-backup-' . bin2hex(random_bytes(12));
-    $root = $base . '/encdiskmanager-backup';
-    $data = $root . '/data';
-    $archive = $base . '/backup.tgz';
-    if (!mkdir($base, 0700) || !mkdir($root, 0700) || !mkdir($data, 0700)) {
-        throw new RuntimeException('Could not create a private temporary backup directory.');
-    }
-
+    $restoreLock = edm_backup_acquire_lock($dataPath, 'restore.lock');
     try {
-        $metadata = json_encode(array(
-            'format_version' => 1,
-            'application' => 'Encrypted Disk Manager',
-            'created_at' => time()
-        ), JSON_PRETTY_PRINT);
-        if ($metadata === false) {
-            throw new RuntimeException('Backup metadata could not be encoded.');
-        }
-        edm_backup_write_private_file($root . '/metadata.json', $metadata . "\n");
-        edm_backup_write_private_file($data . '/admin.json', json_encode($admin, JSON_PRETTY_PRINT) . "\n");
-        edm_backup_write_private_file($data . '/disks.json', edm_registry_encode($registry));
-
-        $command = '/bin/tar -czf ' . escapeshellarg($archive)
-            . ' -C ' . escapeshellarg($base)
-            . ' encdiskmanager-backup/metadata.json'
-            . ' encdiskmanager-backup/data/admin.json'
-            . ' encdiskmanager-backup/data/disks.json 2>/dev/null';
-        $output = array();
-        $status = 1;
-        exec($command, $output, $status);
-        if ($status !== 0 || is_link($archive) || !is_file($archive)) {
-            throw new RuntimeException('The NAS tar utility could not create the backup archive.');
-        }
-        $stat = lstat($archive);
-        if ($stat === false || (($stat['mode'] & 0170000) !== 0100000)
-            || $stat['size'] < 20 || $stat['size'] > 2097152
-            || !chmod($archive, 0600)) {
-            throw new RuntimeException('Generated backup archive failed its safety checks.');
-        }
-        $contents = file_get_contents($archive);
-        if ($contents === false) {
-            throw new RuntimeException('Generated backup archive could not be read.');
-        }
-        // Validate the archive we are about to send using the same strict parser
-        // that is used for uploaded restore files.
-        edm_backup_read_archive($contents);
-        return $contents;
-    } finally {
-        foreach (array(
-            $data . '/admin.json', $data . '/disks.json',
-            $root . '/metadata.json', $archive
-        ) as $file) {
-            if (is_file($file) && !is_link($file)) {
-                @unlink($file);
+        $adminLock = edm_backup_acquire_lock($dataPath, 'admin.lock');
+        try {
+            if (!edm_auth_is_authenticated()) {
+                throw new RuntimeException('Your administrator session is no longer valid; sign in again before downloading a backup.');
             }
+            $admin = edm_auth_read_admin();
+            if ($admin === null) {
+                throw new RuntimeException('No administrator account exists to back up.');
+            }
+            $registry = edm_registry_load($dataPath . '/disks.json');
+
+            $base = rtrim(sys_get_temp_dir(), '/') . '/edm-backup-' . bin2hex(random_bytes(12));
+            $root = $base . '/encdiskmanager-backup';
+            $data = $root . '/data';
+            $archive = $base . '/backup.tgz';
+            if (!mkdir($base, 0700)) {
+                throw new RuntimeException('Could not create a private temporary backup directory.');
+            }
+
+            try {
+                if (!mkdir($root, 0700) || !mkdir($data, 0700)) {
+                    throw new RuntimeException('Could not prepare the private backup directory.');
+                }
+                $metadata = json_encode(array(
+                    'format_version' => 1,
+                    'application' => 'Encrypted Disk Manager',
+                    'created_at' => time()
+                ), JSON_PRETTY_PRINT);
+                if ($metadata === false) {
+                    throw new RuntimeException('Backup metadata could not be encoded.');
+                }
+                edm_backup_write_private_file($root . '/metadata.json', $metadata . "\n");
+                edm_backup_write_private_file($data . '/admin.json', json_encode($admin, JSON_PRETTY_PRINT) . "\n");
+                edm_backup_write_private_file($data . '/disks.json', edm_registry_encode($registry));
+
+                $command = '/bin/tar -czf ' . escapeshellarg($archive)
+                    . ' -C ' . escapeshellarg($base)
+                    . ' encdiskmanager-backup/metadata.json'
+                    . ' encdiskmanager-backup/data/admin.json'
+                    . ' encdiskmanager-backup/data/disks.json 2>/dev/null';
+                $output = array();
+                $status = 1;
+                exec($command, $output, $status);
+                if ($status !== 0 || is_link($archive) || !is_file($archive)) {
+                    throw new RuntimeException('The NAS tar utility could not create the backup archive.');
+                }
+                $stat = lstat($archive);
+                if ($stat === false || (($stat['mode'] & 0170000) !== 0100000)
+                    || $stat['size'] < 20 || $stat['size'] > 2097152
+                    || !chmod($archive, 0600)) {
+                    throw new RuntimeException('Generated backup archive failed its safety checks.');
+                }
+                $contents = file_get_contents($archive);
+                if ($contents === false) {
+                    throw new RuntimeException('Generated backup archive could not be read.');
+                }
+                // Validate our own output with the same strict parser used for uploads.
+                edm_backup_read_archive($contents);
+                return $contents;
+            } finally {
+                foreach (array(
+                    $data . '/admin.json', $data . '/disks.json',
+                    $root . '/metadata.json', $archive
+                ) as $file) {
+                    if (is_file($file) && !is_link($file)) {
+                        @unlink($file);
+                    }
+                }
+                @rmdir($data);
+                @rmdir($root);
+                @rmdir($base);
+            }
+        } finally {
+            edm_backup_release_lock($adminLock);
         }
-        @rmdir($data);
-        @rmdir($root);
-        @rmdir($base);
+    } finally {
+        edm_backup_release_lock($restoreLock);
     }
 }
 
