@@ -38,13 +38,16 @@ function edm_auth_app_path()
 function edm_auth_data_path()
 {
     $appPath = edm_auth_app_path();
-    $dataPath = $appPath . '/data';
+    // WD's builder defines APP_PERSISTENT_DATA_PATH as a sibling of APP_PATH:
+    // <application parent>/_EncDiskManager. Keeping this outside APP_PATH
+    // allows configuration to survive normal app removal and upgrades.
+    $dataPath = dirname($appPath) . '/_EncDiskManager';
     $stat = @lstat($dataPath);
     if ($stat === false || (($stat['mode'] & 0170000) !== 0040000)
         || is_link($dataPath) || $stat['uid'] !== 0
         || (($stat['mode'] & 0777) !== 0700)
         || realpath($dataPath) !== $dataPath) {
-        throw new RuntimeException('Private application data directory is not secure.');
+        throw new RuntimeException('Persistent application data directory is not secure.');
     }
     if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
         throw new RuntimeException('The web PHP process must run as root to access private application data.');
