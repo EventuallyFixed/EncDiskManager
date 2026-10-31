@@ -227,6 +227,13 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
     if (is_link($lockPath)) {
         throw new RuntimeException('Restore lock must not be a symbolic link.');
     }
+    if (file_exists($lockPath)) {
+        $lockStat = @lstat($lockPath);
+        if ($lockStat === false || (($lockStat['mode'] & 0170000) !== 0100000)
+            || $lockStat['uid'] !== 0) {
+            throw new RuntimeException('Restore lock must be a root-owned regular file.');
+        }
+    }
     $lock = fopen($lockPath, 'c');
     if ($lock === false || !chown($lockPath, 0) || !chgrp($lockPath, 0)
         || !chmod($lockPath, 0600) || !flock($lock, LOCK_EX)) {
