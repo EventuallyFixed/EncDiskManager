@@ -68,6 +68,52 @@ else
     exit 1
 fi
 
+# Restore the private registry and administrator credentials after an upgrade.
+# The preinst script creates this root-only handover directory before remove.sh.
+UPGRADE_BACKUP="/tmp/encdiskmanager-upgrade"
+if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
+    if [ -L "$UPGRADE_BACKUP" ] || [ ! -d "$UPGRADE_BACKUP" ] ||
+        [ "$(stat -c %u "$UPGRADE_BACKUP")" != "0" ] ||
+        [ "$(stat -c %a "$UPGRADE_BACKUP")" != "700" ] ||
+        [ ! -f "$UPGRADE_BACKUP/backup-complete" ] ||
+        [ -L "$UPGRADE_BACKUP/backup-complete" ] ||
+        [ "$(stat -c %u "$UPGRADE_BACKUP/backup-complete")" != "0" ] ||
+        [ "$(stat -c %a "$UPGRADE_BACKUP/backup-complete")" != "600" ] ||
+        [ "$(cat "$UPGRADE_BACKUP/backup-complete")" != "complete" ] ||
+        [ ! -f "$UPGRADE_BACKUP/source-path" ] ||
+        [ -L "$UPGRADE_BACKUP/source-path" ] ||
+        [ "$(cat "$UPGRADE_BACKUP/source-path")" != "$APP_PATH" ]; then
+        log "ERROR: Temporary upgrade backup failed validation; it has been left untouched."
+        exit 1
+    fi
+
+    for FILE in disks.json admin.json; do
+        SOURCE="$UPGRADE_BACKUP/$FILE"
+        if [ -L "$SOURCE" ]; then
+            log "ERROR: Upgrade backup contains an unexpected symbolic link: $SOURCE"
+            exit 1
+        fi
+        if [ -e "$SOURCE" ]; then
+            if [ ! -f "$SOURCE" ] || [ "$(stat -c %u "$SOURCE")" != "0" ] || [ "$(stat -c %a "$SOURCE")" != "600" ]; then
+                log "ERROR: Upgrade backup file failed ownership or permission checks: $SOURCE"
+                exit 1
+            fi
+            TEMP_FILE="$REGISTRY_DIR/.$FILE.restore.$"
+            if ! cp "$SOURCE" "$TEMP_FILE" ||
+                ! chown root:root "$TEMP_FILE" ||
+                ! chmod 600 "$TEMP_FILE" ||
+                ! mv -f "$TEMP_FILE" "$REGISTRY_DIR/$FILE"; then
+                rm -f "$TEMP_FILE"
+                log "ERROR: Could not restore $FILE; temporary backup has been retained."
+                exit 1
+            fi
+        fi
+    done
+
+    rm -rf "$UPGRADE_BACKUP"
+    log "Previous private configuration restored successfully; temporary backup removed."
+fi
+
 # Write private runtime configuration using the actual WD installation path.
 CONFIG_FILE="${APP_PATH}/encdiskmanager.conf"
 CONFIG_TMP="${APP_PATH}/.encdiskmanager.conf.$$"
