@@ -152,6 +152,8 @@ try {
     $newEpoch = trim(file_get_contents($data . '/auth-epoch'));
     edm_backup_integration_assert($newEpoch !== '' && $newEpoch !== $oldEpoch,
         'replacement restore rotates the authentication session epoch');
+    // Model a fresh login after restore invalidates the previous browser session.
+    $_SESSION['auth_epoch'] = $newEpoch;
     edm_backup_integration_assert(!file_exists($data . '/setup-token')
         && !file_exists($data . '/login-attempts.json'),
         'replacement restore removes obsolete setup and login-attempt files');
