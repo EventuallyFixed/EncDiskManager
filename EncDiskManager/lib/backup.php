@@ -272,6 +272,7 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
         throw new RuntimeException('There is no existing administrator account to replace.');
     }
 
+    $stageSuffix = bin2hex(random_bytes(8));
     $lockPath = $dataPath . '/restore.lock';
     if (is_link($lockPath)) {
         throw new RuntimeException('Restore lock must not be a symbolic link.');
@@ -320,7 +321,7 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
         throw new RuntimeException('Could not secure the administrator lock for restore.');
     }
 
-    $stage = $dataPath . '/.restore-' . bin2hex(random_bytes(8));
+    $stage = $dataPath . '/.restore-' . $stageSuffix;
     $oldAdmin = $stage . '/previous-admin.json';
     $oldRegistry = $stage . '/previous-disks.json';
     $adminPath = $dataPath . '/admin.json';
