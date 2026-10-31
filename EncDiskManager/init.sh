@@ -104,9 +104,14 @@ if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
             if ! cp "$SOURCE" "$TEMP_FILE" ||
                 ! chown root:root "$TEMP_FILE" ||
                 ! chmod 600 "$TEMP_FILE" ||
+                ! cmp -s "$SOURCE" "$TEMP_FILE" ||
                 ! mv -f "$TEMP_FILE" "$REGISTRY_DIR/$FILE"; then
                 rm -f "$TEMP_FILE"
                 log "ERROR: Could not restore $FILE; temporary backup has been retained."
+                exit 1
+            fi
+            if ! cmp -s "$SOURCE" "$REGISTRY_DIR/$FILE"; then
+                log "ERROR: Restored $FILE does not match the temporary backup; backup has been retained."
                 exit 1
             fi
         fi
