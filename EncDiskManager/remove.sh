@@ -28,6 +28,7 @@ if [ -e "$PRESERVE_MARKER" ] || [ -L "$PRESERVE_MARKER" ]; then
     if [ -L "$PRESERVE_MARKER" ] || [ ! -f "$PRESERVE_MARKER" ] ||
         [ "$(stat -c %u "$PRESERVE_MARKER")" != "0" ] ||
         [ "$(stat -c %a "$PRESERVE_MARKER")" != "600" ] ||
+        [ "$(cat "$PRESERVE_MARKER")" != "pending" ] ||
         [ ! -d "$BACKUP_DIR" ] || [ -L "$BACKUP_DIR" ] ||
         [ "$(stat -c %u "$BACKUP_DIR")" != "0" ] ||
         [ "$(stat -c %a "$BACKUP_DIR")" != "700" ] ||
@@ -38,6 +39,8 @@ if [ -e "$PRESERVE_MARKER" ] || [ -L "$PRESERVE_MARKER" ]; then
         [ "$(cat "$BACKUP_DIR/backup-complete")" != "complete" ] ||
         [ ! -f "$BACKUP_DIR/source-path" ] ||
         [ -L "$BACKUP_DIR/source-path" ] ||
+        [ "$(stat -c %u "$BACKUP_DIR/source-path")" != "0" ] ||
+        [ "$(stat -c %a "$BACKUP_DIR/source-path")" != "600" ] ||
         [ "$(cat "$BACKUP_DIR/source-path")" != "$APP_PATH" ]; then
         log "ERROR: Upgrade configuration backup is missing or invalid; refusing to delete the existing application."
         exit 1
