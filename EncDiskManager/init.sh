@@ -50,10 +50,14 @@ if [ -d "${APP_PATH}" ]; then
     fi
 fi
 
-# Create a private data directory inside the application tree.
-# It is deliberately outside web/ and protected from web access.
-# users should download a configuration backup before removing the app.
-REGISTRY_DIR="${APP_PATH}/data"
+# Create the builder-provided persistent data directory. This is a sibling
+# of APP_PATH (normally .../Nas_Prog/_EncDiskManager), so WD can remove or
+# replace the application directory without deleting the administrator or registry.
+REGISTRY_DIR="${APP_PERSISTENT_DATA_PATH}"
+if [ -z "${REGISTRY_DIR}" ] || [ "${REGISTRY_DIR}" = "/" ]; then
+    log "ERROR: Builder did not provide a valid persistent data path."
+    exit 1
+fi
 if [ -L "${REGISTRY_DIR}" ]; then
     log "ERROR: Registry data directory must not be a symbolic link: ${REGISTRY_DIR}"
     exit 1
@@ -62,10 +66,49 @@ fi
 if mkdir -p "${REGISTRY_DIR}" &&
     chown root:root "${REGISTRY_DIR}" &&
     chmod 700 "${REGISTRY_DIR}"; then
-    log "Secured private app-local registry directory at ${REGISTRY_DIR}"
+    log "Secured persistent application data directory at ${REGISTRY_DIR}"
 else
-    log "ERROR: Could not create or secure registry directory: ${REGISTRY_DIR}"
+    log "ERROR: Could not create or secure persistent data directory: ${REGISTRY_DIR}"
     exit 1
+fi
+
+# One-time migration for installations that still have the 0.4.x app-local
+# data directory. Never overwrite an existing persistent file, and never
+# follow links or copy files with unexpected ownership or permissions.
+OLD_DATA_DIR="${APP_PATH}/data"
+if [ -e "${OLD_DATA_DIR}" ] || [ -L "${OLD_DATA_DIR}" ]; then
+    if [ -L "${OLD_DATA_DIR}" ] || [ ! -d "${OLD_DATA_DIR}" ] ||
+        [ "$(stat -c %u "${OLD_DATA_DIR}")" != "0" ] ||
+        [ "$(stat -c %a "${OLD_DATA_DIR}")" != "700" ]; then
+        log "ERROR: Legacy app-local data directory failed security checks; refusing migration."
+        exit 1
+    fi
+    for FILE in admin.json disks.json setup-token login-attempts.json; do
+        SOURCE="${OLD_DATA_DIR}/${FILE}"
+        DEST="${REGISTRY_DIR}/${FILE}"
+        if [ -L "${SOURCE}" ]; then
+            log "ERROR: Legacy configuration contains a symbolic link: ${SOURCE}"
+            exit 1
+        fi
+        if [ -e "${SOURCE}" ] && [ ! -e "${DEST}" ]; then
+            if [ ! -f "${SOURCE}" ] ||
+                [ "$(stat -c %u "${SOURCE}")" != "0" ] ||
+                [ "$(stat -c %a "${SOURCE}")" != "600" ]; then
+                log "ERROR: Legacy configuration file failed security checks: ${SOURCE}"
+                exit 1
+            fi
+            TEMP_FILE="${REGISTRY_DIR}/.${FILE}.migrate.$"
+            if ! cp "${SOURCE}" "${TEMP_FILE}" ||
+                ! chown root:root "${TEMP_FILE}" ||
+                ! chmod 600 "${TEMP_FILE}" ||
+                ! cmp -s "${SOURCE}" "${TEMP_FILE}" ||
+                ! mv "${TEMP_FILE}" "${DEST}"; then
+                rm -f "${TEMP_FILE}"
+                log "ERROR: Could not safely migrate ${FILE}; original data has been retained."
+                exit 1
+            fi
+        fi
+    done
 fi
 
 # Restore the private registry and administrator credentials after an upgrade.
@@ -122,9 +165,9 @@ if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
 fi
 
 # Create a one-time setup code only while no administrator account exists.
-# Retrieve it over SSH from: $APP_PATH/data/setup-token
-ADMIN_FILE="$APP_PATH/data/admin.json"
-SETUP_TOKEN_FILE="$APP_PATH/data/setup-token"
+# Retrieve it over SSH from: $REGISTRY_DIR/setup-token
+ADMIN_FILE="$REGISTRY_DIR/admin.json"
+SETUP_TOKEN_FILE="$REGISTRY_DIR/setup-token"
 if [ -L "$ADMIN_FILE" ] || [ -L "$SETUP_TOKEN_FILE" ]; then
     log "ERROR: Authentication data must not be stored in symbolic links."
     exit 1
@@ -145,7 +188,7 @@ elif [ -e "$SETUP_TOKEN_FILE" ]; then
         exit 1
     fi
 else
-    SETUP_TOKEN_TMP="$APP_PATH/data/.setup-token.$$"
+    SETUP_TOKEN_TMP="$REGISTRY_DIR/.setup-token.$"
     SETUP_TOKEN="$(php -r 'echo bin2hex(random_bytes(32));')"
     case "$SETUP_TOKEN" in
         *[!a-f0-9]*|'') log "ERROR: Could not generate a valid one-time setup code."; exit 1 ;;
