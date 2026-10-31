@@ -335,6 +335,9 @@ function edm_backup_delete_configuration()
         'admin.json', 'disks.json', 'setup-token', 'login-attempts.json',
         'admin.lock', 'disks.json.lock', 'restore.lock'
     );
+
+    // Validate every known entry before deleting any of them, so an unsafe
+    // file cannot cause an avoidable partial wipe.
     foreach ($known as $name) {
         $path = $dataPath . '/' . $name;
         if (is_link($path)) {
@@ -343,13 +346,24 @@ function edm_backup_delete_configuration()
         if (file_exists($path)) {
             $stat = lstat($path);
             if ($stat === false || (($stat['mode'] & 0170000) !== 0100000)
-                || $stat['uid'] !== 0 || (($stat['mode'] & 0777) !== 0600)
-                || !unlink($path)) {
-                throw new RuntimeException('Could not securely delete saved configuration file: ' . $name);
+                || $stat['uid'] !== 0 || (($stat['mode'] & 0777) !== 0600)) {
+                throw new RuntimeException('Saved configuration file failed security checks: ' . $name);
             }
         }
     }
 
+    $temporaryToken = $dataPath . '/.setup-token-delete-' . bin2hex(random_bytes(8));
     $token = bin2hex(random_bytes(32)) . "\n";
-    edm_backup_write_private_file($dataPath . '/setup-token', $token);
+    edm_backup_write_private_file($temporaryToken, $token);
+
+    foreach ($known as $name) {
+        $path = $dataPath . '/' . $name;
+        if (file_exists($path) && !@unlink($path)) {
+            error_log('EncDiskManager: could not delete saved configuration file ' . $name);
+            throw new RuntimeException('Could not delete saved configuration file: ' . $name);
+        }
+    }
+    if (!rename($temporaryToken, $dataPath . '/setup-token')) {
+        throw new RuntimeException('Configuration was deleted but a new setup token could not be installed.');
+    }
 }
