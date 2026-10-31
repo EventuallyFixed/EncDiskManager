@@ -18,6 +18,8 @@ try {
                 $confirm = isset($_POST['confirm_password']) ? (string)$_POST['confirm_password'] : '';
                 if (strlen($password) < 12) {
                     $authError = 'Choose a password with at least 12 characters.';
+                } elseif (strlen($password) > 72) {
+                    $authError = 'Choose a password no longer than 72 bytes.';
                 } elseif (!hash_equals($password, $confirm)) {
                     $authError = 'The password confirmation does not match.';
                 } else {
@@ -75,7 +77,7 @@ try {
         <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
         <input type="hidden" name="auth_action" value="<?php echo $setupMode ? 'setup' : 'login'; ?>">
         <label class="field" for="password">Administrator password</label>
-        <input id="password" name="password" type="password" required autocomplete="<?php echo $setupMode ? 'new-password' : 'current-password'; ?>" <?php echo $setupMode ? 'minlength="12"' : ''; ?>>
+        <input id="password" name="password" type="password" required autocomplete="<?php echo $setupMode ? 'new-password' : 'current-password'; ?>" <?php echo $setupMode ? 'minlength="12" maxlength="72"' : ''; ?>>
         <?php if ($setupMode): ?>
         <label class="field" for="confirm-password">Confirm password</label>
         <input id="confirm-password" name="confirm_password" type="password" required minlength="12" autocomplete="new-password">
