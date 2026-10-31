@@ -30,7 +30,7 @@ fi
 # This marker tells remove.sh that deletion is part of an upgrade and
 # must not proceed unless the handover backup is complete.
 umask 077
-printf '%s\\n' "pending" > "$APP_PATH/.edm-upgrade-preserve"
+printf '%s\n' "pending" > "$APP_PATH/.edm-upgrade-preserve"
 chown root:root "$APP_PATH/.edm-upgrade-preserve"
 chmod 600 "$APP_PATH/.edm-upgrade-preserve"
 
