@@ -245,6 +245,7 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
     $registryMoved = false;
     $adminInstalled = false;
     $registryInstalled = false;
+    $preserveStageForRecovery = false;
 
     try {
         if (!mkdir($stage, 0700) || !chown($stage, 0) || !chgrp($stage, 0)) {
@@ -293,26 +294,35 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
             }
         }
     } catch (Throwable $exception) {
-        if ($adminInstalled && file_exists($adminPath)) {
-            @unlink($adminPath);
+        $rollbackOk = true;
+        if ($adminInstalled && file_exists($adminPath) && !@unlink($adminPath)) {
+            $rollbackOk = false;
         }
-        if ($registryInstalled && file_exists($registryPath)) {
-            @unlink($registryPath);
+        if ($registryInstalled && file_exists($registryPath) && !@unlink($registryPath)) {
+            $rollbackOk = false;
         }
-        if ($adminMoved && file_exists($oldAdmin)) {
-            @rename($oldAdmin, $adminPath);
+        if ($adminMoved && file_exists($oldAdmin) && !@rename($oldAdmin, $adminPath)) {
+            $rollbackOk = false;
         }
-        if ($registryMoved && file_exists($oldRegistry)) {
-            @rename($oldRegistry, $registryPath);
+        if ($registryMoved && file_exists($oldRegistry) && !@rename($oldRegistry, $registryPath)) {
+            $rollbackOk = false;
+        }
+        if (!$rollbackOk) {
+            // Keep the root-only staging directory and any surviving old files
+            // as a manual recovery copy rather than deleting the last copy.
+            $preserveStageForRecovery = true;
+            error_log('EncDiskManager: restore rollback was incomplete; recovery files retained at ' . $stage);
         }
         throw $exception;
     } finally {
-        foreach (array($stage . '/admin.json', $stage . '/disks.json', $oldAdmin, $oldRegistry) as $file) {
-            if (is_file($file) && !is_link($file)) {
-                @unlink($file);
+        if (!$preserveStageForRecovery) {
+            foreach (array($stage . '/admin.json', $stage . '/disks.json', $oldAdmin, $oldRegistry) as $file) {
+                if (is_file($file) && !is_link($file)) {
+                    @unlink($file);
+                }
             }
+            @rmdir($stage);
         }
-        @rmdir($stage);
         @flock($lock, LOCK_UN);
         fclose($lock);
     }
