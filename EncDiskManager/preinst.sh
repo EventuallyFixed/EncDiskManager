@@ -27,7 +27,13 @@ if [ -e "$BACKUP_DIR" ] || [ -L "$BACKUP_DIR" ]; then
     exit 1
 fi
 
+# This marker tells remove.sh that deletion is part of an upgrade and
+# must not proceed unless the handover backup is complete.
 umask 077
+printf '%s\\n' "pending" > "$APP_PATH/.edm-upgrade-preserve"
+chown root:root "$APP_PATH/.edm-upgrade-preserve"
+chmod 600 "$APP_PATH/.edm-upgrade-preserve"
+
 if ! mkdir "$BACKUP_DIR"; then
     log "ERROR: Could not create temporary upgrade backup directory."
     exit 1
