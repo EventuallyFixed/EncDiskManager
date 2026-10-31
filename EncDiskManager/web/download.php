@@ -18,6 +18,10 @@ try {
     exit;
 }
 
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: same-origin');
+
 try {
     $scriptPath = realpath(__FILE__);
     $appPath = ($scriptPath === false) ? false : realpath(dirname($scriptPath) . '/..');
