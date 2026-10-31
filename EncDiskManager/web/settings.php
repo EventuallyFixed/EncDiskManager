@@ -11,12 +11,14 @@ $error = '';
 $success = '';
 $admin = null;
 $setupToken = null;
+$setupTokenPath = '';
 
 try {
     edm_auth_start_session();
     $admin = edm_auth_read_admin();
     if ($admin === null) {
         $setupToken = edm_auth_read_setup_token();
+        $setupTokenPath = edm_auth_data_path() . '/setup-token';
     } else {
         edm_auth_require_login();
     }
@@ -90,7 +92,6 @@ try {
 $csrf = isset($_SESSION['csrf_token']) ? (string)$_SESSION['csrf_token'] : '';
 $isSetup = ($admin === null);
 $https = edm_auth_is_https();
-$setupTokenPath = $isSetup ? edm_auth_data_path() . '/setup-token' : '';
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('X-Content-Type-Options: nosniff');
