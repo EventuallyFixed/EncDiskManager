@@ -4,6 +4,7 @@ require_once __DIR__ . '/../lib/auth.php';
 try {
     edm_auth_start_session();
     $admin = edm_auth_read_admin();
+    $setupToken = ($admin === null) ? edm_auth_read_setup_token() : null;
     $authError = '';
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -16,7 +17,10 @@ try {
             if ($authAction === 'setup' && $admin === null) {
                 $password = isset($_POST['password']) ? (string)$_POST['password'] : '';
                 $confirm = isset($_POST['confirm_password']) ? (string)$_POST['confirm_password'] : '';
-                if (strlen($password) < 12) {
+                $providedSetupToken = isset($_POST['setup_token']) ? (string)$_POST['setup_token'] : '';
+                if ($setupToken === null || !hash_equals($setupToken, $providedSetupToken)) {
+                    $authError = 'The one-time setup code is missing or incorrect.';
+                } elseif (strlen($password) < 12) {
                     $authError = 'Choose a password with at least 12 characters.';
                 } elseif (strlen($password) > 72) {
                     $authError = 'Choose a password no longer than 72 bytes.';
@@ -24,7 +28,10 @@ try {
                     $authError = 'The password confirmation does not match.';
                 } else {
                     edm_auth_write_admin($password);
-                    unset($password, $confirm);
+                    if (!edm_auth_consume_setup_token($providedSetupToken)) {
+                        throw new RuntimeException('The one-time setup code could not be consumed.');
+                    }
+                    unset($password, $confirm, $providedSetupToken);
                     if (!edm_auth_login((string)$_POST['password'])) {
                         throw new RuntimeException('Administrator account was created, but automatic sign-in failed. Please sign in.');
                     }
@@ -71,11 +78,15 @@ try {
         button{margin-top:20px;padding:10px 16px;border:0;border-radius:5px;background:#075f91;color:#fff;font:inherit;cursor:pointer}
         .error{padding:10px;background:#fff0ed;border-left:4px solid #b23b2b;color:#842719}
         </style></head><body><main>
-        <h1>Encrypted Disk Manager</h1><p><?php echo $setupMode ? 'Create the one administrator password for this application.' : 'Sign in to manage encrypted disks.'; ?></p>
+        <h1>Encrypted Disk Manager</h1><p><?php echo $setupMode ? 'Enter the one-time setup code from the NAS, then create the administrator password.' : 'Sign in to manage encrypted disks.'; ?></p>
         <?php echo $errorHtml; ?>
         <form method="post" autocomplete="on">
         <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
         <input type="hidden" name="auth_action" value="<?php echo $setupMode ? 'setup' : 'login'; ?>">
+        <?php if ($setupMode): ?>
+        <label class="field" for="setup-token">One-time setup code</label>
+        <input id="setup-token" name="setup_token" type="password" required autocomplete="off">
+        <?php endif; ?>
         <label class="field" for="password">Administrator password</label>
         <input id="password" name="password" type="password" required autocomplete="<?php echo $setupMode ? 'new-password' : 'current-password'; ?>" <?php echo $setupMode ? 'minlength="12" maxlength="72"' : ''; ?>>
         <?php if ($setupMode): ?>
