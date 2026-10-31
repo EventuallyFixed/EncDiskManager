@@ -97,7 +97,7 @@ if [ -e "${OLD_DATA_DIR}" ] || [ -L "${OLD_DATA_DIR}" ]; then
                 log "ERROR: Legacy configuration file failed security checks: ${SOURCE}"
                 exit 1
             fi
-            TEMP_FILE="${REGISTRY_DIR}/.${FILE}.migrate.$"
+            TEMP_FILE="${REGISTRY_DIR}/.${FILE}.migrate.$$"
             if ! cp "${SOURCE}" "${TEMP_FILE}" ||
                 ! chown root:root "${TEMP_FILE}" ||
                 ! chmod 600 "${TEMP_FILE}" ||
@@ -188,7 +188,7 @@ elif [ -e "$SETUP_TOKEN_FILE" ]; then
         exit 1
     fi
 else
-    SETUP_TOKEN_TMP="$REGISTRY_DIR/.setup-token.$"
+    SETUP_TOKEN_TMP="$REGISTRY_DIR/.setup-token.$$"
     SETUP_TOKEN="$(php -r 'echo bin2hex(random_bytes(32));')"
     case "$SETUP_TOKEN" in
         *[!a-f0-9]*|'') log "ERROR: Could not generate a valid one-time setup code."; exit 1 ;;
