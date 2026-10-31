@@ -23,7 +23,11 @@ fi
 
 # Never reuse or overwrite an earlier backup. It may be the only recoverable copy.
 if [ -e "$BACKUP_DIR" ] || [ -L "$BACKUP_DIR" ]; then
-    log "ERROR: A previous upgrade backup already exists at $BACKUP_DIR; refusing to overwrite it."
+    umask 077
+    printf '%s\\n' "blocked" > "$APP_PATH/.edm-upgrade-preserve"
+    chown root:root "$APP_PATH/.edm-upgrade-preserve"
+    chmod 600 "$APP_PATH/.edm-upgrade-preserve"
+    log "ERROR: A previous upgrade backup already exists at $BACKUP_DIR; refusing to overwrite it or remove the old application."
     exit 1
 fi
 
