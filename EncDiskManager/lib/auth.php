@@ -280,8 +280,14 @@ function edm_auth_write_admin($password)
 
 function edm_auth_is_https()
 {
-    return isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== ''
-        && strtolower((string)$_SERVER['HTTPS']) !== 'off';
+    if (isset($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== ""
+        && strtolower((string) $_SERVER["HTTPS"]) !== "off") {
+        return true;
+    }
+
+    // WD My Cloud OS5 passes the original TLS listener port to PHP.
+    return isset($_SERVER["SERVER_PORT"])
+        && (string) $_SERVER["SERVER_PORT"] === "8543";
 }
 
 function edm_auth_start_session()

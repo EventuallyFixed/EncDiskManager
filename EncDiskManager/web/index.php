@@ -91,7 +91,8 @@ try {
         .warning{padding:10px;background:#fff8e7;border-left:4px solid #b7791f;color:#704b0b}
         </style></head><body><main>
         <h1>Encrypted Disk Manager</h1><p><?php echo $setupMode ? 'Enter the one-time setup code from the NAS, then create the administrator password.' : 'Sign in to manage encrypted disks.'; ?></p>
-        <?php echo $noticeHtml; ?>\n        <?php echo $errorHtml; ?>
+        <?php echo $noticeHtml; ?>
+        <?php echo $errorHtml; ?>
         <?php if (!$httpsConnection): ?>
         <p class="warning">Administrator setup and sign-in are disabled over HTTP. Open Encrypted Disk Manager using your NAS's HTTPS address. A self-signed certificate is acceptable if you have verified it belongs to your NAS.</p>
         <?php else: ?>
