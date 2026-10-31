@@ -90,6 +90,7 @@ try {
 $csrf = isset($_SESSION['csrf_token']) ? (string)$_SESSION['csrf_token'] : '';
 $isSetup = ($admin === null);
 $https = edm_auth_is_https();
+$setupTokenPath = $isSetup ? edm_auth_data_path() . '/setup-token' : '';
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('X-Content-Type-Options: nosniff');
@@ -128,7 +129,7 @@ button{margin-top:16px;padding:10px 15px;border:0;border-radius:5px;background:#
 <h2><?php echo $isSetup ? 'Restore an existing backup' : 'Restore configuration'; ?></h2>
 <p>A backup contains the administrator password hash and registered-disk settings. It does not contain plaintext passwords, LUKS passphrases or disk contents. Treat the file as sensitive.</p>
 <?php if ($isSetup): ?>
-<p class="warning">No administrator is configured. Enter the one-time setup code from the NAS to restore a backup. After restore, sign in using the administrator password contained in that backup.</p>
+<p class="warning">No administrator is configured. Enter the one-time setup code from the NAS to restore a backup. Retrieve the code over SSH from <code><?php echo edm_settings_h($setupTokenPath); ?></code>. After restore, sign in using the administrator password contained in that backup.</p>
 <?php else: ?>
 <p class="warning">Restoring replaces the current administrator account and the entire registered-disk list. The current configuration will be replaced only after the uploaded archive passes validation.</p>
 <?php endif; ?>
