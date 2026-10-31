@@ -124,6 +124,10 @@ if [ -L "$ADMIN_FILE" ] || [ -L "$SETUP_TOKEN_FILE" ]; then
     log "ERROR: Authentication data must not be stored in symbolic links."
     exit 1
 fi
+if [ -e "$ADMIN_FILE" ] && [ ! -f "$ADMIN_FILE" ]; then
+    log "ERROR: Administrator credential path is not a regular file."
+    exit 1
+fi
 if [ -f "$ADMIN_FILE" ]; then
     if [ "$(stat -c %u "$ADMIN_FILE")" != "0" ] || [ "$(stat -c %a "$ADMIN_FILE")" != "600" ]; then
         log "ERROR: Administrator credential file ownership or permissions are unsafe."
