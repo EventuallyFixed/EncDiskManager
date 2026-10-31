@@ -344,6 +344,10 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
             throw new RuntimeException('An administrator has been configured; sign in before replacing its configuration.');
         }
 
+        // Reject unsafe ephemeral entries before changing either configuration
+        // file or rotating the authentication epoch. This keeps a refused restore
+        // from invalidating sessions when no replacement has been committed.
+
         if (!mkdir($stage, 0700) || !chown($stage, 0) || !chgrp($stage, 0)) {
             throw new RuntimeException('Could not create a private restore staging directory.');
         }
