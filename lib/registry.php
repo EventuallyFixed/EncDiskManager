@@ -47,7 +47,11 @@ function edm_registry_assert_directory($directory)
         // directory. Trust only this exact vendor-managed parent; the app tree
         // and its data directory are still checked separately and must be
         // root-owned. Do not generalise this exception to other ancestors.
-        $trustedWdAppParent = ($current === '/mnt/HD/HD_a2/Nas_Prog');
+        $trustedWdAppParents = array(
+            '/mnt/HD/HD_a2',
+            '/mnt/HD/HD_a2/Nas_Prog'
+        );
+        $trustedWdAppParent = in_array($current, $trustedWdAppParents, true);
         if (($permissions & 0022) !== 0 && !$isStickyDirectory && !$trustedWdAppParent) {
             throw new RuntimeException('Registry path contains an ancestor writable by group or others.');
         }
