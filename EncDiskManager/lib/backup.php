@@ -243,6 +243,34 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
         throw new RuntimeException('Could not secure the restore lock.');
     }
 
+    // Serialize credential replacement with login and initial administrator
+    // creation. Login captures the session epoch while holding this same lock.
+    $adminLockPath = $dataPath . '/admin.lock';
+    if (is_link($adminLockPath)) {
+        @flock($lock, LOCK_UN);
+        fclose($lock);
+        throw new RuntimeException('Administrator lock must not be a symbolic link.');
+    }
+    if (file_exists($adminLockPath)) {
+        $adminLockStat = @lstat($adminLockPath);
+        if ($adminLockStat === false || (($adminLockStat['mode'] & 0170000) !== 0100000)
+            || $adminLockStat['uid'] !== 0) {
+            @flock($lock, LOCK_UN);
+            fclose($lock);
+            throw new RuntimeException('Administrator lock must be a root-owned regular file.');
+        }
+    }
+    $adminLock = fopen($adminLockPath, 'c');
+    if ($adminLock === false || !chown($adminLockPath, 0) || !chgrp($adminLockPath, 0)
+        || !chmod($adminLockPath, 0600) || !flock($adminLock, LOCK_EX)) {
+        if (is_resource($adminLock)) {
+            fclose($adminLock);
+        }
+        @flock($lock, LOCK_UN);
+        fclose($lock);
+        throw new RuntimeException('Could not secure the administrator lock for restore.');
+    }
+
     $stage = $dataPath . '/.restore-' . bin2hex(random_bytes(8));
     $oldAdmin = $stage . '/previous-admin.json';
     $oldRegistry = $stage . '/previous-disks.json';
@@ -333,6 +361,8 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
             }
             @rmdir($stage);
         }
+        @flock($adminLock, LOCK_UN);
+        fclose($adminLock);
         @flock($lock, LOCK_UN);
         fclose($lock);
     }
