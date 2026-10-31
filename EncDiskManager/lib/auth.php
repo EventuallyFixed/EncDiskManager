@@ -184,6 +184,7 @@ function edm_auth_start_session()
     ini_set('session.use_only_cookies', '1');
     ini_set('session.use_trans_sid', '0');
     ini_set('session.cookie_httponly', '1');
+    ini_set('session.gc_maxlifetime', '28800');
 
     $https = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== ''
         && strtolower((string)$_SERVER['HTTPS']) !== 'off';
