@@ -99,140 +99,6 @@ header('X-Content-Type-Options: nosniff');
 function h($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
-
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
-if (empty($_SESSION['bdm_csrf_token'])) {
-    $_SESSION['bdm_csrf_token'] = bin2hex(random_bytes(32));
-}
-
-$actionMessage = '';
-$actionOutput = array();
-
-function run_backup_helper($action, $arguments, $passphrase, &$output, &$status) {
-    $scriptPath = realpath(__FILE__);
-    $appPath = ($scriptPath === false) ? false : realpath(dirname($scriptPath) . '/..');
-    if ($appPath === false || !is_dir($appPath)) {
-        $output = array('Action unavailable: the application installation path could not be resolved.');
-        $status = 127;
-        return false;
-    }
-
-    $configFile = $appPath . '/encdiskmanager.conf';
-    if (is_link($configFile) || !is_file($configFile) || !is_readable($configFile)) {
-        $output = array('Action unavailable: the application configuration is missing or inaccessible.');
-        $status = 127;
-        return false;
-    }
-
-    $configuredPath = trim((string)file_get_contents($configFile));
-    if ($configuredPath !== $appPath) {
-        $output = array('Action unavailable: the application configuration does not match its installation path.');
-        $status = 127;
-        return false;
-    }
-
-    $helper = $appPath . '/bin/encdiskmanager-helper';
-    if (!is_file($helper) || !is_executable($helper)) {
-        $output = array('Action unavailable: the installed helper is missing or not executable.');
-        $status = 127;
-        return false;
-    }
-
-    $parts = array(escapeshellarg($helper), escapeshellarg($action));
-    foreach ($arguments as $argument) {
-        $parts[] = escapeshellarg($argument);
-    }
-    $command = implode(' ', $parts);
-    $spec = array(
-        0 => array('pipe', 'r'),
-        1 => array('pipe', 'w'),
-        2 => array('redirect', 1)
-    );
-    $process = proc_open($command, $spec, $pipes);
-    if (!is_resource($process)) {
-        $output = array('Could not start the storage helper.');
-        $status = 127;
-        return false;
-    }
-
-    $writeFailed = false;
-    if ($passphrase !== null) {
-        $expectedBytes = strlen($passphrase);
-        $offset = 0;
-        while ($offset < $expectedBytes) {
-            $writtenBytes = fwrite($pipes[0], substr($passphrase, $offset));
-            if ($writtenBytes === false || $writtenBytes === 0) {
-                $writeFailed = true;
-                break;
-            }
-            $offset += $writtenBytes;
-        }
-    }
-    fclose($pipes[0]);
-    $combined = stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-    $status = proc_close($process);
-
-    if ($writeFailed) {
-        $output = array('Could not safely deliver the passphrase to the storage helper; the action was not confirmed.');
-        $status = 125;
-        return false;
-    }
-
-    $combined = trim((string)$combined);
-    $output = ($combined === '') ? array() : array_slice(explode("\n", $combined), 0, 30);
-    return $status === 0;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $postedToken = isset($_POST['csrf_token']) ? (string)$_POST['csrf_token'] : '';
-    $action = isset($_POST['disk_action']) ? (string)$_POST['disk_action'] : '';
-    $passphrase = isset($_POST['passphrase']) ? (string)$_POST['passphrase'] : '';
-    unset($_POST['passphrase']);
-    $mountPath = isset($_POST['mount_path']) ? trim((string)$_POST['mount_path']) : '';
-    $confirmRepair = isset($_POST['confirm_repair']) && $_POST['confirm_repair'] === 'yes';
-
-    if (!hash_equals($_SESSION['bdm_csrf_token'], $postedToken)) {
-        http_response_code(403);
-        $actionMessage = 'Request rejected: security token invalid. Reload the page and try again.';
-    } elseif (!in_array($action, array('mount', 'unmount', 'repair'), true)) {
-        http_response_code(400);
-        $actionMessage = 'Request rejected: unsupported action.';
-    } elseif (in_array($action, array('mount', 'unmount'), true) &&
-        ($mountPath === '' || strpos($mountPath, '/mnt/') !== 0 ||
-         strpos($mountPath, '..') !== false ||
-         !preg_match('~^/mnt/[A-Za-z0-9._/-]+$~', $mountPath) ||
-         preg_match('~//|/\./|/$~', $mountPath))) {
-        http_response_code(400);
-        $actionMessage = 'Invalid mount folder path. Choose a folder beneath /mnt using letters, numbers, dots, underscores, or hyphens.';
-    } elseif ($action === 'repair' && !$confirmRepair) {
-        http_response_code(400);
-        $actionMessage = 'Repair was not started because explicit confirmation was not provided.';
-    } elseif (in_array($action, array('mount', 'repair'), true) && $passphrase === '') {
-        http_response_code(400);
-        $actionMessage = 'Enter the encryption passphrase to continue.';
-    } else {
-        $arguments = array();
-        if ($action === 'mount' || $action === 'unmount') {
-            $arguments[] = $mountPath;
-        } elseif ($action === 'repair') {
-            $arguments[] = 'CONFIRM';
-        }
-
-        $helperOutput = array();
-        $status = 1;
-        $secret = in_array($action, array('mount', 'repair'), true) ? $passphrase : null;
-        $ok = run_backup_helper($action, $arguments, $secret, $helperOutput, $status);
-        $actionOutput = $helperOutput;
-        $actionMessage = $ok
-            ? 'Command completed successfully.'
-            : 'Command failed (exit status ' . (int)$status . ').';
-    }
-    unset($passphrase);
-}
-
 function read_blkid($device) {
     // Only allow kernel-style block device names; never accept user input.
     if (!preg_match('/^[a-zA-Z0-9._+-]+$/', $device)) {
@@ -447,7 +313,7 @@ unset($device);
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EncDiskManager</title>
+<title>Encrypted Disk Manager</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined">
 <style>
     body {
@@ -556,7 +422,7 @@ unset($device);
 <header>
     <img src="logo.svg" alt="">
     <div>
-        <h1>EncDiskManager</h1>
+        <h1>Encrypted Disk Manager</h1>
         <div class="muted">USB storage · LUKS inventory</div>
     </div>
     <div class="header-actions">
@@ -566,34 +432,20 @@ unset($device);
             <span class="material-symbol" aria-hidden="true">download</span>
             <span>Backup config</span>
         </a>
+        <form method="post" style="display:inline-block;margin-left:8px">
+            <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['csrf_token']); ?>">
+            <input type="hidden" name="auth_action" value="logout">
+            <button type="submit" style="padding:8px 11px;border:1px solid #aebac1;border-radius:5px;background:#fff;color:#075f91;cursor:pointer">Sign out</button>
+        </form>
     </div>
 </header>
 <main>
     <section class="panel safe-note">
         <strong>Before uninstalling or reinstalling:</strong>
         download a configuration backup using the header button.
-        The registry is stored inside this application and will be deleted
-        when the app is removed. The backup contains disk UUIDs and mount
-        settings only; it does not contain encryption passphrases.
-    </section>
-    <section class="panel">
-        <h2>Backup USB controls</h2>
-        <p class="muted">
-            Use the action links on the row matching the configured backup
-            partition. Mounting requires the encryption passphrase and a
-            destination folder beneath <code>/mnt</code>. Normal mounting
-            and unmounting never run filesystem repair.
-        </p>
-        <?php if ($actionMessage !== ''): ?>
-            <p class="status"><?php echo h($actionMessage); ?></p>
-            <?php if ($actionOutput): ?>
-                <pre><code><?php echo h(implode("\n", $actionOutput)); ?></code></pre>
-            <?php endif; ?>
-        <?php endif; ?>
-        <p class="muted">
-            Do not disconnect the backup USB disk while it is mounted.
-            Repair is a separate, explicitly confirmed operation.
-        </p>
+        Normal upgrades preserve the registered-disk configuration and administrator
+        account automatically. A complete uninstall removes local configuration;
+        the downloaded backup contains disk UUIDs and mount settings only, never passphrases.
     </section>
     <section class="panel">
         <h2>Detected USB partitions</h2>
@@ -616,7 +468,6 @@ unset($device);
                     <th>Filesystem / type</th>
                     <th>UUID</th>
                     <th>Mounted at</th>
-                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -631,29 +482,6 @@ unset($device);
                     <td><?php echo h($device['type'] ?: 'Unknown'); ?></td>
                     <td><code><?php echo h($device['uuid'] ?: '—'); ?></code></td>
                     <td><?php echo h($device['mount'] ?: 'Not mounted directly'); ?></td>
-                    <td>
-                        <?php if (!empty($device['is_backup'])): ?>
-                            <?php if (!empty($device['backup_mount'])): ?>
-                                <code><?php echo h($device['backup_mount']); ?></code>
-                                <a href="#" class="action-link"
-                                   data-open-dialog="unmount-dialog"
-                                   data-mount-path="<?php echo h($device['backup_mount']); ?>"
-                                   aria-label="Unmount" title="Unmount"><span class="material-symbol" aria-hidden="true">eject</span></a>
-                            <?php else: ?>
-                                <span>Not Mounted</span>
-                                <a href="#" class="action-link"
-                                   data-open-dialog="mount-dialog"
-                                   aria-label="Mount" title="Mount"><span class="material-symbol" aria-hidden="true">cloud_upload</span></a>
-                                <?php if (!empty($device['backup_mapper'])): ?>
-                                    <a href="#" class="action-link"
-                                       data-open-dialog="repair-dialog"
-                                       aria-label="Repair" title="Repair"><span class="material-symbol" aria-hidden="true">build</span></a>
-                                <?php endif; ?>
-                            <?php endif; ?>
-                        <?php else: ?>
-                            <span class="muted">—</span>
-                        <?php endif; ?>
-                    </td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -713,98 +541,6 @@ unset($device);
         makes no storage changes.
     </section>
 
-    <dialog id="mount-dialog" aria-labelledby="mount-dialog-title">
-        <form method="post">
-            <h2 id="mount-dialog-title">Mount backup disk</h2>
-            <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['bdm_csrf_token']); ?>">
-            <input type="hidden" name="disk_action" value="mount">
-            <label for="mount-path">Backup folder under /mnt</label>
-            <input id="mount-path" name="mount_path" type="text"
-                   value="/mnt/backupdisk" required
-                   pattern="/mnt/[A-Za-z0-9._/-]+"
-                   autocomplete="off">
-            <label for="mount-passphrase">Encryption passphrase</label>
-            <input id="mount-passphrase" name="passphrase" type="password"
-                   required autocomplete="off">
-            <p class="muted">Normal mounting does not run filesystem repair.</p>
-            <div class="dialog-actions">
-                <button type="submit">Mount</button>
-                <button type="button" data-close-dialog>Cancel</button>
-            </div>
-        </form>
-    </dialog>
-
-    <dialog id="unmount-dialog" aria-labelledby="unmount-dialog-title">
-        <form method="post">
-            <h2 id="unmount-dialog-title">Unmount backup disk</h2>
-            <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['bdm_csrf_token']); ?>">
-            <input type="hidden" name="disk_action" value="unmount">
-            <input type="hidden" name="mount_path" id="unmount-path">
-            <p>Unmount the backup disk at <code id="unmount-path-label"></code>?</p>
-            <div class="dialog-actions">
-                <button type="submit">Unmount</button>
-                <button type="button" data-close-dialog>Cancel</button>
-            </div>
-        </form>
-    </dialog>
-
-    <dialog id="repair-dialog" aria-labelledby="repair-dialog-title">
-        <form method="post">
-            <h2 id="repair-dialog-title">Repair backup filesystem</h2>
-            <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['bdm_csrf_token']); ?>">
-            <input type="hidden" name="disk_action" value="repair">
-            <p>Repair can modify filesystem metadata. Ensure the backup disk is unmounted and important data is backed up.</p>
-            <label for="repair-passphrase">Encryption passphrase</label>
-            <input id="repair-passphrase" name="passphrase" type="password"
-                   required autocomplete="off">
-            <label>
-                <input type="checkbox" name="confirm_repair" value="yes" required>
-                I explicitly confirm that the filesystem repair may modify data.
-            </label>
-            <div class="dialog-actions">
-                <button type="submit">Confirm repair</button>
-                <button type="button" data-close-dialog>Cancel</button>
-            </div>
-        </form>
-    </dialog>
-
-    <script>
-    (function () {
-        document.querySelectorAll('[data-open-dialog]').forEach(function (link) {
-            link.addEventListener('click', function (event) {
-                event.preventDefault();
-                var dialog = document.getElementById(link.getAttribute('data-open-dialog'));
-                if (!dialog) return;
-                if (dialog.id === 'unmount-dialog') {
-                    var path = link.getAttribute('data-mount-path') || '';
-                    document.getElementById('unmount-path').value = path;
-                    document.getElementById('unmount-path-label').textContent = path;
-                }
-                dialog.showModal();
-            });
-        });
-        document.querySelectorAll('[data-close-dialog]').forEach(function (button) {
-            button.addEventListener('click', function () {
-                var dialog = button.closest('dialog');
-                if (dialog) {
-                    dialog.querySelectorAll('input[type="password"]').forEach(function (field) {
-                        field.value = '';
-                    });
-                    dialog.close();
-                }
-            });
-        });
-        document.querySelectorAll('dialog form').forEach(function (form) {
-            form.addEventListener('submit', function () {
-                window.setTimeout(function () {
-                    form.querySelectorAll('input[type="password"]').forEach(function (field) {
-                        field.value = '';
-                    });
-                }, 0);
-            });
-        });
-    }());
-    </script>
 </main>
 </body>
 </html>
