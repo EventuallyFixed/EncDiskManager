@@ -157,6 +157,35 @@ try {
         'replacement restore removes obsolete setup and login-attempt files');
     $passed += 2;
 
+    // Unsafe ephemeral entries must be rejected before replacing configuration
+    // or rotating the authentication epoch. The symlink is confined to this
+    // disposable test data directory.
+    $preflightAdmin = edm_auth_read_admin();
+    $preflightRegistry = edm_registry_load($data . '/disks.json');
+    $preflightEpoch = trim(file_get_contents($data . '/auth-epoch'));
+    if (!symlink($base . '/missing-setup-token-target', $data . '/setup-token')) {
+        throw new RuntimeException('Could not prepare the isolated preflight-failure fixture.');
+    }
+    $preflightFailureMessage = null;
+    try {
+        edm_backup_restore_archive($archive, true);
+    } catch (Throwable $exception) {
+        $preflightFailureMessage = $exception->getMessage();
+    }
+    edm_backup_integration_assert($preflightFailureMessage ===
+        'Unexpected symbolic link in private configuration directory.',
+        'restore rejects an unsafe setup-token symlink during preflight');
+    $passed++;
+    edm_backup_integration_assert(
+        edm_auth_read_admin()['password_hash'] === $preflightAdmin['password_hash']
+            && edm_registry_load($data . '/disks.json') === $preflightRegistry,
+        'preflight rejection leaves administrator and registry unchanged');
+    $passed++;
+    edm_backup_integration_assert(trim(file_get_contents($data . '/auth-epoch')) === $preflightEpoch,
+        'preflight rejection leaves the authentication session epoch unchanged');
+    $passed++;
+    unlink($data . '/setup-token');
+
     // Also exercise first-time restore, where no administrator exists yet.
     unlink($data . '/admin.json');
     unlink($data . '/disks.json');
