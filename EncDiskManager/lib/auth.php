@@ -27,7 +27,13 @@ function edm_auth_app_path()
         }
         $permissions = $stat['mode'] & 07777;
         $stickyDirectory = (($permissions & 01000) !== 0);
-        $trustedWdParent = ($current === '/mnt/HD/HD_a2/Nas_Prog');
+        // WD OS5 places NAS applications under /mnt/HD/HD_a2/Nas_Prog.
+        // On the EX4100 both vendor-managed directories are root-owned but
+        // mode 0777, so permit only these exact path components.
+        $trustedWdParent = in_array($current, array(
+            '/mnt/HD/HD_a2',
+            '/mnt/HD/HD_a2/Nas_Prog'
+        ), true);
         if (($permissions & 0022) !== 0 && !$stickyDirectory && !$trustedWdParent) {
             throw new RuntimeException('Application path contains a directory writable by group or others.');
         }
