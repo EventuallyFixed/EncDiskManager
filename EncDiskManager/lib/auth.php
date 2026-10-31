@@ -60,6 +60,73 @@ function edm_auth_file_path()
     return edm_auth_data_path() . '/admin.json';
 }
 
+/*
+ * A separate random epoch invalidates every previously issued PHP session
+ * after an administrator restore or configuration deletion.
+ */
+function edm_auth_read_session_epoch()
+{
+    $dataPath = edm_auth_data_path();
+    $path = $dataPath . '/auth-epoch';
+    if (is_link($path)) {
+        throw new RuntimeException('Authentication session epoch must not be a symbolic link.');
+    }
+    if (!file_exists($path)) {
+        edm_auth_rotate_session_epoch();
+    }
+    $stat = @lstat($path);
+    if ($stat === false || (($stat['mode'] & 0170000) !== 0100000)
+        || $stat['uid'] !== 0 || (($stat['mode'] & 0777) !== 0600)) {
+        throw new RuntimeException('Authentication session epoch permissions are invalid.');
+    }
+    $epoch = trim((string)file_get_contents($path));
+    if (!preg_match('/^[a-f0-9]{64}$/', $epoch)) {
+        throw new RuntimeException('Authentication session epoch is invalid.');
+    }
+    return $epoch;
+}
+
+function edm_auth_rotate_session_epoch()
+{
+    $dataPath = edm_auth_data_path();
+    $lockPath = $dataPath . '/auth-epoch.lock';
+    if (is_link($lockPath)) {
+        throw new RuntimeException('Authentication epoch lock must not be a symbolic link.');
+    }
+    $lock = fopen($lockPath, 'c');
+    if ($lock === false) {
+        throw new RuntimeException('Could not open authentication epoch lock.');
+    }
+
+    try {
+        if (!chown($lockPath, 0) || !chgrp($lockPath, 0)
+            || !chmod($lockPath, 0600) || !flock($lock, LOCK_EX)) {
+            throw new RuntimeException('Could not secure authentication epoch lock.');
+        }
+        $temporary = tempnam($dataPath, '.auth-epoch-');
+        if ($temporary === false) {
+            throw new RuntimeException('Could not create a temporary authentication epoch.');
+        }
+        try {
+            $epoch = bin2hex(random_bytes(32)) . "\n";
+            $written = file_put_contents($temporary, $epoch, LOCK_EX);
+            if ($written === false || $written !== strlen($epoch)
+                || !chown($temporary, 0) || !chgrp($temporary, 0)
+                || !chmod($temporary, 0600)
+                || !rename($temporary, $dataPath . '/auth-epoch')) {
+                throw new RuntimeException('Could not safely rotate the authentication session epoch.');
+            }
+        } finally {
+            if (file_exists($temporary)) {
+                @unlink($temporary);
+            }
+        }
+    } finally {
+        @flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
 function edm_auth_read_admin()
 {
     $path = edm_auth_file_path();
@@ -236,7 +303,17 @@ function edm_auth_start_session()
 
 function edm_auth_is_authenticated()
 {
-    return isset($_SESSION['authenticated']) && $_SESSION['authenticated'] === true;
+    if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
+        return false;
+    }
+    $currentEpoch = edm_auth_read_session_epoch();
+    $sessionEpoch = isset($_SESSION['auth_epoch']) ? (string)$_SESSION['auth_epoch'] : '';
+    if ($sessionEpoch === '' || !hash_equals($currentEpoch, $sessionEpoch)) {
+        $_SESSION = array();
+        session_regenerate_id(true);
+        return false;
+    }
+    return true;
 }
 
 function edm_auth_login($password)
@@ -346,6 +423,7 @@ function edm_auth_login($password)
     $_SESSION['authenticated'] = true;
     $_SESSION['created_at'] = time();
     $_SESSION['last_activity'] = time();
+    $_SESSION['auth_epoch'] = edm_auth_read_session_epoch();
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     return true;
 }
