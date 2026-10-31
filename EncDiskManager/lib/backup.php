@@ -371,48 +371,105 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
 function edm_backup_delete_configuration()
 {
     $dataPath = edm_auth_data_path();
-    $known = array(
-        'admin.json', 'disks.json', 'setup-token', 'login-attempts.json',
-        'admin.lock', 'disks.json.lock', 'restore.lock'
-    );
 
-    // Validate every known entry before deleting any of them, so an unsafe
-    // file cannot cause an avoidable partial wipe.
-    foreach ($known as $name) {
-        $path = $dataPath . '/' . $name;
-        if (is_link($path)) {
-            throw new RuntimeException('Refusing to delete a symbolic link from the private data directory.');
-        }
-        if (file_exists($path)) {
-            $stat = lstat($path);
-            if ($stat === false || (($stat['mode'] & 0170000) !== 0100000)
-                || $stat['uid'] !== 0 || (($stat['mode'] & 0777) !== 0600)) {
-                throw new RuntimeException('Saved configuration file failed security checks: ' . $name);
-            }
+    // Use the same lock order as restore: restore.lock, then admin.lock.
+    // This serializes deletion with restore, login and initial setup.
+    $restoreLockPath = $dataPath . '/restore.lock';
+    if (is_link($restoreLockPath)) {
+        throw new RuntimeException('Restore lock must not be a symbolic link.');
+    }
+    if (file_exists($restoreLockPath)) {
+        $stat = @lstat($restoreLockPath);
+        if ($stat === false || (($stat['mode'] & 0170000) !== 0100000) || $stat['uid'] !== 0) {
+            throw new RuntimeException('Restore lock must be a root-owned regular file.');
         }
     }
+    $restoreLock = fopen($restoreLockPath, 'c');
+    if ($restoreLock === false || !chown($restoreLockPath, 0) || !chgrp($restoreLockPath, 0)
+        || !chmod($restoreLockPath, 0600) || !flock($restoreLock, LOCK_EX)) {
+        if (is_resource($restoreLock)) {
+            fclose($restoreLock);
+        }
+        throw new RuntimeException('Could not secure the restore lock for configuration deletion.');
+    }
 
-    $temporaryToken = $dataPath . '/.setup-token-delete-' . bin2hex(random_bytes(8));
-    $token = bin2hex(random_bytes(32)) . "\n";
-    edm_backup_write_private_file($temporaryToken, $token);
-
-    // Revoke other browser sessions before removing the administrator file.
-    // Even a later filesystem error must not leave old sessions authenticated.
-    edm_auth_rotate_session_epoch();
-
-    foreach ($known as $name) {
-        $path = $dataPath . '/' . $name;
-        if (file_exists($path) && !@unlink($path)) {
-            // If the administrator file was already removed, install the
-            // staged token so the owner can still complete a fresh setup.
-            if (!file_exists($dataPath . '/admin.json')) {
-                @rename($temporaryToken, $dataPath . '/setup-token');
-            }
-            error_log('EncDiskManager: could not delete saved configuration file ' . $name);
-            throw new RuntimeException('Could not delete saved configuration file: ' . $name);
+    $adminLockPath = $dataPath . '/admin.lock';
+    if (is_link($adminLockPath)) {
+        @flock($restoreLock, LOCK_UN);
+        fclose($restoreLock);
+        throw new RuntimeException('Administrator lock must not be a symbolic link.');
+    }
+    if (file_exists($adminLockPath)) {
+        $stat = @lstat($adminLockPath);
+        if ($stat === false || (($stat['mode'] & 0170000) !== 0100000) || $stat['uid'] !== 0) {
+            @flock($restoreLock, LOCK_UN);
+            fclose($restoreLock);
+            throw new RuntimeException('Administrator lock must be a root-owned regular file.');
         }
     }
-    if (!rename($temporaryToken, $dataPath . '/setup-token')) {
-        throw new RuntimeException('Configuration was deleted but a new setup token could not be installed.');
+    $adminLock = fopen($adminLockPath, 'c');
+    if ($adminLock === false || !chown($adminLockPath, 0) || !chgrp($adminLockPath, 0)
+        || !chmod($adminLockPath, 0600) || !flock($adminLock, LOCK_EX)) {
+        if (is_resource($adminLock)) {
+            fclose($adminLock);
+        }
+        @flock($restoreLock, LOCK_UN);
+        fclose($restoreLock);
+        throw new RuntimeException('Could not secure the administrator lock for configuration deletion.');
+    }
+
+    $temporaryToken = null;
+    try {
+        $known = array(
+            'admin.json', 'disks.json', 'setup-token', 'login-attempts.json',
+            'disks.json.lock'
+        );
+
+        // Validate every known entry before deleting any of them, so an unsafe
+        // file cannot cause an avoidable partial wipe.
+        foreach ($known as $name) {
+            $path = $dataPath . '/' . $name;
+            if (is_link($path)) {
+                throw new RuntimeException('Refusing to delete a symbolic link from the private data directory.');
+            }
+            if (file_exists($path)) {
+                $stat = lstat($path);
+                if ($stat === false || (($stat['mode'] & 0170000) !== 0100000)
+                    || $stat['uid'] !== 0 || (($stat['mode'] & 0777) !== 0600)) {
+                    throw new RuntimeException('Saved configuration file failed security checks: ' . $name);
+                }
+            }
+        }
+
+        $temporaryToken = $dataPath . '/.setup-token-delete-' . bin2hex(random_bytes(8));
+        $token = bin2hex(random_bytes(32)) . "\n";
+        edm_backup_write_private_file($temporaryToken, $token);
+
+        // Revoke other browser sessions before removing the administrator file.
+        edm_auth_rotate_session_epoch();
+
+        foreach ($known as $name) {
+            $path = $dataPath . '/' . $name;
+            if (file_exists($path) && !@unlink($path)) {
+                if (!file_exists($dataPath . '/admin.json')
+                    && @rename($temporaryToken, $dataPath . '/setup-token')) {
+                    $temporaryToken = null;
+                }
+                error_log('EncDiskManager: could not delete saved configuration file ' . $name);
+                throw new RuntimeException('Could not delete saved configuration file: ' . $name);
+            }
+        }
+        if (!rename($temporaryToken, $dataPath . '/setup-token')) {
+            throw new RuntimeException('Configuration was deleted but a new setup token could not be installed.');
+        }
+        $temporaryToken = null;
+    } finally {
+        if ($temporaryToken !== null && is_file($temporaryToken) && !is_link($temporaryToken)) {
+            @unlink($temporaryToken);
+        }
+        @flock($adminLock, LOCK_UN);
+        fclose($adminLock);
+        @flock($restoreLock, LOCK_UN);
+        fclose($restoreLock);
     }
 }
