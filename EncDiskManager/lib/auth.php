@@ -174,6 +174,12 @@ function edm_auth_write_admin($password)
     }
 }
 
+function edm_auth_is_https()
+{
+    return isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== ''
+        && strtolower((string)$_SERVER['HTTPS']) !== 'off';
+}
+
 function edm_auth_start_session()
 {
     if (session_status() === PHP_SESSION_ACTIVE) {
@@ -186,8 +192,7 @@ function edm_auth_start_session()
     ini_set('session.cookie_httponly', '1');
     ini_set('session.gc_maxlifetime', '28800');
 
-    $https = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== ''
-        && strtolower((string)$_SERVER['HTTPS']) !== 'off';
+    $https = edm_auth_is_https();
     $script = isset($_SERVER['SCRIPT_NAME']) ? (string)$_SERVER['SCRIPT_NAME'] : '/';
     $cookiePath = rtrim(str_replace('\\', '/', dirname($script)), '/');
     if ($cookiePath === '') {
