@@ -114,6 +114,30 @@ if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
     log "Previous private configuration restored successfully; temporary backup removed."
 fi
 
+# Create a one-time setup code only while no administrator account exists.
+# Retrieve it over SSH from: $APP_PATH/data/setup-token
+ADMIN_FILE="$APP_PATH/data/admin.json"
+SETUP_TOKEN_FILE="$APP_PATH/data/setup-token"
+if [ -f "$ADMIN_FILE" ]; then
+    rm -f "$SETUP_TOKEN_FILE"
+elif [ ! -e "$SETUP_TOKEN_FILE" ]; then
+    SETUP_TOKEN_TMP="$APP_PATH/data/.setup-token.$"
+    SETUP_TOKEN="$(php -r 'echo bin2hex(random_bytes(32));')"
+    case "$SETUP_TOKEN" in
+        *[!a-f0-9]*|'') log "ERROR: Could not generate a valid one-time setup code."; exit 1 ;;
+    esac
+    if printf '%s\n' "$SETUP_TOKEN" > "$SETUP_TOKEN_TMP" &&
+        chown root:root "$SETUP_TOKEN_TMP" &&
+        chmod 600 "$SETUP_TOKEN_TMP" &&
+        mv -f "$SETUP_TOKEN_TMP" "$SETUP_TOKEN_FILE"; then
+        log "One-time setup code created. Retrieve it over SSH from $SETUP_TOKEN_FILE."
+    else
+        rm -f "$SETUP_TOKEN_TMP"
+        log "ERROR: Could not securely create the one-time setup code."
+        exit 1
+    fi
+fi
+
 # Write private runtime configuration using the actual WD installation path.
 CONFIG_FILE="${APP_PATH}/encdiskmanager.conf"
 CONFIG_TMP="${APP_PATH}/.encdiskmanager.conf.$$"
