@@ -125,7 +125,44 @@ try {
         'first-time restore installs the backed-up disk registry');
     $passed += 2;
 
-    echo "PASS: {$passed} backup integration checks completed.\n";
+    // Force a failure after both restored files have been installed: the
+    // authentication epoch lock is checked only when restore rotates the
+    // epoch, which happens after the two configuration files are committed.
+    // The symlink is confined to this disposable test data directory.
+    $_SESSION['auth_epoch'] = trim(file_get_contents($data . '/auth-epoch'));
+    $rollbackAdmin = array(
+        'password_hash' => password_hash('integration-rollback-password', PASSWORD_DEFAULT),
+        'created_at' => time()
+    );
+    $rollbackRegistry = array('version' => 1, 'disks' => array());
+    edm_backup_write_private_file($data . '/admin.json', json_encode($rollbackAdmin, JSON_PRETTY_PRINT) . "\\n");
+    edm_registry_save($data . '/disks.json', $rollbackRegistry);
+    unlink($data . '/auth-epoch.lock');
+    if (!symlink($base . '/missing-lock-target', $data . '/auth-epoch.lock')) {
+        throw new RuntimeException('Could not prepare the isolated restore-failure fixture.');
+    }
+
+    $restoreFailed = false;
+    try {
+        edm_backup_restore_archive($archive, true);
+    } catch (RuntimeException $exception) {
+        $restoreFailed = (strpos($exception->getMessage(), 'Authentication epoch lock must not be a symbolic link') !== false);
+    }
+    edm_backup_integration_assert($restoreFailed,
+        'restore reports the deliberately induced post-install epoch-lock failure');
+    $passed++;
+
+    $afterRollbackAdmin = edm_auth_read_admin();
+    $afterRollbackRegistry = edm_registry_load($data . '/disks.json');
+    edm_backup_integration_assert($afterRollbackAdmin['password_hash'] === $rollbackAdmin['password_hash'],
+        'rollback restores the previous administrator file after a post-install failure');
+    edm_backup_integration_assert($afterRollbackRegistry === $rollbackRegistry,
+        'rollback restores the previous registry file after a post-install failure');
+    $passed += 2;
+
+    unlink($data . '/auth-epoch.lock');
+
+    echo "PASS: {$passed} backup integration checks completed.\\n";
 } catch (Throwable $exception) {
     fwrite(STDERR, $exception->getMessage() . "\n");
     exit(1);
