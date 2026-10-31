@@ -190,9 +190,14 @@ function edm_auth_logout()
     $_SESSION = array();
     if (ini_get('session.use_cookies')) {
         $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000, $params['path'],
-            isset($params['domain']) ? $params['domain'] : '',
-            !empty($params['secure']), !empty($params['httponly']));
+        setcookie(session_name(), '', array(
+            'expires' => time() - 42000,
+            'path' => $params['path'],
+            'domain' => isset($params['domain']) ? $params['domain'] : '',
+            'secure' => !empty($params['secure']),
+            'httponly' => !empty($params['httponly']),
+            'samesite' => 'Lax'
+        ));
     }
     session_destroy();
 }
