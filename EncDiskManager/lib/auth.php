@@ -104,6 +104,13 @@ function edm_auth_rotate_session_epoch()
     if (is_link($lockPath)) {
         throw new RuntimeException('Authentication epoch lock must not be a symbolic link.');
     }
+    if (file_exists($lockPath)) {
+        $lockStat = @lstat($lockPath);
+        if ($lockStat === false || (($lockStat['mode'] & 0170000) !== 0100000)
+            || $lockStat['uid'] !== 0) {
+            throw new RuntimeException('Authentication epoch lock must be a root-owned regular file.');
+        }
+    }
     $lock = fopen($lockPath, 'c');
     if ($lock === false) {
         throw new RuntimeException('Could not open authentication epoch lock.');
