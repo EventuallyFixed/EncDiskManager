@@ -463,24 +463,25 @@ unset($device);
         <div class="muted">USB storage · LUKS inventory</div>
     </div>
     <div class="header-actions">
-        <a class="backup-link" href="download.php"
-           title="Download encrypted-disk configuration backup"
-           aria-label="Download configuration backup">
-            <span class="material-symbol" aria-hidden="true">download</span>
-            <span>Backup config</span>
+        <a class="backup-link" href="settings.php"
+           title="Manage configuration and backups">
+            <span class="material-symbol" aria-hidden="true">settings</span>
+            <span>Settings</span>
         </a>
-        <a class="backup-link" href="settings.php" title="Restore or permanently delete saved configuration">Settings</a>
         <form method="post" style="display:inline-block;margin-left:8px">
             <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['csrf_token']); ?>">
             <input type="hidden" name="auth_action" value="logout">
-            <button type="submit" style="padding:8px 11px;border:1px solid #aebac1;border-radius:5px;background:#fff;color:#075f91;cursor:pointer">Sign out</button>
+            <button type="submit" class="backup-link" title="Sign out of Encrypted Disk Manager">
+                <span class="material-symbol" aria-hidden="true">logout</span>
+                <span>Sign out</span>
+            </button>
         </form>
     </div>
 </header>
 <main>
     <section class="panel safe-note">
         <strong>Before uninstalling or reinstalling:</strong>
-        download a configuration backup using the header button.
+        download a configuration backup from the Backup section on the Settings page.
         Normal upgrades and ordinary app removal preserve the administrator account
         and registered-disk configuration in WD's persistent app-data directory.
         Use Settings to restore a .tgz backup or explicitly delete saved configuration.
