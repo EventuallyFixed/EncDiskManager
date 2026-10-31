@@ -86,6 +86,10 @@ if [ -e "${OLD_DATA_DIR}" ] || [ -L "${OLD_DATA_DIR}" ]; then
     for FILE in admin.json disks.json setup-token login-attempts.json; do
         SOURCE="${OLD_DATA_DIR}/${FILE}"
         DEST="${REGISTRY_DIR}/${FILE}"
+        if [ -L "${DEST}" ]; then
+            log "ERROR: Persistent configuration path is a symbolic link: ${DEST}"
+            exit 1
+        fi
         if [ -L "${SOURCE}" ]; then
             log "ERROR: Legacy configuration contains a symbolic link: ${SOURCE}"
             exit 1
@@ -143,19 +147,28 @@ if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
                 log "ERROR: Upgrade backup file failed ownership or permission checks: $SOURCE"
                 exit 1
             fi
-            TEMP_FILE="$REGISTRY_DIR/.$FILE.restore.$$"
-            if ! cp "$SOURCE" "$TEMP_FILE" ||
-                ! chown root:root "$TEMP_FILE" ||
-                ! chmod 600 "$TEMP_FILE" ||
-                ! cmp -s "$SOURCE" "$TEMP_FILE" ||
-                ! mv -f "$TEMP_FILE" "$REGISTRY_DIR/$FILE"; then
-                rm -f "$TEMP_FILE"
-                log "ERROR: Could not restore $FILE; temporary backup has been retained."
-                exit 1
-            fi
-            if ! cmp -s "$SOURCE" "$REGISTRY_DIR/$FILE"; then
-                log "ERROR: Restored $FILE does not match the temporary backup; backup has been retained."
-                exit 1
+            DEST="$REGISTRY_DIR/$FILE"
+            if [ -e "$DEST" ]; then
+                if [ ! -f "$DEST" ] || [ "$(stat -c %u "$DEST")" != "0" ] ||
+                    [ "$(stat -c %a "$DEST")" != "600" ] || ! cmp -s "$SOURCE" "$DEST"; then
+                    log "ERROR: Existing persistent $FILE conflicts with the upgrade backup; backup has been retained."
+                    exit 1
+                fi
+            else
+                TEMP_FILE="$REGISTRY_DIR/.$FILE.restore.$"
+                if ! cp "$SOURCE" "$TEMP_FILE" ||
+                    ! chown root:root "$TEMP_FILE" ||
+                    ! chmod 600 "$TEMP_FILE" ||
+                    ! cmp -s "$SOURCE" "$TEMP_FILE" ||
+                    ! mv "$TEMP_FILE" "$DEST"; then
+                    rm -f "$TEMP_FILE"
+                    log "ERROR: Could not restore $FILE; temporary backup has been retained."
+                    exit 1
+                fi
+                if ! cmp -s "$SOURCE" "$DEST"; then
+                    log "ERROR: Restored $FILE does not match the temporary backup; backup has been retained."
+                    exit 1
+                fi
             fi
         fi
     done
