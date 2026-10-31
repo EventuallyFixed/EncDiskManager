@@ -102,13 +102,13 @@ try {
 
     // Duplicate archive paths are rejected rather than allowing a later
     // entry to silently override an earlier administrator or registry file.
-    $duplicate = edm_backup_test_tar($base, $base . '/duplicate.tgz', array(
-        'encdiskmanager-backup/metadata.json',
-        'encdiskmanager-backup/metadata.json',
-        'encdiskmanager-backup/data/admin.json',
-        'encdiskmanager-backup/data/disks.json'
-    ));
-    edm_backup_test_rejects($duplicate, 'duplicate archive path is rejected');
+    $tarForDuplicate = gzdecode($archive);
+    $firstSize = octdec(trim(substr($tarForDuplicate, 124, 12), " \\0"));
+    $firstRecordLength = 512 + (int)(ceil($firstSize / 512) * 512);
+    $duplicateTar = substr($tarForDuplicate, 0, $firstRecordLength)
+        . substr($tarForDuplicate, 0, $firstRecordLength)
+        . substr($tarForDuplicate, $firstRecordLength);
+    edm_backup_test_rejects(gzencode($duplicateTar), 'duplicate archive path is rejected');
     $passed++;
 
     // Symbolic links are rejected, even when their target is within the archive.
