@@ -283,6 +283,17 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
     $preserveStageForRecovery = false;
 
     try {
+        // Re-check authorization and account state after taking both locks;
+        // another browser may have restored or deleted configuration meanwhile.
+        $lockedAdmin = edm_auth_read_admin();
+        if ($replaceExisting) {
+            if ($lockedAdmin === null || !edm_auth_is_authenticated()) {
+                throw new RuntimeException('Your administrator session is no longer valid; sign in again before replacing configuration.');
+            }
+        } elseif ($lockedAdmin !== null) {
+            throw new RuntimeException('An administrator has been configured; sign in before replacing its configuration.');
+        }
+
         if (!mkdir($stage, 0700) || !chown($stage, 0) || !chgrp($stage, 0)) {
             throw new RuntimeException('Could not create a private restore staging directory.');
         }
