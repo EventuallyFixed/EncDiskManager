@@ -7,7 +7,10 @@ try {
     $setupToken = ($admin === null) ? edm_auth_read_setup_token() : null;
     $authError = '';
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !edm_auth_is_https()) {
+        http_response_code(400);
+        $authError = 'HTTPS is required for administrator sign-in and setup. Open the NAS using its HTTPS address.';
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $postedToken = isset($_POST['csrf_token']) ? (string)$_POST['csrf_token'] : '';
         if (!hash_equals((string)$_SESSION['csrf_token'], $postedToken)) {
             http_response_code(403);
@@ -65,8 +68,7 @@ try {
         $pageTitle = $setupMode ? 'Set up administrator' : 'Administrator sign in';
         $csrf = htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8');
         $errorHtml = ($authError === '') ? '' : '<p class="error">' . htmlspecialchars($authError, ENT_QUOTES, 'UTF-8') . '</p>';
-        $httpsConnection = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== ''
-            && strtolower((string)$_SERVER['HTTPS']) !== 'off';
+        $httpsConnection = edm_auth_is_https();
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
         ?><!doctype html>
@@ -84,8 +86,8 @@ try {
         <h1>Encrypted Disk Manager</h1><p><?php echo $setupMode ? 'Enter the one-time setup code from the NAS, then create the administrator password.' : 'Sign in to manage encrypted disks.'; ?></p>
         <?php echo $errorHtml; ?>
         <?php if (!$httpsConnection): ?>
-        <p class="warning">This connection is not using HTTPS. Use the NAS's HTTPS address before entering your administrator password.</p>
-        <?php endif; ?>
+        <p class="warning">Administrator setup and sign-in are disabled over HTTP. Open Encrypted Disk Manager using your NAS's HTTPS address. A self-signed certificate is acceptable if you have verified it belongs to your NAS.</p>
+        <?php else: ?>
         <form method="post" autocomplete="on">
         <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
         <input type="hidden" name="auth_action" value="<?php echo $setupMode ? 'setup' : 'login'; ?>">
@@ -100,7 +102,9 @@ try {
         <input id="confirm-password" name="confirm_password" type="password" required minlength="12" autocomplete="new-password">
         <?php endif; ?>
         <button type="submit"><?php echo $setupMode ? 'Create administrator' : 'Sign in'; ?></button>
-        </form></main></body></html><?php
+        </form>
+        <?php endif; ?>
+        </main></body></html><?php
         exit;
     }
     edm_auth_require_login();
