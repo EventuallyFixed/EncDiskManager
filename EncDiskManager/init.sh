@@ -82,6 +82,8 @@ if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
         [ "$(cat "$UPGRADE_BACKUP/backup-complete")" != "complete" ] ||
         [ ! -f "$UPGRADE_BACKUP/source-path" ] ||
         [ -L "$UPGRADE_BACKUP/source-path" ] ||
+        [ "$(stat -c %u "$UPGRADE_BACKUP/source-path")" != "0" ] ||
+        [ "$(stat -c %a "$UPGRADE_BACKUP/source-path")" != "600" ] ||
         [ "$(cat "$UPGRADE_BACKUP/source-path")" != "$APP_PATH" ]; then
         log "ERROR: Temporary upgrade backup failed validation; it has been left untouched."
         exit 1
@@ -121,7 +123,7 @@ SETUP_TOKEN_FILE="$APP_PATH/data/setup-token"
 if [ -f "$ADMIN_FILE" ]; then
     rm -f "$SETUP_TOKEN_FILE"
 elif [ ! -e "$SETUP_TOKEN_FILE" ]; then
-    SETUP_TOKEN_TMP="$APP_PATH/data/.setup-token.$"
+    SETUP_TOKEN_TMP="$APP_PATH/data/.setup-token.$$"
     SETUP_TOKEN="$(php -r 'echo bin2hex(random_bytes(32));')"
     case "$SETUP_TOKEN" in
         *[!a-f0-9]*|'') log "ERROR: Could not generate a valid one-time setup code."; exit 1 ;;
