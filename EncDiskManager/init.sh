@@ -50,8 +50,8 @@ if [ -d "${APP_PATH}" ]; then
     fi
 fi
 
-# Create a private registry directory inside the application tree.
-# It is deliberately outside web/ and is removed on uninstall/reinstall;
+# Create a private data directory inside the application tree.
+# It is deliberately outside web/ and protected from web access.
 # users should download a configuration backup before removing the app.
 REGISTRY_DIR="${APP_PATH}/data"
 if [ -L "${REGISTRY_DIR}" ]; then
