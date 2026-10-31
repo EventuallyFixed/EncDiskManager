@@ -203,7 +203,7 @@ elif [ -e "$AUTH_EPOCH_FILE" ]; then
         exit 1
     fi
 else
-    AUTH_EPOCH_TMP="$REGISTRY_DIR/.auth-epoch.$"
+    AUTH_EPOCH_TMP="$REGISTRY_DIR/.auth-epoch.$$"
     AUTH_EPOCH="$(php -r 'echo bin2hex(random_bytes(32));')"
     case "$AUTH_EPOCH" in
         *[!a-f0-9]*|'') log "ERROR: Could not generate a valid authentication session epoch."; exit 1 ;;
