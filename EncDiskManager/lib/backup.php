@@ -336,7 +336,7 @@ function edm_backup_delete_configuration()
     $dataPath = edm_auth_data_path();
     $known = array(
         'admin.json', 'disks.json', 'setup-token', 'login-attempts.json',
-        'admin.lock', 'disks.json.lock', 'restore.lock', 'auth-epoch', 'auth-epoch.lock'
+        'admin.lock', 'disks.json.lock', 'restore.lock'
     );
 
     // Validate every known entry before deleting any of them, so an unsafe
@@ -359,6 +359,10 @@ function edm_backup_delete_configuration()
     $token = bin2hex(random_bytes(32)) . "\n";
     edm_backup_write_private_file($temporaryToken, $token);
 
+    // Revoke other browser sessions before removing the administrator file.
+    // Even a later filesystem error must not leave old sessions authenticated.
+    edm_auth_rotate_session_epoch();
+
     foreach ($known as $name) {
         $path = $dataPath . '/' . $name;
         if (file_exists($path) && !@unlink($path)) {
@@ -374,6 +378,4 @@ function edm_backup_delete_configuration()
     if (!rename($temporaryToken, $dataPath . '/setup-token')) {
         throw new RuntimeException('Configuration was deleted but a new setup token could not be installed.');
     }
-    // Invalidate any other browser sessions even if they were still active.
-    edm_auth_rotate_session_epoch();
 }
