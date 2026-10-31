@@ -344,6 +344,16 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
             throw new RuntimeException('An administrator has been configured; sign in before replacing its configuration.');
         }
 
+        // Reject unsafe ephemeral entries before changing either configuration
+        // file or rotating the authentication epoch. This keeps a refused restore
+        // from invalidating sessions when no replacement has been committed.
+        foreach (array('setup-token', 'login-attempts.json') as $ephemeral) {
+            $path = $dataPath . '/' . $ephemeral;
+            if (is_link($path)) {
+                throw new RuntimeException('Unexpected symbolic link in private configuration directory.');
+            }
+        }
+
         if (!mkdir($stage, 0700) || !chown($stage, 0) || !chgrp($stage, 0)) {
             throw new RuntimeException('Could not create a private restore staging directory.');
         }
@@ -378,12 +388,6 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
         // Invalidate sessions in every browser after replacing credentials.
         edm_auth_rotate_session_epoch();
 
-        foreach (array('setup-token', 'login-attempts.json') as $ephemeral) {
-            $path = $dataPath . '/' . $ephemeral;
-            if (is_link($path)) {
-                throw new RuntimeException('Unexpected symbolic link in private configuration directory.');
-            }
-        }
         // The installed admin.json disables setup mode even if an obsolete
         // token cannot be unlinked. Cleanup must not trigger a destructive
         // rollback after both replacement files have been committed.
