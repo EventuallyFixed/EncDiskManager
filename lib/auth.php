@@ -292,6 +292,16 @@ function edm_auth_is_https()
 
 function edm_auth_start_session()
 {
+    // Recover interrupted configuration transactions before any page reads
+    // administrator state. This also covers requests where the NAS app-start
+    // hook was skipped or the web service became available first.
+    static $restoreRecoveryChecked = false;
+    if (!$restoreRecoveryChecked) {
+        require_once __DIR__ . '/backup.php';
+        edm_backup_recover_interrupted_restores();
+        $restoreRecoveryChecked = true;
+    }
+
     if (session_status() === PHP_SESSION_ACTIVE) {
         return;
     }
