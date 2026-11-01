@@ -17,6 +17,9 @@
 # Load all the useful variables
 . "$1/helpers.sh" "$0" "$1";
 
+# EDM-specific persistent location; keep this aligned with lib/auth.php.
+APP_PERSISTENT_DATA_PATH="${APPS_PATH}/_${APP_NAME}"
+
 # ----------------------------------------------------------------------
 # Initialisation script: prepares app icon, index page and paths
 #  - Use this to restore custom paths and settings on reinstall / reboot
@@ -50,9 +53,10 @@ if [ -d "${APP_PATH}" ]; then
     fi
 fi
 
-# Create the builder-provided persistent data directory. This is a sibling
-# of APP_PATH (normally .../Nas_Prog/_EncDiskManager), so WD can remove or
-# replace the application directory without deleting the administrator or registry.
+# EDM deliberately keeps private configuration in a stable sibling directory.
+# Do not use the builder's generic *_conf convention: auth.php and existing
+# installations use <application parent>/_EncDiskManager.
+APP_PERSISTENT_DATA_PATH="${APPS_PATH}/_${APP_NAME}"
 REGISTRY_DIR="${APP_PERSISTENT_DATA_PATH}"
 if [ -z "${REGISTRY_DIR}" ] || [ "${REGISTRY_DIR}" = "/" ]; then
     log "ERROR: Builder did not provide a valid persistent data path."
