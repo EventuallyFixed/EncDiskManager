@@ -45,6 +45,49 @@ function edm_backup_test_tar($base, $archive, $paths)
     return $contents;
 }
 
+
+function edm_backup_test_rechecksum(&$tar, $offset)
+{
+    $header = substr($tar, $offset, 512);
+    $checksumHeader = substr_replace($header, str_repeat(' ', 8), 148, 8);
+    $checksum = 0;
+    for ($i = 0; $i < 512; $i++) {
+        $checksum += ord($checksumHeader[$i]);
+    }
+    $field = sprintf("%06o\0 ", $checksum);
+    $tar = substr_replace($tar, $field, $offset + 148, 8);
+}
+
+function edm_backup_test_header_offset($tar, $wantedPath)
+{
+    $offset = 0;
+    $length = strlen($tar);
+    while ($offset + 512 <= $length) {
+        $header = substr($tar, $offset, 512);
+        if ($header === str_repeat("\0", 512)) {
+            return false;
+        }
+        $name = rtrim(substr($header, 0, 100), "\0");
+        $prefix = rtrim(substr($header, 345, 155), "\0");
+        $path = ($prefix === '') ? $name : $prefix . '/' . $name;
+        if ($path === $wantedPath) {
+            return $offset;
+        }
+        $sizeText = trim(substr($header, 124, 12), " \0");
+        if ($sizeText === '' || !preg_match('/^[0-7]+$/', $sizeText)) {
+            return false;
+        }
+        $size = octdec($sizeText);
+        $offset += 512 + (int)(ceil($size / 512) * 512);
+    }
+    return false;
+}
+
+function edm_backup_test_rejects_with_reason($archive, $message)
+{
+    edm_backup_test_rejects($archive, $message);
+}
+
 $base = sys_get_temp_dir() . '/edm-backup-test-' . bin2hex(random_bytes(8));
 $root = $base . '/encdiskmanager-backup';
 $data = $root . '/data';
@@ -122,6 +165,127 @@ try {
     edm_backup_test_rejects($linked, 'symbolic link entry is rejected');
     unlink($root . '/metadata.json');
     rename($root . '/metadata.real', $root . '/metadata.json');
+    $passed++;
+
+
+    // Archive paths are matched against an exact allow-list. Mutate a valid
+    // header and recompute its checksum so these tests reach path validation.
+    $pathTraversalTar = gzdecode($archive);
+    $pathTraversalTar = substr_replace(
+        $pathTraversalTar,
+        str_pad('../metadata.json', 100, "\0"),
+        0,
+        100
+    );
+    edm_backup_test_rechecksum($pathTraversalTar, 0);
+    edm_backup_test_rejects(gzencode($pathTraversalTar), 'parent-directory traversal path is rejected');
+    $passed++;
+
+    $absolutePathTar = gzdecode($archive);
+    $absolutePathTar = substr_replace(
+        $absolutePathTar,
+        str_pad('/tmp/metadata.json', 100, "\0"),
+        0,
+        100
+    );
+    edm_backup_test_rechecksum($absolutePathTar, 0);
+    edm_backup_test_rejects(gzencode($absolutePathTar), 'absolute archive path is rejected');
+    $passed++;
+
+    // Hard links and special TAR entries must not be accepted as regular files.
+    $hardLinkTar = gzdecode($archive);
+    $hardLinkTar = substr_replace($hardLinkTar, '1', 156, 1);
+    $hardLinkTar = substr_replace(
+        $hardLinkTar,
+        str_pad('metadata.json', 100, "\0"),
+        157,
+        100
+    );
+    edm_backup_test_rechecksum($hardLinkTar, 0);
+    edm_backup_test_rejects(gzencode($hardLinkTar), 'hard-link entry is rejected');
+    $passed++;
+
+    $specialEntryTar = gzdecode($archive);
+    $specialEntryTar = substr_replace($specialEntryTar, '5', 156, 1);
+    edm_backup_test_rechecksum($specialEntryTar, 0);
+    edm_backup_test_rejects(gzencode($specialEntryTar), 'directory/special TAR entry is rejected');
+    $passed++;
+
+    // Increase the final file's declared size without adding data. The parser
+    // must detect that the file body extends beyond the available archive.
+    $truncatedTar = gzdecode($archive);
+    $lastPath = 'encdiskmanager-backup/data/disks.json';
+    $lastOffset = edm_backup_test_header_offset($truncatedTar, $lastPath);
+    edm_backup_test_assert($lastOffset !== false, 'last TAR header located for truncation test');
+    $lastHeader = substr($truncatedTar, $lastOffset, 512);
+    $lastSize = octdec(trim(substr($lastHeader, 124, 12), " \0"));
+    $largerSize = $lastSize + 2048;
+    $sizeField = sprintf("%011o\0", $largerSize);
+    $truncatedTar = substr_replace($truncatedTar, $sizeField, $lastOffset + 124, 12);
+    edm_backup_test_rechecksum($truncatedTar, $lastOffset);
+    edm_backup_test_rejects(gzencode($truncatedTar), 'truncated TAR file body is rejected');
+    $passed++;
+
+    $missingEndMarkerTar = substr(gzdecode($archive), 0, -512);
+    edm_backup_test_rejects(gzencode($missingEndMarkerTar), 'archive missing a TAR end block is rejected');
+    $passed++;
+
+    // A syntactically valid TAR missing one required file must be rejected.
+    $missing = edm_backup_test_tar($base, $base . '/missing.tgz', array(
+        'encdiskmanager-backup/metadata.json',
+        'encdiskmanager-backup/data/admin.json'
+    ));
+    edm_backup_test_rejects($missing, 'archive missing required registry file is rejected');
+    $passed++;
+
+    // The compressed input is small, but its expanded content exceeds the
+    // parser's 1 MiB decompression ceiling.
+    $oversizedExpanded = gzencode(str_repeat('A', 1048577));
+    edm_backup_test_rejects($oversizedExpanded, 'oversized decompressed archive is rejected');
+    $passed++;
+
+    // Invalid administrator hashes must not be accepted, even in valid JSON.
+    $originalAdminJson = file_get_contents($data . '/admin.json');
+    $invalidAdmin = array('password_hash' => 'not-a-password-hash', 'created_at' => time());
+    file_put_contents($data . '/admin.json', json_encode($invalidAdmin) . "\n");
+    $invalidAdminArchive = edm_backup_test_tar($base, $base . '/invalid-admin.tgz', array(
+        'encdiskmanager-backup/metadata.json',
+        'encdiskmanager-backup/data/admin.json',
+        'encdiskmanager-backup/data/disks.json'
+    ));
+    edm_backup_test_rejects($invalidAdminArchive, 'invalid administrator data is rejected');
+    file_put_contents($data . '/admin.json', $originalAdminJson);
+    $passed++;
+
+    // Registry JSON is parsed and schema-validated before restore.
+    $originalRegistryJson = file_get_contents($data . '/disks.json');
+    $invalidRegistry = array('version' => 1, 'disks' => array(array('luks_uuid' => 'invalid')));
+    file_put_contents($data . '/disks.json', json_encode($invalidRegistry) . "\n");
+    $invalidRegistryArchive = edm_backup_test_tar($base, $base . '/invalid-registry.tgz', array(
+        'encdiskmanager-backup/metadata.json',
+        'encdiskmanager-backup/data/admin.json',
+        'encdiskmanager-backup/data/disks.json'
+    ));
+    edm_backup_test_rejects($invalidRegistryArchive, 'invalid disk registry schema is rejected');
+    file_put_contents($data . '/disks.json', $originalRegistryJson);
+    $passed++;
+
+    // Metadata is independently constrained to the supported application and
+    // format version, not merely accepted because it is valid JSON.
+    $originalMetadataJson = file_get_contents($root . '/metadata.json');
+    $invalidMetadata = array(
+        'format_version' => 99,
+        'application' => 'Other application',
+        'created_at' => time()
+    );
+    file_put_contents($root . '/metadata.json', json_encode($invalidMetadata) . "\n");
+    $invalidMetadataArchive = edm_backup_test_tar($base, $base . '/invalid-metadata.tgz', array(
+        'encdiskmanager-backup/metadata.json',
+        'encdiskmanager-backup/data/admin.json',
+        'encdiskmanager-backup/data/disks.json'
+    ));
+    edm_backup_test_rejects($invalidMetadataArchive, 'unsupported backup metadata is rejected');
+    file_put_contents($root . '/metadata.json', $originalMetadataJson);
     $passed++;
 
     echo "PASS: {$passed} backup archive checks completed.\n";
