@@ -486,6 +486,8 @@ function edm_backup_create_archive()
 
 function edm_backup_restore_archive($compressed, $replaceExisting)
 {
+    // Finish any transaction left by an earlier interrupted request before starting another.
+    edm_backup_recover_interrupted_restores();
     $payload = edm_backup_read_archive($compressed);
     $dataPath = edm_auth_data_path();
     $currentAdmin = edm_auth_read_admin();
@@ -581,7 +583,18 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
         if (!mkdir($stage, 0700) || !chown($stage, 0) || !chgrp($stage, 0)) {
             throw new RuntimeException('Could not create a private restore staging directory.');
         }
-        if (file_exists($adminPath)) {
+        $adminExisted = file_exists($adminPath);
+        $registryExisted = file_exists($registryPath);
+        $transaction = array(
+            'version' => 1,
+            'state' => 'active',
+            'admin_existed' => $adminExisted,
+            'registry_existed' => $registryExisted
+        );
+        edm_backup_write_transaction_state($stage, $transaction);
+        edm_backup_sync_filesystem();
+
+        if ($adminExisted) {
             edm_auth_read_admin();
             if (!rename($adminPath, $oldAdmin)) {
                 throw new RuntimeException('Could not stage the existing administrator file.');
@@ -590,7 +603,7 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
         }
         // Load even when file_exists() is false so a dangling symlink is rejected.
         edm_registry_load($registryPath);
-        if (file_exists($registryPath)) {
+        if ($registryExisted) {
             if (!rename($registryPath, $oldRegistry)) {
                 throw new RuntimeException('Could not stage the existing disk registry.');
             }
@@ -599,6 +612,9 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
 
         edm_backup_write_private_file($stage . '/admin.json', $payload['admin_json']);
         edm_backup_write_private_file($stage . '/disks.json', $payload['registry_json']);
+        // Persist the journal, previous files and staged replacements before
+        // installing either replacement into the live configuration directory.
+        edm_backup_sync_filesystem();
 
         if (!rename($stage . '/admin.json', $adminPath)) {
             throw new RuntimeException('Could not install restored administrator data.');
@@ -608,9 +624,17 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
             throw new RuntimeException('Could not install restored disk registry.');
         }
         $registryInstalled = true;
+        edm_backup_sync_filesystem();
 
         // Invalidate sessions in every browser after replacing credentials.
         edm_auth_rotate_session_epoch();
+        edm_backup_sync_filesystem();
+
+        // The committed journal is written only after both replacements and
+        // the new authentication epoch have been flushed to storage.
+        $transaction['state'] = 'committed';
+        edm_backup_write_transaction_state($stage, $transaction);
+        edm_backup_sync_filesystem();
 
         // The installed admin.json disables setup mode even if an obsolete
         // token cannot be unlinked. Cleanup must not trigger a destructive
@@ -635,9 +659,20 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
         if ($registryMoved && file_exists($oldRegistry) && !@rename($oldRegistry, $registryPath)) {
             $rollbackOk = false;
         }
+        if ($rollbackOk) {
+            try {
+                edm_backup_sync_filesystem();
+                $transaction['state'] = 'rolled_back';
+                edm_backup_write_transaction_state($stage, $transaction);
+                edm_backup_sync_filesystem();
+            } catch (Throwable $journalException) {
+                $rollbackOk = false;
+                error_log('EncDiskManager: could not persist restore rollback state: ' . $journalException->getMessage());
+            }
+        }
         if (!$rollbackOk) {
-            // Keep the root-only staging directory and any surviving old files
-            // as a manual recovery copy rather than deleting the last copy.
+            // Keep the root-only staging directory and journal so startup
+            // recovery can retry, or an administrator can recover manually.
             $preserveStageForRecovery = true;
             error_log('EncDiskManager: restore rollback was incomplete; recovery files retained at ' . $stage);
         }
