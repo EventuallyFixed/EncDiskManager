@@ -557,6 +557,7 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
     $adminInstalled = false;
     $registryInstalled = false;
     $preserveStageForRecovery = false;
+    $transactionCreated = false;
 
     try {
         // Re-check authorization and account state after taking both locks;
@@ -592,6 +593,7 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
             'registry_existed' => $registryExisted
         );
         edm_backup_write_transaction_state($stage, $transaction);
+        $transactionCreated = true;
         edm_backup_sync_filesystem();
 
         if ($adminExisted) {
@@ -659,7 +661,7 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
         if ($registryMoved && file_exists($oldRegistry) && !@rename($oldRegistry, $registryPath)) {
             $rollbackOk = false;
         }
-        if ($rollbackOk) {
+        if ($rollbackOk && $transactionCreated) {
             try {
                 edm_backup_sync_filesystem();
                 $transaction['state'] = 'rolled_back';
@@ -678,13 +680,12 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
         }
         throw $exception;
     } finally {
-        if (!$preserveStageForRecovery) {
-            foreach (array($stage . '/admin.json', $stage . '/disks.json', $oldAdmin, $oldRegistry) as $file) {
-                if (is_file($file) && !is_link($file)) {
-                    @unlink($file);
-                }
+        if (!$preserveStageForRecovery && is_dir($stage) && !is_link($stage)) {
+            try {
+                edm_backup_recovery_remove_stage($stage);
+            } catch (Throwable $cleanupException) {
+                error_log('EncDiskManager: restore staging cleanup deferred to recovery: ' . $cleanupException->getMessage());
             }
-            @rmdir($stage);
         }
         @flock($adminLock, LOCK_UN);
         fclose($adminLock);
