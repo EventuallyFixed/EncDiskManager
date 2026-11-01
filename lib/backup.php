@@ -488,6 +488,9 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
 {
     // Finish any transaction left by an earlier interrupted request before starting another.
     edm_backup_recover_interrupted_restores();
+    if (!function_exists('exec')) {
+        throw new RuntimeException('PHP exec() and the sync utility are required for crash-safe configuration restore.');
+    }
     $payload = edm_backup_read_archive($compressed);
     $dataPath = edm_auth_data_path();
     $currentAdmin = edm_auth_read_admin();
