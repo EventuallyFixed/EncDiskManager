@@ -1,146 +1,141 @@
 <?php
-/*
- * EncDiskManager - read-only USB/LUKS inventory.
- * No unlock, mount, unmount, or repair operations are performed here.
- */
+require_once __DIR__ . '/../lib/auth.php';
+
+try {
+    edm_auth_start_session();
+    $admin = edm_auth_read_admin();
+    $setupToken = ($admin === null) ? edm_auth_read_setup_token() : null;
+    $authError = '';
+    $authNotice = '';
+    if (isset($_GET['restored']) && $_GET['restored'] === '1') {
+        $authNotice = 'Backup restored successfully. Sign in using the administrator password stored in that backup.';
+    } elseif (isset($_GET['configuration_deleted']) && $_GET['configuration_deleted'] === '1') {
+        $authNotice = 'Saved configuration was deleted. A new setup code is available from the Settings page.';
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !edm_auth_is_https()) {
+        http_response_code(400);
+        $authError = 'HTTPS is required for administrator sign-in and setup. Open the NAS using its HTTPS address.';
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $postedToken = isset($_POST['csrf_token']) ? (string)$_POST['csrf_token'] : '';
+        if (!hash_equals((string)$_SESSION['csrf_token'], $postedToken)) {
+            http_response_code(403);
+            $authError = 'Your security token expired. Please reload and try again.';
+        } else {
+            $authAction = isset($_POST['auth_action']) ? (string)$_POST['auth_action'] : '';
+            if ($authAction === 'setup' && $admin === null) {
+                $password = isset($_POST['password']) ? (string)$_POST['password'] : '';
+                $confirm = isset($_POST['confirm_password']) ? (string)$_POST['confirm_password'] : '';
+                $providedSetupToken = isset($_POST['setup_token']) ? (string)$_POST['setup_token'] : '';
+                if ($setupToken === null || !hash_equals($setupToken, $providedSetupToken)) {
+                    $authError = 'The one-time setup code is missing or incorrect.';
+                } elseif (strlen($password) < 12) {
+                    $authError = 'Choose a password with at least 12 characters.';
+                } elseif (strlen($password) > 72) {
+                    $authError = 'Choose a password no longer than 72 bytes.';
+                } elseif (!hash_equals($password, $confirm)) {
+                    $authError = 'The password confirmation does not match.';
+                } else {
+                    edm_auth_write_admin($password);
+                    if (!edm_auth_consume_setup_token($providedSetupToken)) {
+                        throw new RuntimeException('The one-time setup code could not be consumed.');
+                    }
+                    unset($password, $confirm, $providedSetupToken);
+                    if (!edm_auth_login((string)$_POST['password'])) {
+                        throw new RuntimeException('Administrator account was created, but automatic sign-in failed. Please sign in.');
+                    }
+                    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+                    exit;
+                }
+                unset($password, $confirm);
+            } elseif ($authAction === 'login' && $admin !== null) {
+                $password = isset($_POST['password']) ? (string)$_POST['password'] : '';
+                $ok = edm_auth_login($password);
+                unset($password);
+                if ($ok) {
+                    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+                    exit;
+                }
+                $authError = 'The password was not recognised.';
+            } elseif ($authAction === 'logout' && edm_auth_is_authenticated()) {
+                edm_auth_logout();
+                header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+                exit;
+            } else {
+                http_response_code(400);
+                $authError = 'That request is not available.';
+            }
+        }
+        unset($_POST['password'], $_POST['confirm_password']);
+    }
+
+    if (!edm_auth_is_authenticated()) {
+        $setupMode = ($admin === null);
+        $pageTitle = $setupMode ? 'Set up administrator' : 'Administrator sign in';
+        $csrf = htmlspecialchars((string)$_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8');
+        $errorHtml = ($authError === '') ? '' : '<p class="error">' . htmlspecialchars($authError, ENT_QUOTES, 'UTF-8') . '</p>';
+        $noticeHtml = ($authNotice === '') ? '' : '<p class="notice">' . htmlspecialchars($authNotice, ENT_QUOTES, 'UTF-8') . '</p>';
+        $httpsConnection = edm_auth_is_https();
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        ?><!doctype html>
+        <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+        <title><?php echo htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8'); ?> · Encrypted Disk Manager</title>
+        <style>
+        body{margin:0;background:#f3f5f6;color:#20272c;font:16px/1.5 Arial,Helvetica,sans-serif;display:grid;min-height:100vh;place-items:center}
+        main{box-sizing:border-box;width:min(440px,calc(100% - 32px));background:#fff;border:1px solid #d9dfe2;border-radius:9px;padding:28px}
+        h1{font-size:1.45rem;margin:0 0 5px}p{color:#58656d}.field{display:block;font-weight:bold;margin:17px 0 5px}
+        input{box-sizing:border-box;width:100%;padding:11px;border:1px solid #aebac1;border-radius:5px;font:inherit}
+        button{margin-top:20px;padding:10px 16px;border:0;border-radius:5px;background:#075f91;color:#fff;font:inherit;cursor:pointer}
+        .error{padding:10px;background:#fff0ed;border-left:4px solid #b23b2b;color:#842719}.notice{padding:10px;background:#eaf4f8;border-left:4px solid #075f91;color:#17465e}
+        .warning{padding:10px;background:#fff8e7;border-left:4px solid #b7791f;color:#704b0b}
+        </style></head><body><main>
+        <h1>Encrypted Disk Manager</h1><p><?php echo $setupMode ? 'Enter the one-time setup code from the NAS, then create the administrator password.' : 'Sign in to manage encrypted disks.'; ?></p>
+        <?php echo $noticeHtml; ?>
+        <?php echo $errorHtml; ?>
+        <?php if (!$httpsConnection): ?>
+        <p class="warning">Administrator setup and sign-in are disabled over HTTP. Open Encrypted Disk Manager using your NAS's HTTPS address. A self-signed certificate is acceptable if you have verified it belongs to your NAS.</p>
+        <?php else: ?>
+        <form method="post" autocomplete="on">
+        <input type="hidden" name="csrf_token" value="<?php echo $csrf; ?>">
+        <input type="hidden" name="auth_action" value="<?php echo $setupMode ? 'setup' : 'login'; ?>">
+        <?php if ($setupMode): ?>
+        <label class="field" for="setup-token">One-time setup code</label>
+        <input id="setup-token" name="setup_token" type="password" required autocomplete="off">
+        <?php endif; ?>
+        <label class="field" for="password">Administrator password</label>
+        <input id="password" name="password" type="password" required autocomplete="<?php echo $setupMode ? 'new-password' : 'current-password'; ?>" <?php echo $setupMode ? 'minlength="12" maxlength="72"' : ''; ?>>
+        <?php if ($setupMode): ?>
+        <label class="field" for="confirm-password">Confirm password</label>
+        <input id="confirm-password" name="confirm_password" type="password" required minlength="12" autocomplete="new-password">
+        <?php endif; ?>
+        <button type="submit"><?php echo $setupMode ? 'Create administrator' : 'Sign in'; ?></button>
+        </form>
+        <?php if ($setupMode): ?>
+        <p><a href="settings.php">Restore configuration from a .tgz backup</a></p>
+        <?php endif; ?>
+        <?php endif; ?>
+        </main></body></html><?php
+        exit;
+    }
+    edm_auth_require_login();
+} catch (Throwable $exception) {
+    error_log('EncDiskManager authentication error: ' . $exception->getMessage());
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo "Authentication is temporarily unavailable. Check the private application data permissions.\n";
+    exit;
+}
+
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: same-origin');
 
 function h($value) {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
-
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
-if (empty($_SESSION['bdm_csrf_token'])) {
-    $_SESSION['bdm_csrf_token'] = bin2hex(random_bytes(32));
-}
-
-$actionMessage = '';
-$actionOutput = array();
-
-function run_backup_helper($action, $arguments, $passphrase, &$output, &$status) {
-    $scriptPath = realpath(__FILE__);
-    $appPath = ($scriptPath === false) ? false : realpath(dirname($scriptPath) . '/..');
-    if ($appPath === false || !is_dir($appPath)) {
-        $output = array('Action unavailable: the application installation path could not be resolved.');
-        $status = 127;
-        return false;
-    }
-
-    $configFile = $appPath . '/encdiskmanager.conf';
-    if (is_link($configFile) || !is_file($configFile) || !is_readable($configFile)) {
-        $output = array('Action unavailable: the application configuration is missing or inaccessible.');
-        $status = 127;
-        return false;
-    }
-
-    $configuredPath = trim((string)file_get_contents($configFile));
-    if ($configuredPath !== $appPath) {
-        $output = array('Action unavailable: the application configuration does not match its installation path.');
-        $status = 127;
-        return false;
-    }
-
-    $helper = $appPath . '/bin/encdiskmanager-helper';
-    if (!is_file($helper) || !is_executable($helper)) {
-        $output = array('Action unavailable: the installed helper is missing or not executable.');
-        $status = 127;
-        return false;
-    }
-
-    $parts = array(escapeshellarg($helper), escapeshellarg($action));
-    foreach ($arguments as $argument) {
-        $parts[] = escapeshellarg($argument);
-    }
-    $command = implode(' ', $parts);
-    $spec = array(
-        0 => array('pipe', 'r'),
-        1 => array('pipe', 'w'),
-        2 => array('redirect', 1)
-    );
-    $process = proc_open($command, $spec, $pipes);
-    if (!is_resource($process)) {
-        $output = array('Could not start the storage helper.');
-        $status = 127;
-        return false;
-    }
-
-    $writeFailed = false;
-    if ($passphrase !== null) {
-        $expectedBytes = strlen($passphrase);
-        $offset = 0;
-        while ($offset < $expectedBytes) {
-            $writtenBytes = fwrite($pipes[0], substr($passphrase, $offset));
-            if ($writtenBytes === false || $writtenBytes === 0) {
-                $writeFailed = true;
-                break;
-            }
-            $offset += $writtenBytes;
-        }
-    }
-    fclose($pipes[0]);
-    $combined = stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-    $status = proc_close($process);
-
-    if ($writeFailed) {
-        $output = array('Could not safely deliver the passphrase to the storage helper; the action was not confirmed.');
-        $status = 125;
-        return false;
-    }
-
-    $combined = trim((string)$combined);
-    $output = ($combined === '') ? array() : array_slice(explode("\n", $combined), 0, 30);
-    return $status === 0;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $postedToken = isset($_POST['csrf_token']) ? (string)$_POST['csrf_token'] : '';
-    $action = isset($_POST['disk_action']) ? (string)$_POST['disk_action'] : '';
-    $passphrase = isset($_POST['passphrase']) ? (string)$_POST['passphrase'] : '';
-    unset($_POST['passphrase']);
-    $mountPath = isset($_POST['mount_path']) ? trim((string)$_POST['mount_path']) : '';
-    $confirmRepair = isset($_POST['confirm_repair']) && $_POST['confirm_repair'] === 'yes';
-
-    if (!hash_equals($_SESSION['bdm_csrf_token'], $postedToken)) {
-        http_response_code(403);
-        $actionMessage = 'Request rejected: security token invalid. Reload the page and try again.';
-    } elseif (!in_array($action, array('mount', 'unmount', 'repair'), true)) {
-        http_response_code(400);
-        $actionMessage = 'Request rejected: unsupported action.';
-    } elseif (in_array($action, array('mount', 'unmount'), true) &&
-        ($mountPath === '' || strpos($mountPath, '/mnt/') !== 0 ||
-         strpos($mountPath, '..') !== false ||
-         !preg_match('~^/mnt/[A-Za-z0-9._/-]+$~', $mountPath) ||
-         preg_match('~//|/\./|/$~', $mountPath))) {
-        http_response_code(400);
-        $actionMessage = 'Invalid mount folder path. Choose a folder beneath /mnt using letters, numbers, dots, underscores, or hyphens.';
-    } elseif ($action === 'repair' && !$confirmRepair) {
-        http_response_code(400);
-        $actionMessage = 'Repair was not started because explicit confirmation was not provided.';
-    } elseif (in_array($action, array('mount', 'repair'), true) && $passphrase === '') {
-        http_response_code(400);
-        $actionMessage = 'Enter the encryption passphrase to continue.';
-    } else {
-        $arguments = array();
-        if ($action === 'mount' || $action === 'unmount') {
-            $arguments[] = $mountPath;
-        } elseif ($action === 'repair') {
-            $arguments[] = 'CONFIRM';
-        }
-
-        $helperOutput = array();
-        $status = 1;
-        $secret = in_array($action, array('mount', 'repair'), true) ? $passphrase : null;
-        $ok = run_backup_helper($action, $arguments, $secret, $helperOutput, $status);
-        $actionOutput = $helperOutput;
-        $actionMessage = $ok
-            ? 'Command completed successfully.'
-            : 'Command failed (exit status ' . (int)$status . ').';
-    }
-    unset($passphrase);
-}
-
 function read_blkid($device) {
     // Only allow kernel-style block device names; never accept user input.
     if (!preg_match('/^[a-zA-Z0-9._+-]+$/', $device)) {
@@ -355,7 +350,7 @@ unset($device);
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EncDiskManager</title>
+<title>Encrypted Disk Manager</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined">
 <style>
     body {
@@ -373,6 +368,22 @@ unset($device);
         gap: 16px;
     }
     header img { width: 58px; height: 58px; object-fit: contain; }
+    .header-actions { margin-left: auto; }
+    .backup-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 11px;
+        border: 1px solid #aebac1;
+        border-radius: 5px;
+        color: #075f91;
+        text-decoration: none;
+        white-space: nowrap;
+        background: #fff;
+        font: inherit;
+        cursor: pointer;
+    }
+    .backup-link:hover { background: #f3f7f9; }
     h1 { margin: 0; font-size: 1.45rem; }
     main { max-width: 1050px; margin: 24px auto; padding: 0 18px; }
     .panel {
@@ -451,29 +462,33 @@ unset($device);
 <header>
     <img src="logo.svg" alt="">
     <div>
-        <h1>EncDiskManager</h1>
+        <h1>Encrypted Disk Manager</h1>
         <div class="muted">USB storage · LUKS inventory</div>
+    </div>
+    <div class="header-actions">
+        <a class="backup-link" href="settings.php"
+           title="Manage configuration and backups">
+            <span class="material-symbol" aria-hidden="true">settings</span>
+            <span>Settings</span>
+        </a>
+        <form method="post" style="display:inline-block;margin-left:8px">
+            <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['csrf_token']); ?>">
+            <input type="hidden" name="auth_action" value="logout">
+            <button type="submit" class="backup-link" title="Sign out of Encrypted Disk Manager">
+                <span class="material-symbol" aria-hidden="true">logout</span>
+                <span>Sign out</span>
+            </button>
+        </form>
     </div>
 </header>
 <main>
-    <section class="panel">
-        <h2>Backup USB controls</h2>
-        <p class="muted">
-            Use the action links on the row matching the configured backup
-            partition. Mounting requires the encryption passphrase and a
-            destination folder beneath <code>/mnt</code>. Normal mounting
-            and unmounting never run filesystem repair.
-        </p>
-        <?php if ($actionMessage !== ''): ?>
-            <p class="status"><?php echo h($actionMessage); ?></p>
-            <?php if ($actionOutput): ?>
-                <pre><code><?php echo h(implode("\n", $actionOutput)); ?></code></pre>
-            <?php endif; ?>
-        <?php endif; ?>
-        <p class="muted">
-            Do not disconnect the backup USB disk while it is mounted.
-            Repair is a separate, explicitly confirmed operation.
-        </p>
+    <section class="panel safe-note">
+        <strong>Before uninstalling or reinstalling:</strong>
+        download a configuration backup from the Backup section on the Settings page.
+        Normal upgrades and ordinary app removal preserve the administrator account
+        and registered-disk configuration in WD's persistent app-data directory.
+        Use Settings to restore a .tgz backup or explicitly delete saved configuration.
+        Backups contain a password hash and disk settings, never plaintext passwords or LUKS passphrases.
     </section>
     <section class="panel">
         <h2>Detected USB partitions</h2>
@@ -496,7 +511,6 @@ unset($device);
                     <th>Filesystem / type</th>
                     <th>UUID</th>
                     <th>Mounted at</th>
-                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -511,29 +525,6 @@ unset($device);
                     <td><?php echo h($device['type'] ?: 'Unknown'); ?></td>
                     <td><code><?php echo h($device['uuid'] ?: '—'); ?></code></td>
                     <td><?php echo h($device['mount'] ?: 'Not mounted directly'); ?></td>
-                    <td>
-                        <?php if (!empty($device['is_backup'])): ?>
-                            <?php if (!empty($device['backup_mount'])): ?>
-                                <code><?php echo h($device['backup_mount']); ?></code>
-                                <a href="#" class="action-link"
-                                   data-open-dialog="unmount-dialog"
-                                   data-mount-path="<?php echo h($device['backup_mount']); ?>"
-                                   aria-label="Unmount" title="Unmount"><span class="material-symbol" aria-hidden="true">eject</span></a>
-                            <?php else: ?>
-                                <span>Not Mounted</span>
-                                <a href="#" class="action-link"
-                                   data-open-dialog="mount-dialog"
-                                   aria-label="Mount" title="Mount"><span class="material-symbol" aria-hidden="true">cloud_upload</span></a>
-                                <?php if (!empty($device['backup_mapper'])): ?>
-                                    <a href="#" class="action-link"
-                                       data-open-dialog="repair-dialog"
-                                       aria-label="Repair" title="Repair"><span class="material-symbol" aria-hidden="true">build</span></a>
-                                <?php endif; ?>
-                            <?php endif; ?>
-                        <?php else: ?>
-                            <span class="muted">—</span>
-                        <?php endif; ?>
-                    </td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -593,98 +584,6 @@ unset($device);
         makes no storage changes.
     </section>
 
-    <dialog id="mount-dialog" aria-labelledby="mount-dialog-title">
-        <form method="post">
-            <h2 id="mount-dialog-title">Mount backup disk</h2>
-            <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['bdm_csrf_token']); ?>">
-            <input type="hidden" name="disk_action" value="mount">
-            <label for="mount-path">Backup folder under /mnt</label>
-            <input id="mount-path" name="mount_path" type="text"
-                   value="/mnt/backupdisk" required
-                   pattern="/mnt/[A-Za-z0-9._/-]+"
-                   autocomplete="off">
-            <label for="mount-passphrase">Encryption passphrase</label>
-            <input id="mount-passphrase" name="passphrase" type="password"
-                   required autocomplete="off">
-            <p class="muted">Normal mounting does not run filesystem repair.</p>
-            <div class="dialog-actions">
-                <button type="submit">Mount</button>
-                <button type="button" data-close-dialog>Cancel</button>
-            </div>
-        </form>
-    </dialog>
-
-    <dialog id="unmount-dialog" aria-labelledby="unmount-dialog-title">
-        <form method="post">
-            <h2 id="unmount-dialog-title">Unmount backup disk</h2>
-            <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['bdm_csrf_token']); ?>">
-            <input type="hidden" name="disk_action" value="unmount">
-            <input type="hidden" name="mount_path" id="unmount-path">
-            <p>Unmount the backup disk at <code id="unmount-path-label"></code>?</p>
-            <div class="dialog-actions">
-                <button type="submit">Unmount</button>
-                <button type="button" data-close-dialog>Cancel</button>
-            </div>
-        </form>
-    </dialog>
-
-    <dialog id="repair-dialog" aria-labelledby="repair-dialog-title">
-        <form method="post">
-            <h2 id="repair-dialog-title">Repair backup filesystem</h2>
-            <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['bdm_csrf_token']); ?>">
-            <input type="hidden" name="disk_action" value="repair">
-            <p>Repair can modify filesystem metadata. Ensure the backup disk is unmounted and important data is backed up.</p>
-            <label for="repair-passphrase">Encryption passphrase</label>
-            <input id="repair-passphrase" name="passphrase" type="password"
-                   required autocomplete="off">
-            <label>
-                <input type="checkbox" name="confirm_repair" value="yes" required>
-                I explicitly confirm that the filesystem repair may modify data.
-            </label>
-            <div class="dialog-actions">
-                <button type="submit">Confirm repair</button>
-                <button type="button" data-close-dialog>Cancel</button>
-            </div>
-        </form>
-    </dialog>
-
-    <script>
-    (function () {
-        document.querySelectorAll('[data-open-dialog]').forEach(function (link) {
-            link.addEventListener('click', function (event) {
-                event.preventDefault();
-                var dialog = document.getElementById(link.getAttribute('data-open-dialog'));
-                if (!dialog) return;
-                if (dialog.id === 'unmount-dialog') {
-                    var path = link.getAttribute('data-mount-path') || '';
-                    document.getElementById('unmount-path').value = path;
-                    document.getElementById('unmount-path-label').textContent = path;
-                }
-                dialog.showModal();
-            });
-        });
-        document.querySelectorAll('[data-close-dialog]').forEach(function (button) {
-            button.addEventListener('click', function () {
-                var dialog = button.closest('dialog');
-                if (dialog) {
-                    dialog.querySelectorAll('input[type="password"]').forEach(function (field) {
-                        field.value = '';
-                    });
-                    dialog.close();
-                }
-            });
-        });
-        document.querySelectorAll('dialog form').forEach(function (form) {
-            form.addEventListener('submit', function () {
-                window.setTimeout(function () {
-                    form.querySelectorAll('input[type="password"]').forEach(function (field) {
-                        field.value = '';
-                    });
-                }, 0);
-            });
-        });
-    }());
-    </script>
 </main>
 </body>
 </html>

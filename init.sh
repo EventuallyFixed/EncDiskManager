@@ -50,6 +50,216 @@ if [ -d "${APP_PATH}" ]; then
     fi
 fi
 
+# Create the builder-provided persistent data directory. This is a sibling
+# of APP_PATH (normally .../Nas_Prog/_EncDiskManager), so WD can remove or
+# replace the application directory without deleting the administrator or registry.
+REGISTRY_DIR="${APP_PERSISTENT_DATA_PATH}"
+if [ -z "${REGISTRY_DIR}" ] || [ "${REGISTRY_DIR}" = "/" ]; then
+    log "ERROR: Builder did not provide a valid persistent data path."
+    exit 1
+fi
+if [ -L "${REGISTRY_DIR}" ]; then
+    log "ERROR: Registry data directory must not be a symbolic link: ${REGISTRY_DIR}"
+    exit 1
+fi
+
+if mkdir -p "${REGISTRY_DIR}" &&
+    chown root:root "${REGISTRY_DIR}" &&
+    chmod 700 "${REGISTRY_DIR}"; then
+    log "Secured persistent application data directory at ${REGISTRY_DIR}"
+else
+    log "ERROR: Could not create or secure persistent data directory: ${REGISTRY_DIR}"
+    exit 1
+fi
+
+# One-time migration for installations that still have the 0.4.x app-local
+# data directory. Never overwrite an existing persistent file, and never
+# follow links or copy files with unexpected ownership or permissions.
+OLD_DATA_DIR="${APP_PATH}/data"
+if [ -e "${OLD_DATA_DIR}" ] || [ -L "${OLD_DATA_DIR}" ]; then
+    if [ -L "${OLD_DATA_DIR}" ] || [ ! -d "${OLD_DATA_DIR}" ] ||
+        [ "$(stat -c %u "${OLD_DATA_DIR}")" != "0" ] ||
+        [ "$(stat -c %a "${OLD_DATA_DIR}")" != "700" ]; then
+        log "ERROR: Legacy app-local data directory failed security checks; refusing migration."
+        exit 1
+    fi
+    for FILE in admin.json disks.json setup-token login-attempts.json; do
+        SOURCE="${OLD_DATA_DIR}/${FILE}"
+        DEST="${REGISTRY_DIR}/${FILE}"
+        if [ -L "${DEST}" ]; then
+            log "ERROR: Persistent configuration path is a symbolic link: ${DEST}"
+            exit 1
+        fi
+        if [ -L "${SOURCE}" ]; then
+            log "ERROR: Legacy configuration contains a symbolic link: ${SOURCE}"
+            exit 1
+        fi
+        if [ -e "${SOURCE}" ] && [ ! -e "${DEST}" ]; then
+            if [ ! -f "${SOURCE}" ] ||
+                [ "$(stat -c %u "${SOURCE}")" != "0" ] ||
+                [ "$(stat -c %a "${SOURCE}")" != "600" ]; then
+                log "ERROR: Legacy configuration file failed security checks: ${SOURCE}"
+                exit 1
+            fi
+            TEMP_FILE="${REGISTRY_DIR}/.${FILE}.migrate.$$"
+            if ! cp "${SOURCE}" "${TEMP_FILE}" ||
+                ! chown root:root "${TEMP_FILE}" ||
+                ! chmod 600 "${TEMP_FILE}" ||
+                ! cmp -s "${SOURCE}" "${TEMP_FILE}" ||
+                ! mv "${TEMP_FILE}" "${DEST}"; then
+                rm -f "${TEMP_FILE}"
+                log "ERROR: Could not safely migrate ${FILE}; original data has been retained."
+                exit 1
+            fi
+        fi
+    done
+fi
+
+# Restore the private registry and administrator credentials after an upgrade.
+# The preinst script creates this root-only handover directory before remove.sh.
+UPGRADE_BACKUP="/tmp/encdiskmanager-upgrade"
+if [ -e "$UPGRADE_BACKUP" ] || [ -L "$UPGRADE_BACKUP" ]; then
+    if [ -L "$UPGRADE_BACKUP" ] || [ ! -d "$UPGRADE_BACKUP" ] ||
+        [ "$(stat -c %u "$UPGRADE_BACKUP")" != "0" ] ||
+        [ "$(stat -c %a "$UPGRADE_BACKUP")" != "700" ] ||
+        [ ! -f "$UPGRADE_BACKUP/backup-complete" ] ||
+        [ -L "$UPGRADE_BACKUP/backup-complete" ] ||
+        [ "$(stat -c %u "$UPGRADE_BACKUP/backup-complete")" != "0" ] ||
+        [ "$(stat -c %a "$UPGRADE_BACKUP/backup-complete")" != "600" ] ||
+        [ "$(cat "$UPGRADE_BACKUP/backup-complete")" != "complete" ] ||
+        [ ! -f "$UPGRADE_BACKUP/source-path" ] ||
+        [ -L "$UPGRADE_BACKUP/source-path" ] ||
+        [ "$(stat -c %u "$UPGRADE_BACKUP/source-path")" != "0" ] ||
+        [ "$(stat -c %a "$UPGRADE_BACKUP/source-path")" != "600" ] ||
+        [ "$(cat "$UPGRADE_BACKUP/source-path")" != "$APP_PATH" ]; then
+        log "ERROR: Temporary upgrade backup failed validation; it has been left untouched."
+        exit 1
+    fi
+
+    for FILE in disks.json admin.json; do
+        SOURCE="$UPGRADE_BACKUP/$FILE"
+        if [ -L "$SOURCE" ]; then
+            log "ERROR: Upgrade backup contains an unexpected symbolic link: $SOURCE"
+            exit 1
+        fi
+        if [ -e "$SOURCE" ]; then
+            if [ ! -f "$SOURCE" ] || [ "$(stat -c %u "$SOURCE")" != "0" ] || [ "$(stat -c %a "$SOURCE")" != "600" ]; then
+                log "ERROR: Upgrade backup file failed ownership or permission checks: $SOURCE"
+                exit 1
+            fi
+            DEST="$REGISTRY_DIR/$FILE"
+            if [ -L "$DEST" ]; then
+                log "ERROR: Persistent configuration path is a symbolic link: $DEST"
+                exit 1
+            fi
+            if [ -e "$DEST" ]; then
+                if [ ! -f "$DEST" ] || [ "$(stat -c %u "$DEST")" != "0" ] ||
+                    [ "$(stat -c %a "$DEST")" != "600" ] || ! cmp -s "$SOURCE" "$DEST"; then
+                    log "ERROR: Existing persistent $FILE conflicts with the upgrade backup; backup has been retained."
+                    exit 1
+                fi
+            else
+                TEMP_FILE="$REGISTRY_DIR/.$FILE.restore.$$"
+                if ! cp "$SOURCE" "$TEMP_FILE" ||
+                    ! chown root:root "$TEMP_FILE" ||
+                    ! chmod 600 "$TEMP_FILE" ||
+                    ! cmp -s "$SOURCE" "$TEMP_FILE" ||
+                    ! mv "$TEMP_FILE" "$DEST"; then
+                    rm -f "$TEMP_FILE"
+                    log "ERROR: Could not restore $FILE; temporary backup has been retained."
+                    exit 1
+                fi
+                if ! cmp -s "$SOURCE" "$DEST"; then
+                    log "ERROR: Restored $FILE does not match the temporary backup; backup has been retained."
+                    exit 1
+                fi
+            fi
+        fi
+    done
+
+    rm -rf "$UPGRADE_BACKUP"
+    log "Previous private configuration restored successfully; temporary backup removed."
+fi
+
+# Maintain a root-only session epoch. Restore and permanent configuration
+# deletion rotate it, invalidating sessions in every browser.
+AUTH_EPOCH_FILE="$REGISTRY_DIR/auth-epoch"
+if [ -L "$AUTH_EPOCH_FILE" ]; then
+    log "ERROR: Authentication session epoch must not be a symbolic link."
+    exit 1
+elif [ -e "$AUTH_EPOCH_FILE" ]; then
+    if [ ! -f "$AUTH_EPOCH_FILE" ] ||
+        [ "$(stat -c %u "$AUTH_EPOCH_FILE")" != "0" ] ||
+        [ "$(stat -c %a "$AUTH_EPOCH_FILE")" != "600" ]; then
+        log "ERROR: Authentication session epoch ownership or permissions are unsafe."
+        exit 1
+    fi
+    AUTH_EPOCH="$(cat "$AUTH_EPOCH_FILE")"
+    case "$AUTH_EPOCH" in
+        *[!a-f0-9]*|'') log "ERROR: Authentication session epoch is invalid."; exit 1 ;;
+    esac
+    if [ "${#AUTH_EPOCH}" -ne 64 ]; then
+        log "ERROR: Authentication session epoch has an invalid length."
+        exit 1
+    fi
+else
+    AUTH_EPOCH_TMP="$REGISTRY_DIR/.auth-epoch.$$"
+    AUTH_EPOCH="$(php -r 'echo bin2hex(random_bytes(32));')"
+    case "$AUTH_EPOCH" in
+        *[!a-f0-9]*|'') log "ERROR: Could not generate a valid authentication session epoch."; exit 1 ;;
+    esac
+    if [ "${#AUTH_EPOCH}" -ne 64 ] ||
+        ! printf '%s\n' "$AUTH_EPOCH" > "$AUTH_EPOCH_TMP" ||
+        ! chown root:root "$AUTH_EPOCH_TMP" ||
+        ! chmod 600 "$AUTH_EPOCH_TMP" ||
+        ! mv "$AUTH_EPOCH_TMP" "$AUTH_EPOCH_FILE"; then
+        rm -f "$AUTH_EPOCH_TMP"
+        log "ERROR: Could not securely create the authentication session epoch."
+        exit 1
+    fi
+fi
+
+# Create a one-time setup code only while no administrator account exists.
+# Retrieve it over SSH from: $REGISTRY_DIR/setup-token
+ADMIN_FILE="$REGISTRY_DIR/admin.json"
+SETUP_TOKEN_FILE="$REGISTRY_DIR/setup-token"
+if [ -L "$ADMIN_FILE" ] || [ -L "$SETUP_TOKEN_FILE" ]; then
+    log "ERROR: Authentication data must not be stored in symbolic links."
+    exit 1
+fi
+if [ -e "$ADMIN_FILE" ] && [ ! -f "$ADMIN_FILE" ]; then
+    log "ERROR: Administrator credential path is not a regular file."
+    exit 1
+fi
+if [ -f "$ADMIN_FILE" ]; then
+    if [ "$(stat -c %u "$ADMIN_FILE")" != "0" ] || [ "$(stat -c %a "$ADMIN_FILE")" != "600" ]; then
+        log "ERROR: Administrator credential file ownership or permissions are unsafe."
+        exit 1
+    fi
+    rm -f "$SETUP_TOKEN_FILE"
+elif [ -e "$SETUP_TOKEN_FILE" ]; then
+    if [ ! -f "$SETUP_TOKEN_FILE" ] || [ "$(stat -c %u "$SETUP_TOKEN_FILE")" != "0" ] || [ "$(stat -c %a "$SETUP_TOKEN_FILE")" != "600" ]; then
+        log "ERROR: One-time setup code ownership or permissions are unsafe."
+        exit 1
+    fi
+else
+    SETUP_TOKEN_TMP="$REGISTRY_DIR/.setup-token.$$"
+    SETUP_TOKEN="$(php -r 'echo bin2hex(random_bytes(32));')"
+    case "$SETUP_TOKEN" in
+        *[!a-f0-9]*|'') log "ERROR: Could not generate a valid one-time setup code."; exit 1 ;;
+    esac
+    if printf '%s\n' "$SETUP_TOKEN" > "$SETUP_TOKEN_TMP" &&
+        chown root:root "$SETUP_TOKEN_TMP" &&
+        chmod 600 "$SETUP_TOKEN_TMP" &&
+        mv -f "$SETUP_TOKEN_TMP" "$SETUP_TOKEN_FILE"; then
+        log "One-time setup code created. Retrieve it over SSH from $SETUP_TOKEN_FILE."
+    else
+        rm -f "$SETUP_TOKEN_TMP"
+        log "ERROR: Could not securely create the one-time setup code."
+        exit 1
+    fi
+fi
+
 # Write private runtime configuration using the actual WD installation path.
 CONFIG_FILE="${APP_PATH}/encdiskmanager.conf"
 CONFIG_TMP="${APP_PATH}/.encdiskmanager.conf.$$"

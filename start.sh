@@ -24,3 +24,12 @@
 
 # Load all the useful variables
 . "$1/helpers.sh" "$0" "$1";
+
+# Recover any configuration restore interrupted by a reboot or process crash
+# before the web application accepts administrator requests.
+if [ -f "${APP_PATH}/lib/recover_restore.php" ]; then
+    if ! php "${APP_PATH}/lib/recover_restore.php"; then
+        log "ERROR: Interrupted configuration restore recovery failed; refusing to start EDM."
+        exit 1
+    fi
+fi

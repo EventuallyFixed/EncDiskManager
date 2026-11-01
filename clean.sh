@@ -23,4 +23,4 @@
 
 # Remove the web path
 log "removing web path: ${APP_WEB_PATH}"
-rm -rf ${APP_WEB_PATH}
+rm -rf "${APP_WEB_PATH}"
