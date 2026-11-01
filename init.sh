@@ -17,9 +17,6 @@
 # Load all the useful variables
 . "$1/helpers.sh" "$0" "$1";
 
-# EDM-specific persistent location; keep this aligned with lib/auth.php.
-APP_PERSISTENT_DATA_PATH="${APPS_PATH}/_${APP_NAME}"
-
 # ----------------------------------------------------------------------
 # Initialisation script: prepares app icon, index page and paths
 #  - Use this to restore custom paths and settings on reinstall / reboot
