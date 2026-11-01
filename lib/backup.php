@@ -20,6 +20,230 @@ function edm_backup_write_private_file($path, $contents)
     }
 }
 
+function edm_backup_sync_filesystem()
+{
+    // PHP 7.4 has no fsync() API. Use the platform sync utility as a durability
+    // barrier before advancing the transaction journal.
+    if (!function_exists('exec')) {
+        throw new RuntimeException('Filesystem sync is unavailable; restore cannot proceed safely.');
+    }
+    $output = array();
+    $status = 1;
+    exec('sync', $output, $status);
+    if ($status !== 0) {
+        throw new RuntimeException('Could not flush restore transaction data to storage.');
+    }
+}
+
+function edm_backup_write_transaction_state($stage, $transaction)
+{
+    $temporary = $stage . '/transaction.json.tmp';
+    $manifest = $stage . '/transaction.json';
+    if (is_link($temporary) || is_link($manifest)) {
+        throw new RuntimeException('Restore transaction journal must not contain symbolic links.');
+    }
+    $json = json_encode($transaction, JSON_PRETTY_PRINT);
+    if (!is_string($json)) {
+        throw new RuntimeException('Could not encode restore transaction journal.');
+    }
+    edm_backup_write_private_file($temporary, $json . "\n");
+    if (!rename($temporary, $manifest)) {
+        throw new RuntimeException('Could not update restore transaction journal.');
+    }
+}
+
+function edm_backup_open_recovery_locks($dataPath)
+{
+    $locks = array();
+    foreach (array('restore.lock', 'admin.lock') as $name) {
+        $path = $dataPath . '/' . $name;
+        if (is_link($path)) {
+            throw new RuntimeException('Restore recovery lock must not be a symbolic link.');
+        }
+        if (file_exists($path)) {
+            $stat = @lstat($path);
+            if ($stat === false || (($stat['mode'] & 0170000) !== 0100000)
+                || $stat['uid'] !== 0) {
+                throw new RuntimeException('Restore recovery lock must be a root-owned regular file.');
+            }
+        }
+        $handle = fopen($path, 'c');
+        if ($handle === false || !chown($path, 0) || !chgrp($path, 0)
+            || !chmod($path, 0600) || !flock($handle, LOCK_EX)) {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+            throw new RuntimeException('Could not secure restore recovery locks.');
+        }
+        $locks[] = $handle;
+    }
+    return $locks;
+}
+
+function edm_backup_recovery_validate_file($path)
+{
+    if (is_link($path)) {
+        throw new RuntimeException('Restore recovery encountered an unexpected symbolic link.');
+    }
+    $stat = @lstat($path);
+    if ($stat === false || (($stat['mode'] & 0170000) !== 0100000)
+        || $stat['uid'] !== 0 || (($stat['mode'] & 0777) !== 0600)) {
+        throw new RuntimeException('Restore recovery file failed ownership or permission checks.');
+    }
+}
+
+function edm_backup_recovery_remove_stage($stage)
+{
+    $allowed = array(
+        'transaction.json', 'transaction.json.tmp',
+        'previous-admin.json', 'previous-disks.json',
+        'admin.json', 'disks.json'
+    );
+    $entries = scandir($stage);
+    if (!is_array($entries)) {
+        throw new RuntimeException('Could not inspect restore recovery directory.');
+    }
+    foreach ($entries as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+        if (!in_array($entry, $allowed, true)) {
+            throw new RuntimeException('Unexpected entry in restore recovery directory: ' . $entry);
+        }
+        $path = $stage . '/' . $entry;
+        edm_backup_recovery_validate_file($path);
+        if ($entry !== 'transaction.json' && !@unlink($path)) {
+            throw new RuntimeException('Could not remove a completed restore recovery file.');
+        }
+    }
+    $manifest = $stage . '/transaction.json';
+    if (file_exists($manifest) && !@unlink($manifest)) {
+        throw new RuntimeException('Could not remove completed restore transaction journal.');
+    }
+    if (!@rmdir($stage)) {
+        throw new RuntimeException('Could not remove completed restore recovery directory.');
+    }
+}
+
+function edm_backup_recover_interrupted_restores()
+{
+    $dataPath = edm_auth_data_path();
+    $locks = edm_backup_open_recovery_locks($dataPath);
+    $recovered = 0;
+    try {
+        $stages = glob($dataPath . '/.restore-*', GLOB_ONLYDIR);
+        if (!is_array($stages)) {
+            throw new RuntimeException('Could not scan for interrupted restore transactions.');
+        }
+        foreach ($stages as $stage) {
+            $base = basename($stage);
+            if (!preg_match('/^\.restore-[a-f0-9]{16}$/', $base)) {
+                throw new RuntimeException('Unexpected restore recovery directory name.');
+            }
+            $stageStat = @lstat($stage);
+            if ($stageStat === false || (($stageStat['mode'] & 0170000) !== 0040000)
+                || is_link($stage) || $stageStat['uid'] !== 0
+                || (($stageStat['mode'] & 0777) !== 0700)) {
+                throw new RuntimeException('Restore recovery directory failed security checks.');
+            }
+
+            $manifest = $stage . '/transaction.json';
+            if (is_link($manifest)) {
+                throw new RuntimeException('Restore transaction journal must not be a symbolic link.');
+            }
+            if (!file_exists($manifest)) {
+                // A crash before the journal was written occurs before any live
+                // configuration is moved. Only an empty stage or an incomplete
+                // temporary journal is safe to discard.
+                $entries = scandir($stage);
+                if (!is_array($entries)) {
+                    throw new RuntimeException('Could not inspect an unjournaled restore directory.');
+                }
+                $entries = array_values(array_diff($entries, array('.', '..')));
+                if (count($entries) === 1 && $entries[0] === 'transaction.json.tmp') {
+                    edm_backup_recovery_validate_file($stage . '/transaction.json.tmp');
+                    if (!@unlink($stage . '/transaction.json.tmp')) {
+                        throw new RuntimeException('Could not remove incomplete restore journal.');
+                    }
+                    $entries = array();
+                }
+                if (count($entries) !== 0 || !@rmdir($stage)) {
+                    throw new RuntimeException('Unjournaled restore directory contains data; manual recovery is required.');
+                }
+                $recovered++;
+                continue;
+            }
+
+            edm_backup_recovery_validate_file($manifest);
+            $decoded = json_decode((string)file_get_contents($manifest), true);
+            if (!is_array($decoded)
+                || count($decoded) !== 4
+                || !isset($decoded['version'], $decoded['state'], $decoded['admin_existed'], $decoded['registry_existed'])
+                || $decoded['version'] !== 1
+                || !in_array($decoded['state'], array('active', 'committed', 'rolled_back'), true)
+                || !is_bool($decoded['admin_existed'])
+                || !is_bool($decoded['registry_existed'])) {
+                throw new RuntimeException('Restore transaction journal is invalid; manual recovery is required.');
+            }
+
+            if ($decoded['state'] === 'active') {
+                $targets = array(
+                    array('name' => 'admin.json', 'old' => 'previous-admin.json', 'existed' => $decoded['admin_existed']),
+                    array('name' => 'disks.json', 'old' => 'previous-disks.json', 'existed' => $decoded['registry_existed'])
+                );
+                foreach ($targets as $target) {
+                    $live = $dataPath . '/' . $target['name'];
+                    $old = $stage . '/' . $target['old'];
+                    if (is_link($live) || is_link($old)) {
+                        throw new RuntimeException('Restore recovery refused a symbolic link.');
+                    }
+                    if ($target['existed']) {
+                        if (file_exists($old)) {
+                            edm_backup_recovery_validate_file($old);
+                            if (file_exists($live)) {
+                                edm_backup_recovery_validate_file($live);
+                                if (!@unlink($live)) {
+                                    throw new RuntimeException('Could not remove partially restored configuration.');
+                                }
+                            }
+                            if (!@rename($old, $live)) {
+                                throw new RuntimeException('Could not reinstate previous configuration during recovery.');
+                            }
+                        } elseif (file_exists($live)) {
+                            // The old file was never moved, or a previous
+                            // recovery pass already moved it back.
+                            edm_backup_recovery_validate_file($live);
+                        } else {
+                            throw new RuntimeException('Previous configuration is missing; manual recovery is required.');
+                        }
+                    } elseif (file_exists($live)) {
+                        edm_backup_recovery_validate_file($live);
+                        if (!@unlink($live)) {
+                            throw new RuntimeException('Could not remove partially installed first-time configuration.');
+                        }
+                    }
+                }
+                edm_backup_sync_filesystem();
+                $decoded['state'] = 'rolled_back';
+                edm_backup_write_transaction_state($stage, $decoded);
+                edm_backup_sync_filesystem();
+            }
+
+            // A committed transaction keeps the new live files. A rolled-back
+            // transaction has already reinstated the old state. Cleanup is safe
+            // for either terminal state and is deliberately idempotent.
+            edm_backup_recovery_remove_stage($stage);
+            $recovered++;
+        }
+    } finally {
+        for ($i = count($locks) - 1; $i >= 0; $i--) {
+            @flock($locks[$i], LOCK_UN);
+            fclose($locks[$i]);
+        }
+    }
+    return $recovered;
+}
+
 function edm_backup_read_archive($compressed)
 {
     if (!is_string($compressed) || strlen($compressed) < 20 || strlen($compressed) > 2097152) {
