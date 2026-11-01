@@ -27,9 +27,14 @@ function edm_backup_sync_filesystem()
     if (!function_exists('exec')) {
         throw new RuntimeException('Filesystem sync is unavailable; restore cannot proceed safely.');
     }
+    $syncPath = is_executable('/bin/sync') ? '/bin/sync'
+        : (is_executable('/usr/bin/sync') ? '/usr/bin/sync' : null);
+    if ($syncPath === null) {
+        throw new RuntimeException('The sync utility is unavailable; restore cannot proceed safely.');
+    }
     $output = array();
     $status = 1;
-    exec('sync', $output, $status);
+    exec(escapeshellarg($syncPath), $output, $status);
     if ($status !== 0) {
         throw new RuntimeException('Could not flush restore transaction data to storage.');
     }
