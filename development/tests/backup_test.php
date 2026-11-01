@@ -226,7 +226,10 @@ try {
     edm_backup_test_rejects(gzencode($truncatedTar), 'truncated TAR file body is rejected');
     $passed++;
 
-    $missingEndMarkerTar = substr(gzdecode($archive), 0, -512);
+    // GNU tar pads archives with many zero blocks. Remove everything after
+    // the final file body so no valid two-block TAR terminator remains.
+    $lastEntryEnd = $lastOffset + 512 + (int)(ceil($lastSize / 512) * 512);
+    $missingEndMarkerTar = substr(gzdecode($archive), 0, $lastEntryEnd);
     edm_backup_test_rejects(gzencode($missingEndMarkerTar), 'archive missing a TAR end block is rejected');
     $passed++;
 
