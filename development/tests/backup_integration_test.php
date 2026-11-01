@@ -272,6 +272,133 @@ try {
         'rollback restores both original files after registry installation fails');
     $passed++;
 
+    // Simulate a reboot after both new files were installed but before the
+    // transaction was committed. Recovery must reinstate both previous files.
+    $_SESSION['auth_epoch'] = trim(file_get_contents($data . '/auth-epoch'));
+    $crashOldAdmin = array(
+        'password_hash' => password_hash('crash-old-password', PASSWORD_DEFAULT),
+        'created_at' => time()
+    );
+    $crashOldRegistry = array('version' => 1, 'disks' => array());
+    $crashNewAdmin = array(
+        'password_hash' => password_hash('crash-new-password', PASSWORD_DEFAULT),
+        'created_at' => time()
+    );
+    $crashNewRegistry = $originalRegistry;
+    edm_backup_write_private_file($data . '/admin.json', json_encode($crashNewAdmin, JSON_PRETTY_PRINT) . "\n");
+    edm_registry_save($data . '/disks.json', $crashNewRegistry);
+    $crashStage = $data . '/.restore-' . bin2hex(random_bytes(8));
+    if (!mkdir($crashStage, 0700) || !chown($crashStage, 0) || !chgrp($crashStage, 0)) {
+        throw new RuntimeException('Could not create simulated interrupted restore directory.');
+    }
+    edm_backup_write_private_file($crashStage . '/previous-admin.json',
+        json_encode($crashOldAdmin, JSON_PRETTY_PRINT) . "\n");
+    edm_backup_write_private_file($crashStage . '/previous-disks.json',
+        json_encode($crashOldRegistry, JSON_PRETTY_PRINT) . "\n");
+    edm_backup_write_transaction_state($crashStage, array(
+        'version' => 1, 'state' => 'active',
+        'admin_existed' => true, 'registry_existed' => true
+    ));
+    edm_backup_recover_interrupted_restores();
+    edm_backup_integration_assert(
+        edm_auth_read_admin()['password_hash'] === $crashOldAdmin['password_hash']
+            && edm_registry_load($data . '/disks.json') === $crashOldRegistry,
+        'startup recovery restores both previous files after an interrupted replacement');
+    $passed++;
+    edm_backup_integration_assert(!file_exists($crashStage),
+        'startup recovery removes the completed rollback staging directory');
+    $passed++;
+
+    // A committed journal means both replacements and the new session epoch
+    // were flushed; recovery must retain the new live configuration.
+    $committedAdmin = array(
+        'password_hash' => password_hash('crash-committed-password', PASSWORD_DEFAULT),
+        'created_at' => time()
+    );
+    $committedRegistry = $originalRegistry;
+    edm_backup_write_private_file($data . '/admin.json', json_encode($committedAdmin, JSON_PRETTY_PRINT) . "\n");
+    edm_registry_save($data . '/disks.json', $committedRegistry);
+    $committedStage = $data . '/.restore-' . bin2hex(random_bytes(8));
+    if (!mkdir($committedStage, 0700) || !chown($committedStage, 0) || !chgrp($committedStage, 0)) {
+        throw new RuntimeException('Could not create simulated committed restore directory.');
+    }
+    edm_backup_write_private_file($committedStage . '/previous-admin.json',
+        json_encode($crashOldAdmin, JSON_PRETTY_PRINT) . "\n");
+    edm_backup_write_private_file($committedStage . '/previous-disks.json',
+        json_encode($crashOldRegistry, JSON_PRETTY_PRINT) . "\n");
+    edm_backup_write_transaction_state($committedStage, array(
+        'version' => 1, 'state' => 'committed',
+        'admin_existed' => true, 'registry_existed' => true
+    ));
+    edm_backup_recover_interrupted_restores();
+    edm_backup_integration_assert(
+        edm_auth_read_admin()['password_hash'] === $committedAdmin['password_hash']
+            && edm_registry_load($data . '/disks.json') === $committedRegistry,
+        'startup recovery preserves configuration from a committed restore');
+    $passed++;
+    edm_backup_integration_assert(!file_exists($committedStage),
+        'startup recovery cleans a committed restore staging directory');
+    $passed++;
+
+    // A first-time restore has no previous files. An interrupted transaction
+    // must remove any partially installed first-time configuration.
+    unlink($data . '/admin.json');
+    unlink($data . '/disks.json');
+    $firstCrashStage = $data . '/.restore-' . bin2hex(random_bytes(8));
+    if (!mkdir($firstCrashStage, 0700) || !chown($firstCrashStage, 0) || !chgrp($firstCrashStage, 0)) {
+        throw new RuntimeException('Could not create simulated first-time restore directory.');
+    }
+    edm_backup_write_transaction_state($firstCrashStage, array(
+        'version' => 1, 'state' => 'active',
+        'admin_existed' => false, 'registry_existed' => false
+    ));
+    edm_backup_write_private_file($data . '/admin.json', json_encode($crashNewAdmin, JSON_PRETTY_PRINT) . "\n");
+    edm_registry_save($data . '/disks.json', $crashNewRegistry);
+    edm_backup_recover_interrupted_restores();
+    edm_backup_integration_assert(!file_exists($data . '/admin.json')
+        && !file_exists($data . '/disks.json'),
+        'startup recovery removes partial first-time configuration when no previous files existed');
+    $passed++;
+
+    // Recovery itself must be retryable if the NAS fails again while restoring
+    // the old administrator file.
+    edm_backup_write_private_file($data . '/admin.json', json_encode($crashNewAdmin, JSON_PRETTY_PRINT) . "\n");
+    edm_backup_write_private_file($data . '/disks.json', json_encode($crashNewRegistry, JSON_PRETTY_PRINT) . "\n");
+    $retryStage = $data . '/.restore-' . bin2hex(random_bytes(8));
+    if (!mkdir($retryStage, 0700) || !chown($retryStage, 0) || !chgrp($retryStage, 0)) {
+        throw new RuntimeException('Could not create simulated retry restore directory.');
+    }
+    edm_backup_write_private_file($retryStage . '/previous-admin.json',
+        json_encode($crashOldAdmin, JSON_PRETTY_PRINT) . "\n");
+    edm_backup_write_private_file($retryStage . '/previous-disks.json',
+        json_encode($crashOldRegistry, JSON_PRETTY_PRINT) . "\n");
+    edm_backup_write_transaction_state($retryStage, array(
+        'version' => 1, 'state' => 'active',
+        'admin_existed' => true, 'registry_existed' => true
+    ));
+    $GLOBALS['edm_backup_test_failures']['rename'] = array(array(
+        'from_basename' => 'previous-admin.json',
+        'to' => $data . '/admin.json',
+        'remaining' => 1
+    ));
+    $retryFailure = false;
+    try {
+        edm_backup_recover_interrupted_restores();
+    } catch (Throwable $exception) {
+        $retryFailure = true;
+    }
+    $GLOBALS['edm_backup_test_failures'] = array();
+    edm_backup_integration_assert($retryFailure && is_dir($retryStage),
+        'interrupted recovery retains its journal and staging files when a recovery rename fails');
+    $passed++;
+    edm_backup_recover_interrupted_restores();
+    edm_backup_integration_assert(
+        edm_auth_read_admin()['password_hash'] === $crashOldAdmin['password_hash']
+            && edm_registry_load($data . '/disks.json') === $crashOldRegistry
+            && !file_exists($retryStage),
+        'a later startup recovery safely completes a previously interrupted recovery');
+    $passed++;
+
     // Fail the registry install and then fail restoration of the previous
     // administrator file. The old administrator must remain in the private
     // staging directory for manual recovery.
