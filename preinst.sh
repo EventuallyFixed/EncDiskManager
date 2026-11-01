@@ -3,8 +3,11 @@
 # Called only during WD OS5 application reinstallation, before remove.sh.
 . "$1/helpers.sh" "$0" "$1";
 
+# Match init.sh and lib/auth.php; this directory survives app-tree replacement.
+APP_PERSISTENT_DATA_PATH="${APPS_PATH}/_${APP_NAME}"
+
 set -eu
-DATA_DIR="$APP_PATH/data"
+DATA_DIR="$APP_PERSISTENT_DATA_PATH"
 BACKUP_DIR="/tmp/encdiskmanager-upgrade"
 
 if [ ! -e "$DATA_DIR" ] && [ ! -L "$DATA_DIR" ]; then
