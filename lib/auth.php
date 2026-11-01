@@ -44,9 +44,9 @@ function edm_auth_app_path()
 function edm_auth_data_path()
 {
     $appPath = edm_auth_app_path();
-    // WD's builder defines APP_PERSISTENT_DATA_PATH as a sibling of APP_PATH:
-    // <application parent>/_EncDiskManager. Keeping this outside APP_PATH
-    // allows configuration to survive normal app removal and upgrades.
+    // EDM's private data directory is a stable sibling of APP_PATH.
+    // Keep this aligned with init.sh and preinst.sh so configuration survives
+    // normal app-tree replacement and upgrades.
     $dataPath = dirname($appPath) . '/_EncDiskManager';
     $stat = @lstat($dataPath);
     if ($stat === false || (($stat['mode'] & 0170000) !== 0040000)
