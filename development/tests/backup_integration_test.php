@@ -2,7 +2,7 @@
 /*
  * Integration tests for EncDiskManager backup creation and restore.
  *
- * Run as root with PHP 7.4+ and /bin/tar:
+ * Run as root with PHP 7.4+, /bin/tar, exec enabled and the sync utility:
  *   php development/tests/backup_integration_test.php
  *
  * Copies the PHP libraries into an isolated temporary application tree and
@@ -16,6 +16,17 @@ if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
 }
 if (!is_executable('/bin/tar')) {
     fwrite(STDERR, "Tests require /bin/tar.\n");
+    exit(2);
+}
+if (!function_exists('exec')) {
+    fwrite(STDERR, "Tests require PHP exec() so restore durability barriers can be exercised.\n");
+    exit(2);
+}
+$syncOutput = array();
+$syncStatus = 1;
+exec('command -v sync', $syncOutput, $syncStatus);
+if ($syncStatus !== 0 || count($syncOutput) === 0) {
+    fwrite(STDERR, "Tests require the sync utility.\n");
     exit(2);
 }
 
