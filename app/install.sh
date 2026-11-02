@@ -29,6 +29,13 @@ if [ ! -d "${APP_UPLOAD_PATH}" ] || [ -L "${APP_UPLOAD_PATH}" ]; then
 	exit 1
 fi
 
+# Validate the uploaded package metadata before moving the existing
+# application placeholder. Never accept a missing or symlinked apkg.xml.
+if [ -L "${APP_UPLOAD_PATH}/apkg.xml" ] || [ ! -f "${APP_UPLOAD_PATH}/apkg.xml" ]; then
+	log "ERROR: Uploaded application metadata is missing or is not a regular file: ${APP_UPLOAD_PATH}/apkg.xml"
+	exit 1
+fi
+
 PLACEHOLDER_BACKUP="${APPS_PATH}/.${APP_NAME}.install-placeholder.$$"
 
 if [ -e "${APP_PATH}" ] || [ -L "${APP_PATH}" ]; then
@@ -81,8 +88,15 @@ fi
 # The new application tree is now in place; discard only the verified
 # metadata-only placeholder retained above.
 if [ -d "${PLACEHOLDER_BACKUP}" ]; then
-	rm -f "${PLACEHOLDER_BACKUP}/apkg.xml"
-	rmdir "${PLACEHOLDER_BACKUP}"
+	if ! BACKUP_EXTRA="$(find "${PLACEHOLDER_BACKUP}" -mindepth 1 -maxdepth 1 ! -name apkg.xml -print -quit)"; then
+		log "WARNING: Could not inspect placeholder backup; leaving it untouched: ${PLACEHOLDER_BACKUP}"
+	elif [ -n "${BACKUP_EXTRA}" ]; then
+		log "WARNING: Placeholder backup contains unexpected files; leaving it untouched: ${PLACEHOLDER_BACKUP}"
+	elif ! rm -f "${PLACEHOLDER_BACKUP}/apkg.xml"; then
+		log "WARNING: Could not remove placeholder metadata; backup retained: ${PLACEHOLDER_BACKUP}"
+	elif ! rmdir "${PLACEHOLDER_BACKUP}"; then
+		log "WARNING: Could not remove placeholder backup directory: ${PLACEHOLDER_BACKUP}"
+	fi
 fi
 
 log "Application files moved successfully to: ${APP_PATH}"
