@@ -8,3 +8,6 @@ Thumbs.db
 # Temporary development output
 *.tmp
 *.log
+
+# Local pre-OS5 compatibility backup
+development/history/php/index.php.pre-os5-fix
