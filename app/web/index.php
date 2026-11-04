@@ -351,7 +351,6 @@ unset($device);
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Encrypted Disk Manager</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined">
 <style>
     body {
         margin: 0;
@@ -419,18 +418,13 @@ unset($device);
         text-decoration: underline;
         cursor: pointer;
     }
-    .material-symbol {
-        font-family: 'Material Symbols Outlined';
-        font-weight: normal;
-        font-style: normal;
-        font-size: 20px;
-        line-height: 1;
+    .material-icon {
+        width: 20px;
+        height: 20px;
         display: inline-block;
-        white-space: nowrap;
-        direction: ltr;
-        font-feature-settings: 'liga';
-        -webkit-font-feature-settings: 'liga';
-        -webkit-font-smoothing: antialiased;
+        flex: 0 0 20px;
+        fill: currentColor;
+        vertical-align: middle;
     }
     .action-link:focus-visible, dialog button:focus-visible,
     dialog input:focus-visible {
@@ -468,14 +462,14 @@ unset($device);
     <div class="header-actions">
         <a class="backup-link" href="settings.php"
            title="Manage configuration and backups">
-            <span class="material-symbol" aria-hidden="true">settings</span>
+            <svg class="material-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19.14 12.94c.04-.31.06-.62.06-.94s-.02-.63-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.95l-.36-2.54A.49.49 0 0 0 13.88 2h-3.76a.49.49 0 0 0-.49.42L9.27 4.96c-.59.23-1.14.55-1.63.95l-2.39-.96a.5.5 0 0 0-.61.22L2.72 8.49a.5.5 0 0 0 .12.64l2.03 1.58c-.05.31-.07.63-.07.95s.02.63.07.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.49.4 1.04.72 1.63.95l.36 2.54a.49.49 0 0 0 .49.42h3.76a.49.49 0 0 0 .49-.42l.36-2.54c.59-.23 1.14-.55 1.63-.95l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.02-1.58ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>
             <span>Settings</span>
         </a>
         <form method="post" style="display:inline-block;margin-left:8px">
             <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['csrf_token']); ?>">
             <input type="hidden" name="auth_action" value="logout">
             <button type="submit" class="backup-link" title="Sign out of Encrypted Disk Manager">
-                <span class="material-symbol" aria-hidden="true">logout</span>
+                <svg class="material-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10.09 15.59 11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59ZM19 3H5c-1.1 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2Z"/></svg>
                 <span>Sign out</span>
             </button>
         </form>
