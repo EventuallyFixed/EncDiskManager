@@ -44,8 +44,13 @@ if [ -e "${APP_PATH}" ] || [ -L "${APP_PATH}" ]; then
 		exit 1
 	fi
 
-	if [ -L "${APP_PATH}/apkg.xml" ] || [ ! -f "${APP_PATH}/apkg.xml" ]; then
-		log "ERROR: Existing application directory is not a metadata-only placeholder; refusing replacement: ${APP_PATH}"
+	if [ -L "${APP_PATH}/apkg.xml" ]; then
+		log "ERROR: Existing application metadata is a symbolic link; refusing replacement: ${APP_PATH}/apkg.xml"
+		exit 1
+	fi
+
+	if [ -e "${APP_PATH}/apkg.xml" ] && [ ! -f "${APP_PATH}/apkg.xml" ]; then
+		log "ERROR: Existing application metadata is not a regular file; refusing replacement: ${APP_PATH}/apkg.xml"
 		exit 1
 	fi
 
@@ -54,7 +59,6 @@ if [ -e "${APP_PATH}" ] || [ -L "${APP_PATH}" ]; then
 		log "ERROR: Existing application directory contains additional files; refusing replacement: ${APP_PATH}"
 		exit 1
 	fi
-
 	if [ -e "${PLACEHOLDER_BACKUP}" ] || [ -L "${PLACEHOLDER_BACKUP}" ]; then
 		log "ERROR: Application placeholder backup path already exists; refusing replacement: ${PLACEHOLDER_BACKUP}"
 		exit 1
