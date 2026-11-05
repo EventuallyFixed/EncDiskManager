@@ -48,4 +48,8 @@ $device = array('name' => 'sdb1', 'path' => '/dev/sdb1', 'uuid' => $uuid, 'luks'
 $rows = edm_inventory_rows($one['disks'], array($device));
 check(count($rows) === 1 && $rows[0]['attached'], 'Matching attached disk merged into registration');
 $rows = edm_inventory_rows($one['disks'], array($device, $device));
-check(count($rows) === 3 && !$rows[0]['attached'] && $rows[0]['ambiguous'], 'Duplicate UUID fails closed');
+check(count($rows) === 1 && !$rows[0]['attached'] && $rows[0]['ambiguous'], 'Duplicate UUID fails closed');
+
+$unregistered = array('name' => 'sdc1', 'path' => '/dev/sdc1', 'label' => 'External', 'uuid' => '', 'luks' => false, 'status' => 'Not identified as LUKS');
+$rows = edm_inventory_rows(array(), array($unregistered));
+check(count($rows) === 1 && $rows[0]['status'] === 'Not identified as LUKS', 'Unregistered partition retains detected status');
