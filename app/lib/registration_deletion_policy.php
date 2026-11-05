@@ -33,10 +33,15 @@ function edm_registration_deletion_allowed($uuid, $devices, $mappers, $discovery
         }
         // The caller must supply all active mappers and their source UUIDs.
         // Unknown mapper source identity is not safe evidence of disconnection.
-        if (!array_key_exists('source_uuid', $mapper) || !is_string($mapper['source_uuid'])) {
+        if (!array_key_exists('source_uuid', $mapper)
+            || !is_string($mapper['source_uuid'])
+            || !preg_match('/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i', $mapper['source_uuid'])) {
             return false;
         }
         if (strcasecmp($mapper['source_uuid'], $uuid) === 0) {
+            return false;
+        }
+        if (count($matches) === 1 && in_array($matches[0]['name'], $mapper['parents'], true)) {
             return false;
         }
     }
