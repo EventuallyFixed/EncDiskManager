@@ -55,14 +55,18 @@ function edm_registry_transaction($registryPath, $operation)
 
 /**
  * Only rename and change the nominated mount directory when the disk is
- * confirmed inactive by the caller's live privileged checks.
+ * confirmed inactive by fresh privileged checks inside the registry lock.
  */
-function edm_registry_change_details($registryPath, $uuid, $name, $mountFolder, $isInactive)
+function edm_registry_change_details($registryPath, $uuid, $name, $mountFolder, $verifyInactive)
 {
-    if ($isInactive !== true) {
-        throw new RuntimeException('Disk must be verified inactive before changing its mount directory.');
+    if (!is_callable($verifyInactive)) {
+        throw new RuntimeException('A live disk-state verifier is required.');
     }
-    return edm_registry_transaction($registryPath, function ($current) use ($uuid, $name, $mountFolder) {
+    return edm_registry_transaction($registryPath, function ($current) use ($uuid, $name, $mountFolder, $verifyInactive) {
+        // Verify after acquiring the transaction lock, not before waiting.
+        if (call_user_func($verifyInactive, $uuid) !== true) {
+            throw new RuntimeException('Disk is not confirmed inactive.');
+        }
         return edm_registry_update_disk($current, $uuid, $name, $mountFolder);
     });
 }
@@ -70,13 +74,18 @@ function edm_registry_change_details($registryPath, $uuid, $name, $mountFolder, 
 /**
  * Removing a registration is metadata-only. Keyfile retirement is a separate
  * explicitly confirmed step and must never be silently skipped or assumed.
+ * The verifier does not prevent external disk state changes; full coordination
+ * with the privileged disk-operation lock is still required before enabling UI.
  */
-function edm_registry_delete_registration($registryPath, $uuid, $isInactive)
+function edm_registry_delete_registration($registryPath, $uuid, $verifyInactive)
 {
-    if ($isInactive !== true) {
-        throw new RuntimeException('Disk must be verified inactive before deleting registration.');
+    if (!is_callable($verifyInactive)) {
+        throw new RuntimeException('A live disk-state verifier is required.');
     }
-    return edm_registry_transaction($registryPath, function ($current) use ($uuid) {
+    return edm_registry_transaction($registryPath, function ($current) use ($uuid, $verifyInactive) {
+        if (call_user_func($verifyInactive, $uuid) !== true) {
+            throw new RuntimeException('Disk is not confirmed inactive.');
+        }
         return edm_registry_remove_disk($current, $uuid);
     });
 }
