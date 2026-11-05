@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/registry.php';
 require_once __DIR__ . '/../lib/inventory.php';
+require_once __DIR__ . '/../lib/configuration_request.php';
 
 try {
     edm_auth_start_session();
@@ -353,6 +354,42 @@ foreach ($devices as &$device) {
 }
 unset($device);
 
+// Validate authenticated configuration submissions without performing mutations.
+// The live privileged verifier and keyfile retirement are not yet integrated.
+$configValidationNotice = '';
+$configValidationError = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['config_action'])) {
+    if (!edm_auth_is_https()) {
+        http_response_code(400);
+        $configValidationError = 'HTTPS is required for configuration requests.';
+    } elseif (!isset($_POST['csrf_token'])
+        || !is_string($_POST['csrf_token'])
+        || !hash_equals((string)$_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        http_response_code(403);
+        $configValidationError = 'Security token expired. Reload and try again.';
+    } else {
+        try {
+            $request = array(
+                'action' => $_POST['config_action'],
+                'luks_uuid' => isset($_POST['luks_uuid']) ? $_POST['luks_uuid'] : null
+            );
+            if ($request['action'] === 'edit') {
+                $request['name'] = isset($_POST['name']) ? $_POST['name'] : null;
+                $request['mount_folder'] = isset($_POST['mount_folder']) ? $_POST['mount_folder'] : null;
+            } elseif ($request['action'] === 'delete') {
+                $request['confirmation'] = isset($_POST['confirmation']) ? $_POST['confirmation'] : null;
+            }
+            $validated = edm_configuration_request($request);
+            $configValidationNotice = 'Configuration request validated for ' . $validated['luks_uuid']
+                . '. No changes were saved: live disk-state verification is not yet enabled.';
+        } catch (Throwable $exception) {
+            http_response_code(400);
+            $configValidationError = 'Invalid configuration request: ' . $exception->getMessage();
+        }
+    }
+}
+
 // Registry is authoritative for persistent rows; USB discovery supplies live state.
 $inventoryError = '';
 try {
@@ -521,6 +558,8 @@ try {
     </section>
     <section class="panel">
         <h2>Disk inventory</h2>
+        <?php if ($configValidationNotice !== ''): ?><p role="status"><?php echo h($configValidationNotice); ?></p><?php endif; ?>
+        <?php if ($configValidationError !== ''): ?><p role="alert"><?php echo h($configValidationError); ?></p><?php endif; ?>
         <p class="muted">Registered disks remain listed when disconnected. Disk actions are disabled until the privileged operations are implemented and verified.</p>
         <?php if ($inventoryError !== ''): ?>
             <p class="error"><?php echo h($inventoryError); ?></p>
@@ -576,17 +615,22 @@ try {
         <p class="muted">Configuration preview. Editing, key management and registration deletion are not yet enabled.</p>
         <p><strong>LUKS UUID:</strong> <code id="config-uuid"></code></p>
         <p><strong>Connection:</strong> <span id="config-status"></span></p>
+        <form method="post" id="disk-config-form">
+        <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['csrf_token']); ?>">
+        <input type="hidden" name="config_action" value="edit">
+        <input type="hidden" name="luks_uuid" id="config-form-uuid">
         <label for="config-name">Registered name</label>
-        <input id="config-name" type="text" readonly>
+        <input id="config-name" name="name" type="text" maxlength="160" required>
         <label for="config-folder">Unique mount directory under /mnt</label>
-        <input id="config-folder" type="text" readonly>
+        <input id="config-folder" name="mount_folder" type="text" maxlength="48" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,47}" required>
         <label><input type="checkbox" disabled> Store an unlock key on this NAS (optional)</label>
         <p class="muted">Key storage is not configured in this development build.</p>
         <div class="dialog-actions">
-            <button type="button" disabled>Save changes</button>
+            <button type="submit">Validate changes (no save)</button>
             <button type="button" disabled>Delete registration</button>
             <button type="button" id="close-disk-config">Close</button>
         </div>
+        </form>
     </dialog>
     <section class="panel">
         <h2>Open encrypted volumes linked to USB</h2>
@@ -649,6 +693,7 @@ try {
         Array.prototype.forEach.call(document.querySelectorAll('.configure-disk'), function (button) {
             button.addEventListener('click', function () {
                 document.getElementById('config-uuid').textContent = button.getAttribute('data-uuid');
+                document.getElementById('config-form-uuid').value = button.getAttribute('data-uuid');
                 document.getElementById('config-status').textContent = button.getAttribute('data-status');
                 document.getElementById('config-name').value = button.getAttribute('data-name');
                 document.getElementById('config-folder').value = button.getAttribute('data-folder');
