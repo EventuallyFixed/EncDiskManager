@@ -263,7 +263,7 @@ foreach ($devices as $device) {
 }
 
 $mapperDevices = array();
-foreach ($sysEntries as $name) {
+foreach (is_array($sysEntries) ? $sysEntries : array() as $name) {
     if (!preg_match('/^dm-[0-9]+$/', $name)) {
         continue;
     }
@@ -313,14 +313,21 @@ foreach ($devices as &$device) {
         }
     }
 
+    // Preserve legacy fields for the configured backup while deriving the
+    // general mapper state for every detected USB partition.
     $device['backup_mapper'] = '';
     $device['backup_mount'] = '';
-    if ($device['is_backup']) {
-        foreach ($linkedMappers as $mapper) {
+    $device['mapper_names'] = array();
+    $device['mapper_mounts'] = array();
+    foreach ($linkedMappers as $mapper) {
+        $device['mapper_names'][] = $mapper['name'];
+        if ($mapper['mount'] !== '') {
+            $device['mapper_mounts'][] = $mapper['mount'];
+        }
+        if ($device['is_backup']) {
             $device['backup_mapper'] = $mapper['name'];
             if ($mapper['mount'] !== '') {
                 $device['backup_mount'] = $mapper['mount'];
-                break;
             }
         }
     }
@@ -330,7 +337,7 @@ foreach ($devices as &$device) {
             ? 'Mounted'
             : 'Not identified as LUKS';
     } elseif (!$linkedMappers) {
-        $device['status'] = 'LUKS detected — no open USB-linked mapping found';
+        $device['status'] = 'Encrypted — Locked';
     } else {
         $isMounted = false;
         foreach ($linkedMappers as $mapper) {
@@ -340,8 +347,8 @@ foreach ($devices as &$device) {
             }
         }
         $device['status'] = $isMounted
-            ? 'Unlocked and mounted'
-            : 'Unlocked — not mounted';
+            ? 'Encrypted — Mounted'
+            : 'Encrypted — Unlocked';
     }
 }
 unset($device);
@@ -350,6 +357,9 @@ unset($device);
 $inventoryError = '';
 try {
     $registry = edm_registry_load(edm_auth_data_path() . '/disks.json');
+    if (!is_array($sysEntries)) {
+        throw new RuntimeException('Kernel block device discovery is unavailable.');
+    }
     $inventoryRows = edm_inventory_rows($registry['disks'], $devices);
 } catch (Throwable $exception) {
     error_log('EncDiskManager inventory error: ' . $exception->getMessage());
