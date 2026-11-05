@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../lib/auth.php';
+require_once __DIR__ . '/../lib/registry.php';
+require_once __DIR__ . '/../lib/inventory.php';
 
 try {
     edm_auth_start_session();
@@ -344,6 +346,17 @@ foreach ($devices as &$device) {
 }
 unset($device);
 
+// Registry is authoritative for persistent rows; USB discovery supplies live state.
+$inventoryError = '';
+try {
+    $registry = edm_registry_load(edm_auth_data_path() . '/disks.json');
+    $inventoryRows = edm_inventory_rows($registry['disks'], $devices);
+} catch (Throwable $exception) {
+    error_log('EncDiskManager inventory error: ' . $exception->getMessage());
+    $inventoryError = 'Registered disk inventory is temporarily unavailable.';
+    $inventoryRows = array();
+}
+
 ?>
 <!doctype html>
 <html lang="en">
@@ -351,7 +364,7 @@ unset($device);
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Encrypted Disk Manager</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined">
+
 <style>
     body {
         margin: 0;
@@ -395,6 +408,10 @@ unset($device);
     }
     .muted { color: #58656d; }
     .table-wrap { overflow-x: auto; }
+    .sort-heading { border: 0; background: transparent; font: inherit; font-weight: bold; cursor: pointer; padding: 0; text-align: left; }
+    .sort-heading:focus-visible { outline: 2px solid #075f91; outline-offset: 3px; }
+    .disk-actions { min-width: 220px; }
+    .disk-actions button { margin: 2px; padding: 5px; opacity: .5; cursor: not-allowed; }
     table { border-collapse: collapse; width: 100%; }
     th, td {
         text-align: left;
@@ -468,14 +485,14 @@ unset($device);
     <div class="header-actions">
         <a class="backup-link" href="settings.php"
            title="Manage configuration and backups">
-            <span class="material-symbol" aria-hidden="true">settings</span>
+            
             <span>Settings</span>
         </a>
         <form method="post" style="display:inline-block;margin-left:8px">
             <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['csrf_token']); ?>">
             <input type="hidden" name="auth_action" value="logout">
             <button type="submit" class="backup-link" title="Sign out of Encrypted Disk Manager">
-                <span class="material-symbol" aria-hidden="true">logout</span>
+                
                 <span>Sign out</span>
             </button>
         </form>
@@ -491,40 +508,42 @@ unset($device);
         Backups contain a password hash and disk settings, never plaintext passwords or LUKS passphrases.
     </section>
     <section class="panel">
-        <h2>Detected USB partitions</h2>
-        <p class="muted">
-            This screen is read-only. It does not unlock, mount, unmount,
-            or repair storage.
-        </p>
-        <?php if (!$devices): ?>
-            <p>No USB partitions were detected, or the web server could not
-            read the required system information.</p>
+        <h2>Disk inventory</h2>
+        <p class="muted">Registered disks remain listed when disconnected. Disk actions are disabled until the privileged operations are implemented and verified.</p>
+        <?php if ($inventoryError !== ''): ?>
+            <p class="error"><?php echo h($inventoryError); ?></p>
+        <?php elseif (!$inventoryRows): ?>
+            <p>No registered or attached USB disks were found.</p>
         <?php else: ?>
         <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Device</th>
-                    <th>Label</th>
-                    <th>Encryption</th>
-                    <th>Status</th>
-                    <th>Filesystem / type</th>
-                    <th>UUID</th>
-                    <th>Mounted at</th>
-                </tr>
-            </thead>
+        <table id="disk-inventory">
+            <thead><tr>
+                <th><button type="button" class="sort-heading" data-column="0" aria-sort="ascending">Name ▲</button></th>
+                <th><button type="button" class="sort-heading" data-column="1">Device</button></th>
+                <th><button type="button" class="sort-heading" data-column="2">Status</button></th>
+                <th><button type="button" class="sort-heading" data-column="3">Filesystem / type</button></th>
+                <th><button type="button" class="sort-heading" data-column="4">LUKS UUID</button></th>
+                <th><button type="button" class="sort-heading" data-column="5">Mount directory</button></th>
+                <th>Actions</th>
+            </tr></thead>
             <tbody>
-            <?php foreach ($devices as $device): ?>
+            <?php foreach ($inventoryRows as $row):
+                $disk = $row['device'];
+                $status = $row['status'];
+                $mountFolder = $row['registered'] ? '/mnt/' . $row['mount_folder'] : '—';
+            ?>
                 <tr>
-                    <td><code><?php echo h($device['path']); ?></code></td>
-                    <td><?php echo h($device['label'] ?: '—'); ?></td>
-                    <td class="status">
-                        <?php echo $device['luks'] ? 'LUKS detected' : 'Not identified as LUKS'; ?>
+                    <td><?php echo h($row['name']); ?><?php if (!$row['registered']): ?> <small>(unregistered)</small><?php endif; ?></td>
+                    <td><code><?php echo h($disk === null ? '—' : $disk['path']); ?></code></td>
+                    <td><?php echo h($status); ?></td>
+                    <td><?php echo h($disk === null ? '—' : ($disk['type'] ?: 'Unknown')); ?></td>
+                    <td><code><?php echo h($row['luks_uuid'] ?: '—'); ?></code></td>
+                    <td><?php echo h($mountFolder); ?></td>
+                    <td class="disk-actions">
+                        <?php foreach (array('Unlock', 'Mount', 'Unmount', 'Lock', 'Encrypt') as $action): ?>
+                            <button type="button" disabled title="<?php echo h($action . ': not yet available in this development build'); ?>"><?php echo h($action); ?></button>
+                        <?php endforeach; ?>
                     </td>
-                    <td><?php echo h($device['status']); ?></td>
-                    <td><?php echo h($device['type'] ?: 'Unknown'); ?></td>
-                    <td><code><?php echo h($device['uuid'] ?: '—'); ?></code></td>
-                    <td><?php echo h($device['mount'] ?: 'Not mounted directly'); ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -585,5 +604,38 @@ unset($device);
     </section>
 
 </main>
+<script>
+(function () {
+    'use strict';
+    var table = document.getElementById('disk-inventory');
+    if (!table) return;
+    var buttons = Array.prototype.slice.call(table.querySelectorAll('.sort-heading'));
+    var active = 0, ascending = true;
+    buttons.forEach(function (button, column) {
+        var label = button.textContent.replace(/[ ▲▼]$/, '').trim();
+        button.addEventListener('click', function () {
+            ascending = active === column ? !ascending : true;
+            active = column;
+            var body = table.tBodies[0];
+            var rows = Array.prototype.slice.call(body.rows);
+            rows.sort(function (a, b) {
+                var x = a.cells[column].textContent.trim();
+                var y = b.cells[column].textContent.trim();
+                var cmp = x.localeCompare(y, undefined, {sensitivity: 'base', numeric: true});
+                return ascending ? cmp : -cmp;
+            });
+            rows.forEach(function (row) { body.appendChild(row); });
+            buttons.forEach(function (item, index) {
+                item.textContent = item.textContent.replace(/ [▲▼]$/, '');
+                item.removeAttribute('aria-sort');
+                if (index === column) {
+                    item.textContent = label + (ascending ? ' ▲' : ' ▼');
+                    item.setAttribute('aria-sort', ascending ? 'ascending' : 'descending');
+                }
+            });
+        });
+    });
+}());
+</script>
 </body>
 </html>
