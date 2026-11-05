@@ -411,7 +411,9 @@ try {
     .sort-heading { border: 0; background: transparent; font: inherit; font-weight: bold; cursor: pointer; padding: 0; text-align: left; }
     .sort-heading:focus-visible { outline: 2px solid #075f91; outline-offset: 3px; }
     .disk-actions { min-width: 220px; }
-    .disk-actions button { margin: 2px; padding: 5px; opacity: .5; cursor: not-allowed; }
+    .disk-actions button { margin: 2px; padding: 5px; }
+    .disk-actions button:disabled { opacity: .5; cursor: not-allowed; }
+    .configure-disk { border: 1px solid #aebac1; background: #fff; border-radius: 4px; color: #075f91; cursor: pointer; }
     table { border-collapse: collapse; width: 100%; }
     th, td {
         text-align: left;
@@ -540,6 +542,14 @@ try {
                     <td><code><?php echo h($row['luks_uuid'] ?: '—'); ?></code></td>
                     <td><?php echo h($mountFolder); ?></td>
                     <td class="disk-actions">
+                        <?php if ($row['registered']): ?>
+                            <button type="button" class="configure-disk"
+                                data-uuid="<?php echo h($row['luks_uuid']); ?>"
+                                data-name="<?php echo h($row['name']); ?>"
+                                data-folder="<?php echo h($row['mount_folder']); ?>"
+                                data-status="<?php echo h($row['status']); ?>"
+                                title="View registered disk configuration">Configure</button>
+                        <?php endif; ?>
                         <?php foreach (array('Unlock', 'Mount', 'Unmount', 'Lock', 'Encrypt') as $action): ?>
                             <button type="button" disabled title="<?php echo h($action . ': not yet available in this development build'); ?>"><?php echo h($action); ?></button>
                         <?php endforeach; ?>
@@ -551,6 +561,23 @@ try {
         </div>
         <?php endif; ?>
     </section>
+    <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
+        <h2 id="disk-config-title">Disk configuration</h2>
+        <p class="muted">Configuration preview. Editing, key management and registration deletion are not yet enabled.</p>
+        <p><strong>LUKS UUID:</strong> <code id="config-uuid"></code></p>
+        <p><strong>Connection:</strong> <span id="config-status"></span></p>
+        <label for="config-name">Registered name</label>
+        <input id="config-name" type="text" readonly>
+        <label for="config-folder">Unique mount directory under /mnt</label>
+        <input id="config-folder" type="text" readonly>
+        <label><input type="checkbox" disabled> Store an unlock key on this NAS (optional)</label>
+        <p class="muted">Key storage is not configured in this development build.</p>
+        <div class="dialog-actions">
+            <button type="button" disabled>Save changes</button>
+            <button type="button" disabled>Delete registration</button>
+            <button type="button" id="close-disk-config">Close</button>
+        </div>
+    </dialog>
     <section class="panel">
         <h2>Open encrypted volumes linked to USB</h2>
         <p class="muted">
@@ -607,6 +634,19 @@ try {
 <script>
 (function () {
     'use strict';
+    var dialog = document.getElementById('disk-config-dialog');
+    if (dialog && typeof dialog.showModal === 'function') {
+        Array.prototype.forEach.call(document.querySelectorAll('.configure-disk'), function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('config-uuid').textContent = button.getAttribute('data-uuid');
+                document.getElementById('config-status').textContent = button.getAttribute('data-status');
+                document.getElementById('config-name').value = button.getAttribute('data-name');
+                document.getElementById('config-folder').value = button.getAttribute('data-folder');
+                dialog.showModal();
+            });
+        });
+        document.getElementById('close-disk-config').addEventListener('click', function () { dialog.close(); });
+    }
     var table = document.getElementById('disk-inventory');
     if (!table) return;
     var buttons = Array.prototype.slice.call(table.querySelectorAll('.sort-heading'));
