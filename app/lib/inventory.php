@@ -7,6 +7,7 @@ function edm_inventory_rows($registeredDisks, $detectedDevices)
 {
     $rows = array();
     $matched = array();
+    $ambiguous = array();
     foreach ($registeredDisks as $registration) {
         $uuid = strtolower($registration['luks_uuid']);
         $matches = array();
@@ -18,6 +19,11 @@ function edm_inventory_rows($registeredDisks, $detectedDevices)
             }
         }
         // Multiple devices reporting the same UUID are ambiguous: fail closed.
+        if (count($matches) > 1) {
+            foreach ($matches as $index) {
+                $ambiguous[$index] = true;
+            }
+        }
         $attached = count($matches) === 1;
         if ($attached) {
             $matched[$matches[0]] = true;
@@ -38,7 +44,7 @@ function edm_inventory_rows($registeredDisks, $detectedDevices)
         );
     }
     foreach ($detectedDevices as $index => $device) {
-        if (isset($matched[$index])) {
+        if (isset($matched[$index]) || isset($ambiguous[$index])) {
             continue;
         }
         $rows[] = array(
@@ -51,7 +57,7 @@ function edm_inventory_rows($registeredDisks, $detectedDevices)
             'attached' => true,
             'ambiguous' => false,
             'device' => $device,
-            'status' => 'Not registered'
+            'status' => isset($device['status']) ? $device['status'] : 'State unknown'
         );
     }
     usort($rows, function ($a, $b) {
