@@ -21,7 +21,12 @@ function edm_registry_transaction($registryPath, $operation)
     if (is_link($lockPath)) {
         throw new RuntimeException('Transaction lock must not be a symlink.');
     }
-    $handle = @fopen($lockPath, 'c');
+    $oldUmask = umask(0077);
+    try {
+        $handle = @fopen($lockPath, 'c');
+    } finally {
+        umask($oldUmask);
+    }
     if ($handle === false) {
         throw new RuntimeException('Cannot open registry transaction lock.');
     }
