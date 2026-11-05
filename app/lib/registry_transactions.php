@@ -7,6 +7,7 @@
  * arbitrary registry paths from web input.
  */
 require_once __DIR__ . '/registry_operations.php';
+require_once __DIR__ . '/disk_operation_lock.php';
 
 function edm_registry_transaction($registryPath, $operation)
 {
@@ -16,6 +17,13 @@ function edm_registry_transaction($registryPath, $operation)
     if (!is_callable($operation)) {
         throw new RuntimeException('Invalid registry operation.');
     }
+    return edm_with_disk_operation_lock(dirname($registryPath), function () use ($registryPath, $operation) {
+        return edm_registry_transaction_under_disk_lock($registryPath, $operation);
+    });
+}
+
+function edm_registry_transaction_under_disk_lock($registryPath, $operation)
+{
     edm_registry_assert_directory(dirname($registryPath));
     $lockPath = dirname($registryPath) . '/disks.transaction.lock';
     if (is_link($lockPath)) {
