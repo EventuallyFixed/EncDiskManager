@@ -647,7 +647,14 @@ try {
                 // Reject malformed or duplicate keys rather than deleting valid rows.
                 snapshot.rows.forEach(function (item) {
                     if (!item || typeof item.key !== 'string' || !item.key ||
-                        seen[item.key] || !['connected', 'disconnected'].includes(item.connection)) {
+                        seen[item.key] || !['connected', 'disconnected'].includes(item.connection) ||
+                        typeof item.registered !== 'boolean' ||
+                        ['name', 'device', 'status', 'type', 'uuid', 'mount', 'folder'].some(function (field) {
+                            return typeof item[field] !== 'string';
+                        }) ||
+                        (item.registered && item.key !== 'registered:' + item.uuid.toLowerCase()) ||
+                        (!item.registered && item.key.indexOf('device:') !== 0) ||
+                        (!item.registered && item.connection !== 'connected')) {
                         throw new Error('Ambiguous inventory');
                     }
                     seen[item.key] = true;
