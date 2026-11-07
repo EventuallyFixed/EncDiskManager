@@ -18,9 +18,11 @@ function edm_stored_key_create($dataDirectory, $uuid, $recoveryVerified)
     $secret = random_bytes(64);
     $oldUmask = umask(0077);
     $handle = null;
+    $created = false;
     try {
         $handle = @fopen($path, 'x+b');
         if ($handle === false) throw new RuntimeException('Cannot create private key.');
+        $created = true;
         $stat = fstat($handle);
         if ($stat === false || ($stat['mode'] & 0170000) !== 0100000
             || $stat['uid'] !== 0 || ($stat['mode'] & 0777) !== 0600)
@@ -40,7 +42,7 @@ function edm_stored_key_create($dataDirectory, $uuid, $recoveryVerified)
         return $path;
     } catch (Throwable $error) {
         if (is_resource($handle)) fclose($handle);
-        @unlink($path);
+        if ($created) @unlink($path);
         throw $error;
     } finally {
         umask($oldUmask);
