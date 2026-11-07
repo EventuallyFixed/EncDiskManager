@@ -17,7 +17,7 @@ function edm_luks_keyslot_plan($action, $deviceName, $mapperName = null)
         return array(
             'action' => $action,
             'argv' => array('/usr/sbin/cryptsetup', 'open', '--test-passphrase',
-                '--type', 'luks1', '--key-file', '-', $device),
+                '--type', 'luks1', '--key-file', '-', $device, '__PRIVATE_NEW_KEY_PATH__'),
             'stdin' => 'secret',
             'requires_verified_usb_identity' => true
         );
