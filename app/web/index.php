@@ -19,7 +19,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && !edm_auth_is_https()) {
         http_response_code(400);
         $authError = 'HTTPS is required for administrator sign-in and setup. Open the NAS using its HTTPS address.';
-    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['auth_action'])) {
         $postedToken = isset($_POST['csrf_token']) ? (string)$_POST['csrf_token'] : '';
         if (!hash_equals((string)$_SESSION['csrf_token'], $postedToken)) {
             http_response_code(403);
@@ -121,6 +121,8 @@ try {
         </main></body></html><?php
         exit;
     }
+    // Non-authentication POSTs are handled only after the administrator gate.
+    // Never let a configuration request enter the login/logout dispatcher.
     edm_auth_require_login();
 } catch (Throwable $exception) {
     error_log('EncDiskManager authentication error: ' . $exception->getMessage());
