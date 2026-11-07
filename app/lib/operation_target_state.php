@@ -4,8 +4,9 @@
  * Not an authorization to execute disk operations.
  */
 require_once __DIR__ . '/registration_snapshot_consistency.php';
+require_once __DIR__ . '/mapper_mount_state.php';
 
-function edm_operation_target_state($bound, $deviceSnapshot, $mapperSnapshot)
+function edm_operation_target_state($bound, $deviceSnapshot, $mapperSnapshot, $mountInfoLines = null)
 {
     if (!is_array($bound) || !isset($bound['uuid'], $bound['name'], $bound['dev_id'])
         || !is_array($deviceSnapshot) || !is_array($mapperSnapshot)
@@ -38,6 +39,12 @@ function edm_operation_target_state($bound, $deviceSnapshot, $mapperSnapshot)
         }
     }
     if (count($matches) > 1) return null;
+    $mapperMounted = null;
+    if ($matches) {
+        if ($mountInfoLines === null) return null;
+        $mapperMounted = edm_mapper_mount_state($matches[0], $mountInfoLines);
+        if ($mapperMounted === null) return null;
+    }
     return array(
         'uuid' => $bound['uuid'],
         'name' => $bound['name'],
@@ -45,6 +52,8 @@ function edm_operation_target_state($bound, $deviceSnapshot, $mapperSnapshot)
         'direct_mounted' => $target['mount'] !== '',
         'mapper_open' => count($matches) === 1,
         'mapper_name' => $matches ? $matches[0]['name'] : null,
-        'mapper_device' => $matches ? $matches[0]['device'] : null
+        'mapper_device' => $matches ? $matches[0]['device'] : null,
+        'mapper_dev_id' => $matches ? $matches[0]['dev_id'] : null,
+        'mapper_mounted' => $mapperMounted
     );
 }
