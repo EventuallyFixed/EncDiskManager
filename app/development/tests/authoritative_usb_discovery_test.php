@@ -36,6 +36,13 @@ try {
         return array('uuid' => 'not-a-luks-uuid', 'type' => 'crypto_LUKS');
     });
     check_auth_usb($invalid['complete'] === false, 'Invalid LUKS UUID fails closed');
+    $renumbered = edm_authoritative_usb_discovery($sys, function () use ($usb, $uuid) {
+        file_put_contents($usb . '/sdb1/dev', '240:100');
+        return array('uuid' => $uuid, 'type' => 'crypto_LUKS');
+    });
+    check_auth_usb($renumbered['complete'] === false,
+        'Kernel device number changing during probe fails closed');
+    file_put_contents($usb . '/sdb1/dev', '240:99');
     $changed = edm_authoritative_usb_discovery($sys, function () use ($sys) {
         unlink($sys . '/sdb1');
         return array('uuid' => '12345678-1234-1234-1234-123456789abc',
