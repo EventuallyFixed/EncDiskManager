@@ -19,6 +19,7 @@ function edm_discover_kernel_mappers($sysBlock = '/sys/class/block')
         return array('complete' => false, 'mappers' => array());
     }
     $mappers = array();
+    $observed = array();
     $complete = true;
     foreach ($entries as $entry) {
         if (!preg_match('/^dm-[0-9]+$/D', $entry)) {
@@ -34,6 +35,8 @@ function edm_discover_kernel_mappers($sysBlock = '/sys/class/block')
         }
         $identity = trim($identity);
         $name = trim($name);
+        $observed[$entry] = array('uuid' => $identity, 'name' => $name,
+            'slaves' => array_values(array_diff($slaves, array('.', '..'))));
         $uuid = edm_mapper_luks_uuid($identity);
         if ($uuid === null || $name === ''
             || !preg_match('/^[a-zA-Z0-9._+-]+$/D', $name)) {
@@ -75,6 +78,27 @@ function edm_discover_kernel_mappers($sysBlock = '/sys/class/block')
         sort($beforeDm);
         sort($afterDm);
         if ($beforeDm !== $afterDm) {
+            $complete = false;
+        }
+    }
+    // A dm-N node can be replaced or its ancestry changed without changing
+    // the list of dm-N names. Re-read each observed identity and slave set.
+    foreach ($observed as $entry => $expected) {
+        $base = $sysBlock . '/' . $entry;
+        $uuidAfter = @file_get_contents($base . '/dm/uuid');
+        $nameAfter = @file_get_contents($base . '/dm/name');
+        $slavesAfter = @scandir($base . '/slaves');
+        if ($uuidAfter === false || $nameAfter === false || !is_array($slavesAfter)) {
+            $complete = false;
+            continue;
+        }
+        $actualSlaves = array_values(array_diff($slavesAfter, array('.', '..')));
+        $expectedSlaves = $expected['slaves'];
+        sort($actualSlaves);
+        sort($expectedSlaves);
+        if (trim($uuidAfter) !== $expected['uuid']
+            || trim($nameAfter) !== $expected['name']
+            || $actualSlaves !== $expectedSlaves) {
             $complete = false;
         }
     }
