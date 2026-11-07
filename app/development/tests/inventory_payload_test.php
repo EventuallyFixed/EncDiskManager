@@ -25,6 +25,7 @@ check_payload($unregistered[0]['key'] === 'device:sdb1' && !$unregistered[0]['re
 check_payload(edm_inventory_payload(array()) === array(), 'Empty inventory is valid');
 $failed = false;
 try {
-    edm_inventory_payload(array_merge($connected, $connected));
+    $raw = edm_inventory_rows(array($registration), array($device));
+    edm_inventory_payload(array_merge($raw, $raw));
 } catch (RuntimeException $e) { $failed = true; }
 check_payload($failed, 'Duplicate row keys are rejected');
