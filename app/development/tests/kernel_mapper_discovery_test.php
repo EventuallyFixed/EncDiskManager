@@ -31,7 +31,12 @@ try {
         'Source UUID comes from kernel mapper identity');
     check_kernel($result['mappers'][0]['parents'] === array('sdb1'),
         'Underlying block device is recorded');
-    make_dm($root, 'dm-1', 'LVM-unknown', 'other', 'sdc1');
+    make_dm($root, 'dm-1', 'CRYPT-LUKS1-abcdefabcdefabcdefabcdefabcdefab-backup', 'backup', 'sdc1');
+    $duplicate = edm_discover_kernel_mappers($root);
+    check_kernel($duplicate['complete'] === false,
+        'Duplicate mapper names invalidate discovery');
+    file_put_contents($root . '/dm-1/dm/name', 'other');
+    file_put_contents($root . '/dm-1/dm/uuid', 'LVM-unknown');
     $result = edm_discover_kernel_mappers($root);
     check_kernel($result['complete'] === false,
         'Unknown mapper type fails closed');
