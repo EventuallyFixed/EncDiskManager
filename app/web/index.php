@@ -363,9 +363,8 @@ try {
         <p class="muted">Registered disks remain listed when disconnected. Disk actions are disabled until the privileged operations are implemented and verified.</p>
         <?php if ($inventoryError !== ''): ?>
             <p class="error"><?php echo h($inventoryError); ?></p>
-        <?php elseif (!$inventoryRows): ?>
-            <p>No registered or attached USB disks were found.</p>
-        <?php else: ?>
+        <?php endif; ?>
+        <?php if ($inventoryError === ''): ?>
         <?php
             $connectedCount = 0;
             $disconnectedCount = 0;
@@ -626,7 +625,7 @@ try {
     }
     var polling = false;
     function pollInventory() {
-        if (polling || document.hidden) return;
+        if (polling || document.hidden || (dialog && dialog.open)) return;
         polling = true;
         fetch('inventory.php', {credentials: 'same-origin', cache: 'no-store'})
             .then(function (response) {
