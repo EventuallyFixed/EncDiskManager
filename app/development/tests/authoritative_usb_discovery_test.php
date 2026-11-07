@@ -28,6 +28,14 @@ try {
         return array('uuid' => 'not-a-luks-uuid', 'type' => 'crypto_LUKS');
     });
     check_auth_usb($invalid['complete'] === false, 'Invalid LUKS UUID fails closed');
+    $changed = edm_authoritative_usb_discovery($sys, function () use ($sys) {
+        unlink($sys . '/sdb1');
+        return array('uuid' => '12345678-1234-1234-1234-123456789abc',
+            'type' => 'crypto_LUKS');
+    });
+    check_auth_usb($changed['complete'] === false,
+        'Partition disappearing during identity probe fails closed');
+    symlink($usb . '/sdb1', $sys . '/sdb1');
     check_auth_usb(edm_authoritative_usb_discovery($root . '/missing')['complete'] === false,
         'Missing sysfs fails closed');
 } finally {
