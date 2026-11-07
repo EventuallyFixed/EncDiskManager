@@ -36,7 +36,7 @@ check_live(edm_live_registration_verifier('delete', $broken, $noMappers)($uuid) 
     'Discovery exception fails closed');
 $activeMapper = function () use ($uuid) {
     return array('complete' => true, 'mappers' => array(
-        array('source_uuid' => $uuid, 'parents' => array('sdb1'))
+        array('name' => 'active', 'device' => 'dm-0', 'source_uuid' => $uuid, 'parents' => array('sdb1'))
     ));
 };
 check_live(edm_live_registration_verifier('delete', $emptyDevices, $activeMapper)($uuid) === false,
@@ -51,7 +51,7 @@ check_live($rejected, 'Verifier factory rejects unsupported privileged operation
 
 $inconsistentMapper = function () {
     return array('complete' => true, 'mappers' => array(array(
-        'name' => 'wrong', 'source_uuid' => 'abcdefab-cdef-abcd-efab-cdefabcdefab',
+        'name' => 'wrong', 'device' => 'dm-0', 'source_uuid' => 'abcdefab-cdef-abcd-efab-cdefabcdefab',
         'parents' => array('sdb1')
     )));
 };
