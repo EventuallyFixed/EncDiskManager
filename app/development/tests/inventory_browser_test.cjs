@@ -90,6 +90,9 @@ async function run() {
   await tick([registered('connected'), registered('connected')]);
   assert.deepEqual(rows(), beforeFailure, 'duplicate keys preserve last valid snapshot');
   assert.match(document.querySelector('#inventory-poll-status').textContent, /stale/);
+  await tick([registered('connected'), { ...unregistered, status: undefined }]);
+  assert.deepEqual(rows(), beforeFailure, 'missing display field preserves existing rows');
+  assert.match(document.querySelector('#inventory-poll-status').textContent, /stale/);
   // If a response arrives after a dialog opens, preserve user edits.
   window.pollTest();
   const inFlight = requests.shift();
