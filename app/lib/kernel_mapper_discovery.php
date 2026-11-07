@@ -29,14 +29,18 @@ function edm_discover_kernel_mappers($sysBlock = '/sys/class/block')
         $base = $sysBlock . '/' . $entry;
         $identity = @file_get_contents($base . '/dm/uuid');
         $name = @file_get_contents($base . '/dm/name');
+        $devId = @file_get_contents($base . '/dev');
         $slaves = @scandir($base . '/slaves');
-        if ($identity === false || $name === false || !is_array($slaves)) {
+        if ($identity === false || $name === false || $devId === false || !is_array($slaves)) {
             $complete = false;
             continue;
         }
         $identity = trim($identity);
         $name = trim($name);
+        $devId = trim($devId);
+        if (!preg_match('/^[0-9]+:[0-9]+$/D', $devId)) $complete = false;
         $observed[$entry] = array('uuid' => $identity, 'name' => $name,
+            'dev_id' => $devId,
             'slaves' => array_values(array_diff($slaves, array('.', '..'))));
         $uuid = edm_mapper_luks_uuid($identity);
         if ($uuid === null || $name === ''
@@ -65,6 +69,7 @@ function edm_discover_kernel_mappers($sysBlock = '/sys/class/block')
         $mappers[] = array(
             'name' => $name,
             'device' => $entry,
+            'dev_id' => $devId,
             'source_uuid' => $uuid,
             'parents' => $parents
         );
@@ -92,8 +97,9 @@ function edm_discover_kernel_mappers($sysBlock = '/sys/class/block')
         $base = $sysBlock . '/' . $entry;
         $uuidAfter = @file_get_contents($base . '/dm/uuid');
         $nameAfter = @file_get_contents($base . '/dm/name');
+        $devIdAfter = @file_get_contents($base . '/dev');
         $slavesAfter = @scandir($base . '/slaves');
-        if ($uuidAfter === false || $nameAfter === false || !is_array($slavesAfter)) {
+        if ($uuidAfter === false || $nameAfter === false || $devIdAfter === false || !is_array($slavesAfter)) {
             $complete = false;
             continue;
         }
@@ -103,6 +109,7 @@ function edm_discover_kernel_mappers($sysBlock = '/sys/class/block')
         sort($expectedSlaves);
         if (trim($uuidAfter) !== $expected['uuid']
             || trim($nameAfter) !== $expected['name']
+            || trim($devIdAfter) !== $expected['dev_id']
             || $actualSlaves !== $expectedSlaves) {
             $complete = false;
         }
