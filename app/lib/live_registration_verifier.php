@@ -11,6 +11,7 @@
 require_once __DIR__ . '/kernel_mapper_discovery.php';
 require_once __DIR__ . '/registration_deletion_policy.php';
 require_once __DIR__ . '/disk_inactivity.php';
+require_once __DIR__ . '/authoritative_usb_discovery.php';
 
 function edm_live_registration_verifier($action, $discoverDevices, $discoverMappers = null)
 {
@@ -51,4 +52,16 @@ function edm_live_registration_verifier($action, $discoverDevices, $discoverMapp
             return false;
         }
     };
+}
+
+/**
+ * Production-ready callback wiring for read-only verification.
+ * Call the returned verifier only while holding the shared disk-operation lock.
+ * No UI snapshot or client-provided device path is accepted.
+ */
+function edm_authoritative_registration_verifier($action)
+{
+    return edm_live_registration_verifier(
+        $action, 'edm_authoritative_usb_discovery', 'edm_discover_kernel_mappers'
+    );
 }
