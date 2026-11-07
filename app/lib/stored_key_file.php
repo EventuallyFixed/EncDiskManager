@@ -60,7 +60,13 @@ function edm_stored_key_read($dataDirectory, $uuid)
 {
     $policy = edm_stored_key_policy($dataDirectory, $uuid, false, false);
     if ($policy === null) throw new RuntimeException('Invalid stored-key identity.');
-    edm_stored_key_directory($dataDirectory);
+    edm_registry_assert_directory($dataDirectory);
+    $directory = $dataDirectory . '/keys';
+    if (is_link($directory)) throw new RuntimeException('Key directory symlink rejected.');
+    $directoryStat = @lstat($directory);
+    if ($directoryStat === false || ($directoryStat['mode'] & 0170000) !== 0040000
+        || $directoryStat['uid'] !== 0 || ($directoryStat['mode'] & 0777) !== 0700)
+        throw new RuntimeException('Key directory metadata invalid.');
     $path = $policy['key_path'];
     if (is_link($path)) throw new RuntimeException('Key symlink rejected.');
     $stat = @lstat($path);
