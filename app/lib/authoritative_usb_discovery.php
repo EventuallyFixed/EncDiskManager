@@ -24,6 +24,7 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
     }
     $devices = array();
     $partitionNames = array();
+    $partitionPaths = array();
     foreach ($before as $name) {
         if ($name === '.' || $name === '..') continue;
         if (!preg_match('/^[a-zA-Z0-9._+-]+$/D', $name)) return $empty;
@@ -32,6 +33,7 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
         $partitionNames[] = $name;
         $resolved = realpath($base);
         if ($resolved === false) return $empty;
+        $partitionPaths[$name] = $resolved;
         if (!preg_match('~/(usb[0-9]+)(/|$)~', $resolved)) continue;
         try {
             $info = call_user_func($probe, $name);
@@ -61,6 +63,13 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
     sort($partitionNames);
     sort($afterPartitions);
     if ($partitionNames !== $afterPartitions) return $empty;
+    foreach ($partitionPaths as $name => $resolved) {
+        if (realpath($sysBlock . '/' . $name) !== $resolved) return $empty;
+    }
+    // Mount state can change independently of block-device enumeration.
+    // Do not return a complete snapshot if it changed during probing.
+    $mountLinesAfter = @file('/proc/mounts', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($mountLinesAfter) || $mountLinesAfter !== $mountLines) return $empty;
     return array('complete' => true, 'devices' => $devices);
 }
 
