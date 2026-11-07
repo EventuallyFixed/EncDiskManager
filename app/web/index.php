@@ -622,7 +622,9 @@ try {
             var cmp = x.localeCompare(y, undefined, {sensitivity: 'base', numeric: true});
             return ascending ? cmp : -cmp;
         });
-        rows.forEach(function (row) { body.appendChild(row); });
+        rows.forEach(function (row, index) {
+            if (body.rows[index] !== row) body.insertBefore(row, body.rows[index] || null);
+        });
     }
     var polling = false;
     function pollInventory() {
@@ -634,6 +636,7 @@ try {
                 return response.json();
             })
             .then(function (snapshot) {
+                if (dialog && dialog.open) return;
                 if (!snapshot || !Array.isArray(snapshot.rows)) throw new Error('Invalid inventory');
                 var body = table.tBodies[0];
                 var existing = Object.create(null);
@@ -701,7 +704,9 @@ try {
                 var cmp = x.localeCompare(y, undefined, {sensitivity: 'base', numeric: true});
                 return ascending ? cmp : -cmp;
             });
-            rows.forEach(function (row) { body.appendChild(row); });
+            rows.forEach(function (row, index) {
+                if (body.rows[index] !== row) body.insertBefore(row, body.rows[index] || null);
+            });
             buttons.forEach(function (item, index) {
                 item.textContent = item.textContent.replace(/ [▲▼]$/, '');
                 item.removeAttribute('aria-sort');
