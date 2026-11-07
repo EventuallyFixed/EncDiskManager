@@ -41,3 +41,10 @@ $activeMapper = function () use ($uuid) {
 };
 check_live(edm_live_registration_verifier('delete', $emptyDevices, $activeMapper)($uuid) === false,
     'Active matching mapper blocks disconnected deletion');
+
+$default = edm_authoritative_registration_verifier('delete');
+check_live(is_callable($default), 'Default authoritative verifier factory returns callable');
+$rejected = false;
+try { edm_authoritative_registration_verifier('mount'); }
+catch (RuntimeException $e) { $rejected = true; }
+check_live($rejected, 'Verifier factory rejects unsupported privileged operations');
