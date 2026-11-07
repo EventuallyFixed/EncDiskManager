@@ -16,17 +16,7 @@ function edm_luks_keyslot_subprocess($plan, $secret, $timeoutSeconds = 30)
         || !is_int($timeoutSeconds) || $timeoutSeconds < 1 || $timeoutSeconds > 120)
         return false;
     $argv = $plan['argv'];
-    $verify = in_array($plan['action'], array('verify-recovery', 'verify-new-key'), true)
-        && $plan['stdin'] === 'secret'
-        && count($argv) === 7
-        && $argv[0] === '/usr/sbin/cryptsetup'
-        && $argv[1] === 'open'
-        && $argv[2] === '--test-passphrase'
-        && $argv[3] === '--type'
-        && $argv[4] === 'luks1'
-        && $argv[5] === '--key-file'
-        && $argv[6] === '-';
-    // Verify plans have the device as the eighth operand.
+    // Verification plans have the device as the eighth operand.
     $verify = in_array($plan['action'], array('verify-recovery', 'verify-new-key'), true)
         && $plan['stdin'] === 'secret'
         && count($argv) === 8
