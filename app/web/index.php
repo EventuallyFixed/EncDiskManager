@@ -145,6 +145,7 @@ function h($value) {
 require_once __DIR__ . '/../lib/usb_discovery.php';
 $discovery = edm_discover_usb_inventory();
 $devices = $discovery['devices'];
+$mapperDevices = $discovery['mapperDevices'];
 $sysEntries = $discovery['sysEntries'];
 
 // Validate authenticated configuration submissions without performing mutations.
