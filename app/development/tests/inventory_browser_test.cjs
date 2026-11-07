@@ -54,6 +54,9 @@ async function run() {
     });
     for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
   };
+  assert.equal(requests.length, 1, 'initial refresh starts immediately');
+  requests.shift().resolve({ ok: true, json: async () => ({ rows: [] }) });
+  for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
   assert.equal(rows().length, 0, 'starts with empty table');
   await tick([registered('connected')]);
   assert.equal(rows().length, 1, 'connect inserts a row');
