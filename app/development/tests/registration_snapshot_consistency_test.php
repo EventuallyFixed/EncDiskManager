@@ -26,3 +26,19 @@ check_consistency(!edm_registration_snapshots_consistent(array($disk), array($wr
     'Mapper claiming USB UUID without matching parent rejected');
 check_consistency(edm_registration_snapshots_consistent(array(), array($mapper)),
     'Unrelated mapper without USB partition is not mistaken for a match');
+
+$duplicateSource = $mapper;
+$duplicateSource['name'] = 'another_mapper';
+check_consistency(!edm_registration_snapshots_consistent(array($disk), array($mapper, $duplicateSource)),
+    'Two mappers claiming same LUKS UUID are ambiguous');
+$otherSource = $mapper;
+$otherSource['name'] = 'another_mapper';
+$otherSource['source_uuid'] = $other;
+check_consistency(!edm_registration_snapshots_consistent(array($disk), array($mapper, $otherSource)),
+    'Two mappers sharing USB parent with different UUIDs rejected');
+$unrelated = $mapper;
+$unrelated['name'] = 'unrelated_mapper';
+$unrelated['source_uuid'] = $other;
+$unrelated['parents'] = array('sdc1');
+check_consistency(edm_registration_snapshots_consistent(array($disk), array($mapper, $unrelated)),
+    'Distinct unrelated mapper does not block consistent snapshot');
