@@ -14,12 +14,14 @@ const registered = (connection, name = 'Backup') => ({
   device: connection === 'connected' ? '/dev/sdb1' : '—',
   status: connection === 'connected' ? 'Encrypted — Locked' : 'Disconnected',
   type: connection === 'connected' ? 'crypto_LUKS' : '—',
-  uuid, mount: '/mnt/backup', folder: 'backup'
+  uuid, mount: '/mnt/backup', folder: 'backup',
+  actions: {unlock: connection === 'connected', mount: false, unmount: false, lock: false, encrypt: false}
 });
 const unregistered = {
   key: 'device:sdc1', connection: 'connected', registered: false,
   name: 'Temporary', device: '/dev/sdc1', status: 'Not identified as LUKS',
-  type: 'ext4', uuid: '—', mount: '—', folder: ''
+  type: 'ext4', uuid: '—', mount: '—', folder: '',
+  actions: {unlock: false, mount: false, unmount: false, lock: false, encrypt: false}
 };
 const html = `<!doctype html><html><body>
 <div id="disk-inventory-panel"><table id="disk-inventory">
@@ -61,6 +63,8 @@ async function run() {
   await tick([registered('connected')]);
   assert.equal(rows().length, 1, 'connect inserts a row');
   const original = rows()[0];
+  assert.ok([...original.cells[6].querySelectorAll('button')].every(button => button.disabled), 'actions remain disabled');
+  assert.match(original.cells[6].querySelector('button:not(.configure-disk)').title, /eligible in current read-only snapshot/);
   assert.equal(original.hidden, false);
   await tick([registered('disconnected')]);
   assert.strictEqual(rows()[0], original, 'disconnect preserves DOM row');
