@@ -2,8 +2,9 @@
 /**
  * Strict, non-executing LUKS1 keyslot command plans.
  *
- * Both secrets must be supplied via protected stdin pipes by a future
- * privileged executor; never place secrets or keyfile paths in argv.
+ * Recovery secrets must arrive via protected stdin; the new key may be
+ * supplied by a validated private root-owned keyfile. Never place secret
+ * bytes in argv.
  * These plans alone do not authorize changing any keyslot.
  */
 function edm_luks_keyslot_plan($action, $deviceName, $mapperName = null)
@@ -17,7 +18,7 @@ function edm_luks_keyslot_plan($action, $deviceName, $mapperName = null)
         return array(
             'action' => $action,
             'argv' => array('/usr/sbin/cryptsetup', 'open', '--test-passphrase',
-                '--type', 'luks1', '--key-file', '-', $device, '__PRIVATE_NEW_KEY_PATH__'),
+                '--type', 'luks1', '--key-file', '-', $device),
             'stdin' => 'secret',
             'requires_verified_usb_identity' => true
         );
@@ -28,7 +29,7 @@ function edm_luks_keyslot_plan($action, $deviceName, $mapperName = null)
     return array(
         'action' => 'add-key',
         'argv' => array('/usr/sbin/cryptsetup', 'luksAddKey',
-            '--type', 'luks1', '--key-file', '-', $device),
+            '--type', 'luks1', '--key-file', '-', $device, '__PRIVATE_NEW_KEY_PATH__'),
         'stdin' => 'recovery-secret',
         'new_key_file_required' => true,
         'requires_verified_usb_identity' => true
