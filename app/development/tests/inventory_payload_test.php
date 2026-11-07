@@ -29,3 +29,15 @@ try {
     edm_inventory_payload(array_merge($raw, $raw));
 } catch (RuntimeException $e) { $failed = true; }
 check_payload($failed, 'Duplicate row keys are rejected');
+
+check_payload($connected[0]['actions']['unlock'] === true
+    && $connected[0]['actions']['mount'] === false,
+    'Locked registered disk has advisory unlock eligibility');
+check_payload(!array_filter($disconnected[0]['actions']),
+    'Disconnected registration has no advisory actions');
+check_payload(!array_filter($unregistered[0]['actions']),
+    'Unregistered disk has no advisory actions');
+$ambiguousRow = edm_inventory_rows(array($registration), array($device, $device));
+$ambiguousPayload = edm_inventory_payload($ambiguousRow);
+check_payload(!array_filter($ambiguousPayload[0]['actions']),
+    'Ambiguous duplicate UUID has no advisory actions');
