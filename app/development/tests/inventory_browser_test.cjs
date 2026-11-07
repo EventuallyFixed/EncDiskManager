@@ -34,7 +34,7 @@ const html = `<!doctype html><html><body>
 <button id="close-disk-config"></button></dialog></body></html>`;
 
 async function run() {
-  const dom = new JSDOM(html, { url: 'https://nas.local/' });
+  const dom = new JSDOM(html, { url: 'https://nas.local/', pretendToBeVisual: true });
   const { window } = dom;
   const { document } = window;
   const requests = [];
