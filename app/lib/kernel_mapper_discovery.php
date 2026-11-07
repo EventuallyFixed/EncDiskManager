@@ -1,0 +1,82 @@
+<?php
+require_once __DIR__ . '/mapper_identity.php';
+
+/**
+ * Read the complete device-mapper list from sysfs for conservative policy use.
+ * Unlike the UI's USB-linked mapper list, this includes internal and unrelated
+ * mappings. Any missing/unreadable identity causes a fail-closed result.
+ *
+ * This is a snapshot, not a lock on kernel state. The caller must coordinate
+ * its own privileged disk operations and recheck while holding the shared lock.
+ */
+function edm_discover_kernel_mappers($sysBlock = '/sys/class/block')
+{
+    if (!is_string($sysBlock) || $sysBlock === '') {
+        return array('complete' => false, 'mappers' => array());
+    }
+    $entries = @scandir($sysBlock);
+    if (!is_array($entries)) {
+        return array('complete' => false, 'mappers' => array());
+    }
+    $mappers = array();
+    $complete = true;
+    foreach ($entries as $entry) {
+        if (!preg_match('/^dm-[0-9]+$/D', $entry)) {
+            continue;
+        }
+        $base = $sysBlock . '/' . $entry;
+        $identity = @file_get_contents($base . '/dm/uuid');
+        $name = @file_get_contents($base . '/dm/name');
+        $slaves = @scandir($base . '/slaves');
+        if ($identity === false || $name === false || !is_array($slaves)) {
+            $complete = false;
+            continue;
+        }
+        $identity = trim($identity);
+        $name = trim($name);
+        $uuid = edm_mapper_luks_uuid($identity);
+        if ($uuid === null || $name === ''
+            || !preg_match('/^[a-zA-Z0-9._+-]+$/D', $name)) {
+            $complete = false;
+            continue;
+        }
+        $parents = array();
+        foreach ($slaves as $slave) {
+            if ($slave === '.' || $slave === '..') {
+                continue;
+            }
+            if (!preg_match('/^[a-zA-Z0-9._+-]+$/D', $slave)) {
+                $complete = false;
+                continue;
+            }
+            $parents[] = $slave;
+        }
+        if (!$parents) {
+            $complete = false;
+        }
+        $mappers[] = array(
+            'name' => $name,
+            'device' => $entry,
+            'source_uuid' => $uuid,
+            'parents' => $parents
+        );
+    }
+    // If enumeration changes while reading, the snapshot cannot be trusted.
+    $after = @scandir($sysBlock);
+    if (!is_array($after)) {
+        $complete = false;
+    } else {
+        $beforeDm = array_values(array_filter($entries, function ($item) {
+            return preg_match('/^dm-[0-9]+$/D', $item) === 1;
+        }));
+        $afterDm = array_values(array_filter($after, function ($item) {
+            return preg_match('/^dm-[0-9]+$/D', $item) === 1;
+        }));
+        sort($beforeDm);
+        sort($afterDm);
+        if ($beforeDm !== $afterDm) {
+            $complete = false;
+        }
+    }
+    return array('complete' => $complete, 'mappers' => $mappers);
+}
