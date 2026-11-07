@@ -8,6 +8,7 @@ require_once __DIR__ . '/verified_target_state.php';
 require_once __DIR__ . '/verified_mount_transition.php';
 require_once __DIR__ . '/mount_subprocess.php';
 require_once __DIR__ . '/secure_mount_directory.php';
+require_once __DIR__ . '/registry.php';
 
 function edm_with_locked_mount_transition($dataDirectory, $registryPath,
     $uuid, $action, $timeoutSeconds = 30)
@@ -23,13 +24,14 @@ function edm_with_locked_mount_transition($dataDirectory, $registryPath,
                 $registry = edm_registry_load($registryPath);
             } catch (Throwable $e) { return false; }
             $registration = null;
+            $matches = 0;
             foreach ($registry['disks'] as $disk) {
                 if (strcasecmp($disk['luks_uuid'], $uuid) === 0) {
                     $registration = $disk;
-                    break;
+                    ++$matches;
                 }
             }
-            if ($registration === null || $registration['enabled'] !== true)
+            if ($matches !== 1 || $registration === null || $registration['enabled'] !== true)
                 return false;
             if ($action === 'mount'
                 && !edm_secure_mount_directory($registration['mount_folder']))
