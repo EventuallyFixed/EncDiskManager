@@ -62,7 +62,7 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
             return $empty;
         }
         $devices[] = array(
-            'name' => $name, 'uuid' => $info['uuid'],
+            'name' => $name, 'dev_id' => $devId, 'uuid' => $info['uuid'],
             'luks' => $luks, 'mount' => isset($mountedDevIds[$devId]) ? 'mounted' : '',
             'backup_mapper' => '', 'backup_mount' => ''
         );
