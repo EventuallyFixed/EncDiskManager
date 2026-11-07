@@ -29,3 +29,15 @@ jobs:
             echo "Running $test"
             php "$test"
           done
+
+  browser-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install test-only DOM implementation
+        run: npm install --no-save --no-package-lock jsdom@26
+      - name: Test incremental inventory updates
+        run: node app/development/tests/inventory_browser_test.cjs
