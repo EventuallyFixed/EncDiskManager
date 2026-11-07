@@ -27,9 +27,16 @@ function edm_inventory_action_preview($row)
         'Encrypted — Mounted', 'Mounted', 'Not identified as LUKS'
     ), true);
     if (!$known) return $none;
+    // A status string must agree with the independently discovered LUKS type.
+    // Never present encryption as eligible for an existing registration.
+    if ($device['luks'] !== (strpos($status, 'Encrypted — ') === 0)) {
+        return $none;
+    }
     $open = in_array($status, array('Encrypted — Unlocked', 'Encrypted — Mounted'), true);
     $mounted = in_array($status, array('Encrypted — Mounted', 'Mounted'), true);
-    return edm_disk_action_policy($device['luks'], $open, $mounted, true);
+    $actions = edm_disk_action_policy($device['luks'], $open, $mounted, true);
+    $actions['encrypt'] = false;
+    return $actions;
 }
 
 function edm_inventory_payload($rows)
