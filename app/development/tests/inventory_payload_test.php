@@ -41,3 +41,16 @@ $ambiguousRow = edm_inventory_rows(array($registration), array($device, $device)
 $ambiguousPayload = edm_inventory_payload($ambiguousRow);
 check_payload(!array_filter($ambiguousPayload[0]['actions']),
     'Ambiguous duplicate UUID has no advisory actions');
+
+check_payload($connected[0]['actions']['encrypt'] === false,
+    'Registered disk never previews destructive encryption');
+$inconsistent = $device;
+$inconsistent['status'] = 'Mounted';
+$inconsistentRows = edm_inventory_payload(edm_inventory_rows(array($registration), array($inconsistent)));
+check_payload(!array_filter($inconsistentRows[0]['actions']),
+    'Contradictory LUKS type and status fails closed');
+$unknown = $device;
+$unknown['status'] = 'State unknown';
+$unknownRows = edm_inventory_payload(edm_inventory_rows(array($registration), array($unknown)));
+check_payload(!array_filter($unknownRows[0]['actions']),
+    'Unknown live state never previews operations');
