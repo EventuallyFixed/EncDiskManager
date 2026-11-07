@@ -54,3 +54,14 @@ $missingIntermediate = $nested;
 $missingIntermediate['parents'] = array('dm-9');
 check_consistency(!edm_registration_snapshots_consistent(array($disk), array($mapper, $missingIntermediate)),
     'Missing intermediate mapper fails closed');
+
+$cycleA = array('name' => 'cycle_a', 'device' => 'dm-2',
+    'source_uuid' => '11111111-1111-1111-1111-111111111111', 'parents' => array('dm-3'));
+$cycleB = array('name' => 'cycle_b', 'device' => 'dm-3',
+    'source_uuid' => '22222222-2222-2222-2222-222222222222', 'parents' => array('dm-2'));
+check_consistency(!edm_registration_snapshots_consistent(array(), array($cycleA, $cycleB)),
+    'Cyclic mapper ancestry rejected even without a USB partition');
+$selfCycle = $cycleA;
+$selfCycle['parents'] = array('dm-2');
+check_consistency(!edm_registration_snapshots_consistent(array(), array($selfCycle)),
+    'Self-referential mapper ancestry rejected');
