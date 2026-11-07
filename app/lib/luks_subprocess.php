@@ -75,7 +75,17 @@ function edm_luks_subprocess($argv, $secret = null, $timeoutSeconds = 30)
         }
     } finally {
         if (isset($pipes[0]) && is_resource($pipes[0])) fclose($pipes[0]);
-        if (!$ok) @proc_terminate($process, 9);
+        if (!$ok) {
+            // Kill and reap: a timed-out cryptsetup must not survive after
+            // the caller releases the disk-operation lock.
+            @proc_terminate($process, 9);
+            $reapDeadline = microtime(true) + 2.0;
+            do {
+                $status = @proc_get_status($process);
+                if (!is_array($status) || !$status['running']) break;
+                usleep(20000);
+            } while (microtime(true) < $reapDeadline);
+        }
         @proc_close($process);
     }
     return $ok && $exitCode === 0;
