@@ -86,6 +86,20 @@ async function run() {
   await tick([], true);
   assert.deepEqual(rows(), beforeFailure, 'network failure retains rows');
   assert.match(document.querySelector('#inventory-poll-status').textContent, /stale/);
+  // A malformed snapshot must not clear the previously displayed rows.
+  await tick([registered('connected'), registered('connected')]);
+  assert.deepEqual(rows(), beforeFailure, 'duplicate keys preserve last valid snapshot');
+  assert.match(document.querySelector('#inventory-poll-status').textContent, /stale/);
+  // If a response arrives after a dialog opens, preserve user edits.
+  window.pollTest();
+  const inFlight = requests.shift();
+  configure.click();
+  document.querySelector('#config-name').value = 'Still editing';
+  inFlight.resolve({ok: true, json: async () => ({rows: []})});
+  for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(document.querySelector('#config-name').value, 'Still editing');
+  assert.equal(rows().length, 2, 'in-flight response does not replace rows during dialog');
+  dialog.close();
   await tick([]);
   assert.equal(rows().length, 0, 'successful empty snapshot removes rows');
   console.log('PASS: empty start, connection transitions, row identity, tabs, sorting, dialog and failures');
