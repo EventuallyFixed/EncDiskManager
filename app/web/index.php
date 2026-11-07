@@ -455,6 +455,11 @@ try {
     }
     .muted { color: #58656d; }
     .table-wrap { overflow-x: auto; }
+    .inventory-tabs { display: flex; gap: 8px; margin: 16px 0 10px; border-bottom: 1px solid #d9dfe2; }
+    .inventory-tab { border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; padding: 9px 15px; background: transparent; color: #075f91; font: inherit; cursor: pointer; }
+    .inventory-tab[aria-selected="true"] { background: #f3f7f9; border-color: #d9dfe2; color: #20272c; font-weight: bold; }
+    .inventory-tab:focus-visible { outline: 2px solid #075f91; outline-offset: -2px; }
+    #disk-inventory tr[hidden] { display: none; }
     .sort-heading { border: 0; background: transparent; font: inherit; font-weight: bold; cursor: pointer; padding: 0; text-align: left; }
     .sort-heading:focus-visible { outline: 2px solid #075f91; outline-offset: 3px; }
     .disk-actions { min-width: 220px; }
@@ -566,7 +571,25 @@ try {
         <?php elseif (!$inventoryRows): ?>
             <p>No registered or attached USB disks were found.</p>
         <?php else: ?>
-        <div class="table-wrap">
+        <?php
+            $connectedCount = 0;
+            $disconnectedCount = 0;
+            foreach ($inventoryRows as $inventoryRow) {
+                if ($inventoryRow['device'] === null) {
+                    $disconnectedCount++;
+                } else {
+                    $connectedCount++;
+                }
+            }
+        ?>
+        <div class="inventory-tabs" role="tablist" aria-label="Disk connection status">
+            <button type="button" class="inventory-tab" id="connected-tab" role="tab"
+                aria-selected="true" aria-controls="disk-inventory" data-filter="connected">Connected (<?php echo $connectedCount; ?>)</button>
+            <button type="button" class="inventory-tab" id="disconnected-tab" role="tab"
+                aria-selected="false" aria-controls="disk-inventory" data-filter="disconnected" tabindex="-1">Disconnected (<?php echo $disconnectedCount; ?>)</button>
+        </div>
+        <p id="inventory-empty-filter" class="muted" role="status" hidden></p>
+        <div class="table-wrap" id="disk-inventory-panel" role="tabpanel" aria-labelledby="connected-tab">
         <table id="disk-inventory">
             <thead><tr>
                 <th><button type="button" class="sort-heading" data-column="0" aria-sort="ascending">Name ▲</button></th>
@@ -583,7 +606,7 @@ try {
                 $status = $row['status'];
                 $mountFolder = $row['registered'] ? '/mnt/' . $row['mount_folder'] : '—';
             ?>
-                <tr>
+                <tr data-connection="<?php echo $disk === null ? 'disconnected' : 'connected'; ?>"<?php echo $disk === null ? ' hidden' : ''; ?>>
                     <td><?php echo h($row['name']); ?><?php if (!$row['registered']): ?> <small>(unregistered)</small><?php endif; ?></td>
                     <td><code><?php echo h($disk === null ? '—' : $disk['path']); ?></code></td>
                     <td><?php echo h($status); ?></td>
@@ -704,6 +727,43 @@ try {
     }
     var table = document.getElementById('disk-inventory');
     if (!table) return;
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.inventory-tab'));
+    var emptyFilter = document.getElementById('inventory-empty-filter');
+    var panel = document.getElementById('disk-inventory-panel');
+    function selectConnection(connection, focusTab) {
+        var visible = 0;
+        Array.prototype.forEach.call(table.tBodies[0].rows, function (row) {
+            row.hidden = row.getAttribute('data-connection') !== connection;
+            if (!row.hidden) visible++;
+        });
+        tabs.forEach(function (tab) {
+            var selected = tab.getAttribute('data-filter') === connection;
+            tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+            tab.tabIndex = selected ? 0 : -1;
+            if (selected) {
+                panel.setAttribute('aria-labelledby', tab.id);
+                if (focusTab) tab.focus();
+            }
+        });
+        emptyFilter.hidden = visible !== 0;
+        emptyFilter.textContent = connection === 'connected'
+            ? 'No connected disks were found.'
+            : 'No disconnected registered disks were found.';
+    }
+    tabs.forEach(function (tab, index) {
+        tab.addEventListener('click', function () {
+            selectConnection(tab.getAttribute('data-filter'), false);
+        });
+        tab.addEventListener('keydown', function (event) {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight'
+                && event.key !== 'Home' && event.key !== 'End') return;
+            event.preventDefault();
+            var next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+                : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+            selectConnection(tabs[next].getAttribute('data-filter'), true);
+        });
+    });
+    selectConnection('connected', false);
     var buttons = Array.prototype.slice.call(table.querySelectorAll('.sort-heading'));
     var active = 0, ascending = true;
     buttons.forEach(function (button, column) {
