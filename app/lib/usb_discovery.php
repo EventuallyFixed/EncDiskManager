@@ -219,5 +219,5 @@ foreach ($devices as &$device) {
 unset($device);
 
 
-    return array('devices' => $devices, 'sysEntries' => $sysEntries);
+    return array('devices' => $devices, 'mapperDevices' => $mapperDevices, 'sysEntries' => $sysEntries);
 }
