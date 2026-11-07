@@ -3,6 +3,7 @@
  * Create a new private random keyfile without exposing its bytes to logs,
  * command arguments, the registry or HTTP. This is storage only: a separate
  * verified cryptsetup keyslot transaction must precede activation.
+ * A failed keyslot transaction must retire the newly created key.
  */
 require_once __DIR__ . '/stored_key_policy.php';
 require_once __DIR__ . '/stored_key_directory.php';
@@ -47,5 +48,38 @@ function edm_stored_key_create($dataDirectory, $uuid, $recoveryVerified)
     } finally {
         umask($oldUmask);
         unset($secret);
+    }
+}
+
+/**
+ * Read a key only from a root-owned, private, regular file.
+ * Call only under the shared disk-operation lock after verifying the
+ * registration and device identity. Never return the key to HTTP clients.
+ */
+function edm_stored_key_read($dataDirectory, $uuid)
+{
+    $policy = edm_stored_key_policy($dataDirectory, $uuid, false, false);
+    if ($policy === null) throw new RuntimeException('Invalid stored-key identity.');
+    edm_stored_key_directory($dataDirectory);
+    $path = $policy['key_path'];
+    if (is_link($path)) throw new RuntimeException('Key symlink rejected.');
+    $stat = @lstat($path);
+    if ($stat === false || ($stat['mode'] & 0170000) !== 0100000
+        || $stat['uid'] !== 0 || ($stat['mode'] & 0777) !== 0600
+        || $stat['size'] !== 64 || $stat['nlink'] !== 1)
+        throw new RuntimeException('Stored-key metadata invalid.');
+    $handle = @fopen($path, 'rb');
+    if ($handle === false) throw new RuntimeException('Stored key cannot be opened.');
+    try {
+        $opened = fstat($handle);
+        if ($opened === false || $opened['dev'] !== $stat['dev']
+            || $opened['ino'] !== $stat['ino'] || $opened['size'] !== 64)
+            throw new RuntimeException('Stored key changed during open.');
+        $secret = stream_get_contents($handle, 65);
+        if (!is_string($secret) || strlen($secret) !== 64)
+            throw new RuntimeException('Stored key length invalid.');
+        return $secret;
+    } finally {
+        fclose($handle);
     }
 }
