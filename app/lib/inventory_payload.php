@@ -3,6 +3,35 @@
  * Convert the registry-first inventory into a stable, JSON-safe row contract.
  * This function is pure and can be tested without a NAS or HTTP session.
  */
+require_once __DIR__ . '/disk_actions.php';
+
+/**
+ * Advisory policy only. Never authorize an operation using this snapshot.
+ */
+function edm_inventory_action_preview($row)
+{
+    $none = array('unlock' => false, 'mount' => false,
+        'unmount' => false, 'lock' => false, 'encrypt' => false);
+    if (!empty($row['ambiguous']) || empty($row['device']) ||
+        !is_array($row['device']) || empty($row['registered'])) {
+        return $none;
+    }
+    $device = $row['device'];
+    if (!isset($device['luks'], $device['status']) ||
+        !is_bool($device['luks'])) {
+        return $none;
+    }
+    $status = $device['status'];
+    $known = in_array($status, array(
+        'Encrypted — Locked', 'Encrypted — Unlocked',
+        'Encrypted — Mounted', 'Mounted', 'Not identified as LUKS'
+    ), true);
+    if (!$known) return $none;
+    $open = in_array($status, array('Encrypted — Unlocked', 'Encrypted — Mounted'), true);
+    $mounted = in_array($status, array('Encrypted — Mounted', 'Mounted'), true);
+    return edm_disk_action_policy($device['luks'], $open, $mounted, true);
+}
+
 function edm_inventory_payload($rows)
 {
     if (!is_array($rows)) {
@@ -39,7 +68,8 @@ function edm_inventory_payload($rows)
             'type' => $device === null ? '—' : ((string)$device['type'] ?: 'Unknown'),
             'uuid' => $registered ? $uuid : ((string)$row['luks_uuid'] ?: '—'),
             'mount' => $registered ? '/mnt/' . $row['mount_folder'] : '—',
-            'folder' => $registered ? (string)$row['mount_folder'] : ''
+            'folder' => $registered ? (string)$row['mount_folder'] : '',
+            'actions' => edm_inventory_action_preview($row)
         );
     }
     return $result;
