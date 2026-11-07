@@ -48,3 +48,12 @@ $rejected = false;
 try { edm_authoritative_registration_verifier('mount'); }
 catch (RuntimeException $e) { $rejected = true; }
 check_live($rejected, 'Verifier factory rejects unsupported privileged operations');
+
+$inconsistentMapper = function () {
+    return array('complete' => true, 'mappers' => array(array(
+        'name' => 'wrong', 'source_uuid' => 'abcdefab-cdef-abcd-efab-cdefabcdefab',
+        'parents' => array('sdb1')
+    )));
+};
+check_live(edm_live_registration_verifier('delete', $attached, $inconsistentMapper)($uuid) === false,
+    'Cross-snapshot mapper identity mismatch blocks registration deletion');
