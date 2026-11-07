@@ -11,6 +11,7 @@ mkdir($usb, 0700, true);
 mkdir($sys, 0700, true);
 mkdir($usb . '/sdb1', 0700);
 file_put_contents($usb . '/sdb1/partition', '1');
+file_put_contents($usb . '/sdb1/dev', '240:99');
 symlink($usb . '/sdb1', $sys . '/sdb1');
 $uuid = '12345678-1234-1234-1234-123456789abc';
 try {
@@ -41,6 +42,7 @@ try {
 } finally {
     unlink($sys . '/sdb1');
     unlink($usb . '/sdb1/partition');
+    unlink($usb . '/sdb1/dev');
     rmdir($usb . '/sdb1');
     rmdir($usb);
     rmdir($root . '/usb1');
