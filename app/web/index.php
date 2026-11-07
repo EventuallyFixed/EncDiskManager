@@ -508,15 +508,15 @@ try {
     'use strict';
     var dialog = document.getElementById('disk-config-dialog');
     if (dialog && typeof dialog.showModal === 'function') {
-        Array.prototype.forEach.call(document.querySelectorAll('.configure-disk'), function (button) {
-            button.addEventListener('click', function () {
-                document.getElementById('config-uuid').textContent = button.getAttribute('data-uuid');
-                document.getElementById('config-form-uuid').value = button.getAttribute('data-uuid');
-                document.getElementById('config-status').textContent = button.getAttribute('data-status');
-                document.getElementById('config-name').value = button.getAttribute('data-name');
-                document.getElementById('config-folder').value = button.getAttribute('data-folder');
-                dialog.showModal();
-            });
+        document.addEventListener('click', function (event) {
+            var button = event.target.closest('.configure-disk');
+            if (!button || !document.getElementById('disk-inventory').contains(button)) return;
+            document.getElementById('config-uuid').textContent = button.getAttribute('data-uuid');
+            document.getElementById('config-form-uuid').value = button.getAttribute('data-uuid');
+            document.getElementById('config-status').textContent = button.getAttribute('data-status');
+            document.getElementById('config-name').value = button.getAttribute('data-name');
+            document.getElementById('config-folder').value = button.getAttribute('data-folder');
+            dialog.showModal();
         });
         document.getElementById('close-disk-config').addEventListener('click', function () { dialog.close(); });
     }
