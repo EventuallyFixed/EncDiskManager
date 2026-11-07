@@ -3,7 +3,6 @@
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const vm = require('node:vm');
 const { JSDOM } = require('jsdom');
 
 const source = fs.readFileSync('app/web/index.php', 'utf8');
@@ -34,7 +33,7 @@ const html = `<!doctype html><html><body>
 <button id="close-disk-config"></button></dialog></body></html>`;
 
 async function run() {
-  const dom = new JSDOM(html, { url: 'https://nas.local/', pretendToBeVisual: true });
+  const dom = new JSDOM(html, { url: 'https://nas.local/', pretendToBeVisual: true, runScripts: 'outside-only' });
   const { window } = dom;
   const { document } = window;
   const requests = [];
@@ -43,7 +42,7 @@ async function run() {
   const dialog = document.querySelector('dialog');
   dialog.showModal = () => { dialog.open = true; };
   dialog.close = () => { dialog.open = false; };
-  vm.runInContext(script, vm.createContext(window), { filename: 'index-inline.js' });
+  window.eval(script);
   const table = document.querySelector('#disk-inventory');
   const rows = () => [...table.tBodies[0].rows];
   const tick = async (items, fail = false) => {
