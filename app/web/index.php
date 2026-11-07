@@ -401,7 +401,7 @@ try {
                 $status = $row['status'];
                 $mountFolder = $row['registered'] ? '/mnt/' . $row['mount_folder'] : '—';
             ?>
-                <tr data-connection="<?php echo $disk === null ? 'disconnected' : 'connected'; ?>"<?php echo $disk === null ? ' hidden' : ''; ?>>
+                <tr data-key="<?php echo h($row['registered'] ? 'registered:' . strtolower($row['luks_uuid']) : 'device:' . $disk['name']); ?>" data-connection="<?php echo $disk === null ? 'disconnected' : 'connected'; ?>"<?php echo $disk === null ? ' hidden' : ''; ?>>
                     <td><?php echo h($row['name']); ?><?php if (!$row['registered']): ?> <small>(unregistered)</small><?php endif; ?></td>
                     <td><code><?php echo h($disk === null ? '—' : $disk['path']); ?></code></td>
                     <td><?php echo h($status); ?></td>
@@ -559,6 +559,133 @@ try {
         });
     });
     selectConnection('connected', false);
+    // Poll only while the page is visible. Reconcile rows by stable identity;
+    // never replace the table or overwrite an open configuration dialog.
+    var pollNotice = document.createElement('p');
+    pollNotice.id = 'inventory-poll-status';
+    pollNotice.setAttribute('role', 'status');
+    pollNotice.className = 'muted';
+    table.parentNode.insertBefore(pollNotice, table);
+    function currentConnection() {
+        var selected = tabs.filter(function (tab) {
+            return tab.getAttribute('aria-selected') === 'true';
+        })[0];
+        return selected ? selected.getAttribute('data-filter') : 'connected';
+    }
+    function updateCounts() {
+        ['connected', 'disconnected'].forEach(function (connection) {
+            var count = table.tBodies[0].querySelectorAll('tr[data-connection="' + connection + '"]').length;
+            tabs.forEach(function (tab) {
+                if (tab.getAttribute('data-filter') === connection) {
+                    tab.textContent = (connection === 'connected' ? 'Connected' : 'Disconnected') + ' (' + count + ')';
+                }
+            });
+        });
+    }
+    function updateRow(row, item) {
+        row.setAttribute('data-connection', item.connection);
+        var values = [item.name, item.device, item.status, item.type, item.uuid, item.mount];
+        values.forEach(function (value, index) {
+            var cell = row.cells[index];
+            if (index === 0) {
+                var text = item.name + (item.registered ? '' : ' (unregistered)');
+                if (cell.textContent !== text) cell.textContent = text;
+            } else if (cell.textContent !== value) {
+                cell.textContent = value;
+            }
+        });
+        var actionCell = row.cells[6];
+        var configure = actionCell.querySelector('.configure-disk');
+        if (item.registered && !configure) {
+            configure = document.createElement('button');
+            configure.type = 'button';
+            configure.className = 'configure-disk';
+            configure.textContent = 'Configure';
+            actionCell.insertBefore(configure, actionCell.firstChild);
+        } else if (!item.registered && configure) {
+            configure.remove();
+            configure = null;
+        }
+        if (configure) {
+            configure.setAttribute('data-uuid', item.uuid);
+            configure.setAttribute('data-name', item.name);
+            configure.setAttribute('data-folder', item.folder);
+            configure.setAttribute('data-status', item.status);
+        }
+    }
+    function sortRows() {
+        var body = table.tBodies[0];
+        var rows = Array.prototype.slice.call(body.rows);
+        rows.sort(function (a, b) {
+            var x = a.cells[active].textContent.trim();
+            var y = b.cells[active].textContent.trim();
+            var cmp = x.localeCompare(y, undefined, {sensitivity: 'base', numeric: true});
+            return ascending ? cmp : -cmp;
+        });
+        rows.forEach(function (row) { body.appendChild(row); });
+    }
+    var polling = false;
+    function pollInventory() {
+        if (polling || document.hidden) return;
+        polling = true;
+        fetch('inventory.php', {credentials: 'same-origin', cache: 'no-store'})
+            .then(function (response) {
+                if (!response.ok) throw new Error('Inventory request failed');
+                return response.json();
+            })
+            .then(function (snapshot) {
+                if (!snapshot || !Array.isArray(snapshot.rows)) throw new Error('Invalid inventory');
+                var body = table.tBodies[0];
+                var existing = Object.create(null);
+                Array.prototype.forEach.call(body.rows, function (row) {
+                    existing[row.getAttribute('data-key')] = row;
+                });
+                var seen = Object.create(null);
+                // Reject malformed or duplicate keys rather than deleting valid rows.
+                snapshot.rows.forEach(function (item) {
+                    if (!item || typeof item.key !== 'string' || !item.key ||
+                        seen[item.key] || !['connected', 'disconnected'].includes(item.connection)) {
+                        throw new Error('Ambiguous inventory');
+                    }
+                    seen[item.key] = true;
+                });
+                snapshot.rows.forEach(function (item) {
+                    var row = existing[item.key];
+                    if (!row) {
+                        row = document.createElement('tr');
+                        row.setAttribute('data-key', item.key);
+                        for (var i = 0; i < 7; i++) row.appendChild(document.createElement('td'));
+                        row.cells[6].className = 'disk-actions';
+                        ['Unlock', 'Mount', 'Unmount', 'Lock', 'Encrypt'].forEach(function (action) {
+                            var button = document.createElement('button');
+                            button.type = 'button';
+                            button.disabled = true;
+                            button.title = action + ': not yet available in this development build';
+                            button.textContent = action;
+                            row.cells[6].appendChild(button);
+                        });
+                        body.appendChild(row);
+                    }
+                    updateRow(row, item);
+                });
+                Object.keys(existing).forEach(function (key) {
+                    if (!seen[key]) existing[key].remove();
+                });
+                sortRows();
+                updateCounts();
+                selectConnection(currentConnection(), false);
+                pollNotice.textContent = '';
+            })
+            .catch(function () {
+                pollNotice.textContent = 'Live inventory unavailable; displayed disk status may be stale.';
+            })
+            .then(function () { polling = false; });
+    }
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) pollInventory();
+    });
+    window.setInterval(pollInventory, 3000);
+
     var buttons = Array.prototype.slice.call(table.querySelectorAll('.sort-heading'));
     var active = 0, ascending = true;
     buttons.forEach(function (button, column) {
