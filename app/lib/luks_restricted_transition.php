@@ -10,8 +10,9 @@
 require_once __DIR__ . '/locked_luks_transition.php';
 require_once __DIR__ . '/luks_subprocess.php';
 require_once __DIR__ . '/luks_secret_input.php';
+require_once __DIR__ . '/luks_registry_authorization.php';
 
-function edm_restricted_luks_transition($dataDirectory, $uuid, $action,
+function edm_restricted_luks_transition($dataDirectory, $registryPath, $uuid, $action,
     $expectedMapper, $secret = null, $timeoutSeconds = 30)
 {
     if (!in_array($action, array('unlock', 'lock'), true)
@@ -21,9 +22,19 @@ function edm_restricted_luks_transition($dataDirectory, $uuid, $action,
         || $secret === '' || strlen($secret) > 4096)) return false;
     if ($action === 'lock' && ($secret !== null || $expectedMapper !== null))
         return false;
+    if (!is_string($registryPath) || $registryPath !== $dataDirectory . '/disks.json')
+        return false;
     return edm_with_locked_luks_transition($dataDirectory, $uuid, $action,
         $expectedMapper,
-        function ($plan) use ($action, $secret, $timeoutSeconds) {
+        function ($plan, $state) use ($action, $secret, $timeoutSeconds,
+            $registryPath, $uuid, $expectedMapper) {
+            // This callback runs under the shared disk-operation lock and
+            // after the immediate authoritative identity re-probe.
+            try {
+                $registry = edm_registry_load($registryPath);
+            } catch (Throwable $e) { return false; }
+            if (!edm_luks_registry_authorization($registry, $uuid,
+                $action, $state, $expectedMapper)) return false;
             if ($action === 'unlock') {
                 $input = edm_luks_stdin_command($plan);
                 return $input !== null
