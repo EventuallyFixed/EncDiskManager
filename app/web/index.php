@@ -595,6 +595,17 @@ try {
             }
         });
         var actionCell = row.cells[6];
+        // Preview eligibility without enabling any disk-changing operation.
+        ['unlock', 'mount', 'unmount', 'lock', 'encrypt'].forEach(function (action, index) {
+            var button = Array.prototype.filter.call(actionCell.querySelectorAll('button'), function (candidate) {
+                return !candidate.classList.contains('configure-disk');
+            })[index];
+            if (!button) return;
+            button.disabled = true;
+            button.title = item.actions[action]
+                ? action.charAt(0).toUpperCase() + action.slice(1) + ': eligible in current read-only snapshot; operation not yet available'
+                : action.charAt(0).toUpperCase() + action.slice(1) + ': not available for this disk state';
+        });
         var configure = actionCell.querySelector('.configure-disk');
         if (item.registered && !configure) {
             configure = document.createElement('button');
@@ -654,7 +665,11 @@ try {
                         }) ||
                         (item.registered && item.key !== 'registered:' + item.uuid.toLowerCase()) ||
                         (!item.registered && item.key.indexOf('device:') !== 0) ||
-                        (!item.registered && item.connection !== 'connected')) {
+                        (!item.registered && item.connection !== 'connected') ||
+                        !item.actions || typeof item.actions !== 'object' ||
+                        ['unlock', 'mount', 'unmount', 'lock', 'encrypt'].some(function (action) {
+                            return typeof item.actions[action] !== 'boolean';
+                        })) {
                         throw new Error('Ambiguous inventory');
                     }
                     seen[item.key] = true;
