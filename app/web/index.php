@@ -695,6 +695,8 @@ try {
         if (!document.hidden) pollInventory();
     });
     window.setInterval(pollInventory, 3000);
+    // Refresh immediately: the server-rendered snapshot may already be stale.
+    pollInventory();
 
     var buttons = Array.prototype.slice.call(table.querySelectorAll('.sort-heading'));
     var active = 0, ascending = true;
