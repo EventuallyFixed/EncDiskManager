@@ -12,6 +12,7 @@ require_once __DIR__ . '/kernel_mapper_discovery.php';
 require_once __DIR__ . '/registration_deletion_policy.php';
 require_once __DIR__ . '/disk_inactivity.php';
 require_once __DIR__ . '/authoritative_usb_discovery.php';
+require_once __DIR__ . '/registration_snapshot_consistency.php';
 
 function edm_live_registration_verifier($action, $discoverDevices, $discoverMappers = null)
 {
@@ -35,7 +36,9 @@ function edm_live_registration_verifier($action, $discoverDevices, $discoverMapp
                 || $deviceSnapshot['complete'] !== true
                 || $mapperSnapshot['complete'] !== true
                 || !is_array($deviceSnapshot['devices'])
-                || !is_array($mapperSnapshot['mappers'])) {
+                || !is_array($mapperSnapshot['mappers'])
+                || !edm_registration_snapshots_consistent(
+                    $deviceSnapshot['devices'], $mapperSnapshot['mappers'])) {
                 return false;
             }
             if ($action === 'delete') {
