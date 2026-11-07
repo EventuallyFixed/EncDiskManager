@@ -23,6 +23,8 @@ function edm_registration_snapshots_consistent($devices, $mappers)
         }
     }
     $mapperNames = array();
+    $mapperSources = array();
+    $mappedUsbParents = array();
     foreach ($mappers as $mapper) {
         if (!is_array($mapper) || !isset($mapper['name'], $mapper['source_uuid'], $mapper['parents'])
             || !is_string($mapper['name']) || !is_string($mapper['source_uuid'])
@@ -30,12 +32,18 @@ function edm_registration_snapshots_consistent($devices, $mappers)
             || isset($mapperNames[$mapper['name']])) return false;
         $mapperNames[$mapper['name']] = true;
         $source = strtolower($mapper['source_uuid']);
+        if (isset($mapperSources[$source])) return false;
+        $mapperSources[$source] = true;
         if (!preg_match('/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iD', $source)) return false;
         $parents = array();
         foreach ($mapper['parents'] as $parent) {
             if (!is_string($parent) || !preg_match('/^[a-zA-Z0-9._+-]+$/D', $parent)
                 || isset($parents[$parent])) return false;
             $parents[$parent] = true;
+            if (isset($names[$parent])) {
+                if (isset($mappedUsbParents[$parent])) return false;
+                $mappedUsbParents[$parent] = true;
+            }
         }
         // For a USB LUKS partition we identified, a mapper claiming its UUID
         // must actually have that partition among its kernel slave devices.
