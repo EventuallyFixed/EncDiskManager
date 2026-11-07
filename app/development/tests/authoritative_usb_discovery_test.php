@@ -22,6 +22,13 @@ try {
         'USB partition identified from sysfs');
     check_auth_usb($snapshot['devices'][0]['uuid'] === $uuid
         && $snapshot['devices'][0]['luks'] === true, 'LUKS identity retained');
+    unlink($usb . '/sdb1/dev');
+    $noDevId = edm_authoritative_usb_discovery($sys, function () use ($uuid) {
+        return array('uuid' => $uuid, 'type' => 'crypto_LUKS');
+    });
+    check_auth_usb($noDevId['complete'] === false,
+        'Missing kernel major-minor identity fails closed');
+    file_put_contents($usb . '/sdb1/dev', '240:99');
     $failure = edm_authoritative_usb_discovery($sys, function () { return null; });
     check_auth_usb($failure['complete'] === false && !$failure['devices'],
         'Unresolved blkid identity fails closed');
