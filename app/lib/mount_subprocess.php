@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/trusted_operation_binary.php';
 /**
  * Restricted mount/umount runner. Not exposed to HTTP.
  * Caller MUST hold shared disk lock, verify registry ownership and perform
@@ -31,6 +32,7 @@ function edm_mount_subprocess($plan, $timeoutSeconds = 30)
         && count($argv) === 2
         && $argv[0] === '/bin/umount' && $argv[1] === $destination;
     if (!$mount && !$unmount) return false;
+    if (!edm_trusted_operation_binary($argv[0])) return false;
     if (!function_exists('proc_open') || !function_exists('proc_get_status'))
         return false;
     $pipes = array();
