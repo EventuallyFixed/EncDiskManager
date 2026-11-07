@@ -1,0 +1,31 @@
+name: Feature branch validation
+
+on:
+  push:
+    branches:
+      - feature/usb-disk-encryption
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  php-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: PHP syntax checks
+        run: |
+          find app -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Run read-only regression tests
+        run: |
+          set -eu
+          for test in app/development/tests/*_test.php; do
+            echo "Running $test"
+            php "$test"
+          done
