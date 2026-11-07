@@ -24,3 +24,8 @@ $forged['argv'][7] = '/tmp/key';
 binding_check(edm_luks_keyslot_bind_private_key($forged,
     '/mnt/HD/HD_a2/Nas_Prog/_EncDiskManager', $uuid) === null,
     'Client-provided key path rejected');
+
+binding_check(edm_luks_keyslot_private_file_ready('/tmp', $uuid) === false,
+    'Public temporary directory cannot hold an accepted private key');
+binding_check(edm_luks_keyslot_private_file_ready('/does-not-exist', $uuid) === false,
+    'Missing private key rejected');
