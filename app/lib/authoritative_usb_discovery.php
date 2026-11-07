@@ -14,6 +14,14 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
     if (!is_callable($probe)) return $empty;
     $before = @scandir($sysBlock);
     if (!is_array($before)) return $empty;
+    $mountLines = @file('/proc/mounts', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($mountLines)) return $empty;
+    $mounted = array();
+    foreach ($mountLines as $line) {
+        $fields = preg_split('/\\s+/', $line);
+        if (!isset($fields[0], $fields[1])) return $empty;
+        $mounted[$fields[0]] = $fields[1];
+    }
     $devices = array();
     $partitionNames = array();
     foreach ($before as $name) {
@@ -38,7 +46,7 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
         }
         $devices[] = array(
             'name' => $name, 'uuid' => $info['uuid'],
-            'luks' => $luks, 'mount' => '',
+            'luks' => $luks, 'mount' => isset($mounted['/dev/' . $name]) ? $mounted['/dev/' . $name] : '',
             'backup_mapper' => '', 'backup_mount' => ''
         );
     }
