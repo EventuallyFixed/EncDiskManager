@@ -35,6 +35,7 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
     $devices = array();
     $partitionNames = array();
     $partitionPaths = array();
+    $partitionDevIds = array();
     foreach ($before as $name) {
         if ($name === '.' || $name === '..') continue;
         if (!preg_match('/^[a-zA-Z0-9._+-]+$/D', $name)) return $empty;
@@ -47,6 +48,7 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
         $devId = @file_get_contents($base . '/dev');
         if ($devId === false || !preg_match('/^[0-9]+:[0-9]+$/D', trim($devId))) return $empty;
         $devId = trim($devId);
+        $partitionDevIds[$name] = $devId;
         if (!preg_match('~/(usb[0-9]+)(/|$)~', $resolved)) continue;
         try {
             $info = call_user_func($probe, $name);
@@ -78,6 +80,8 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
     if ($partitionNames !== $afterPartitions) return $empty;
     foreach ($partitionPaths as $name => $resolved) {
         if (realpath($sysBlock . '/' . $name) !== $resolved) return $empty;
+        $devIdAfter = @file_get_contents($sysBlock . '/' . $name . '/dev');
+        if ($devIdAfter === false || trim($devIdAfter) !== $partitionDevIds[$name]) return $empty;
     }
     // Mount state can change independently of block-device enumeration.
     // Do not return a complete snapshot if it changed during probing.
