@@ -20,6 +20,7 @@ function edm_discover_kernel_mappers($sysBlock = '/sys/class/block')
     }
     $mappers = array();
     $observed = array();
+    $seenNames = array();
     $complete = true;
     foreach ($entries as $entry) {
         if (!preg_match('/^dm-[0-9]+$/D', $entry)) {
@@ -43,6 +44,10 @@ function edm_discover_kernel_mappers($sysBlock = '/sys/class/block')
             $complete = false;
             continue;
         }
+        if (isset($seenNames[$name])) {
+            $complete = false;
+        }
+        $seenNames[$name] = true;
         $parents = array();
         foreach ($slaves as $slave) {
             if ($slave === '.' || $slave === '..') {
