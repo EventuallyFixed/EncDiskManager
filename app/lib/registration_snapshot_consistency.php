@@ -23,6 +23,8 @@ function edm_registration_snapshots_consistent($devices, $mappers)
         }
     }
     $mapperNames = array();
+    $mapperDevices = array();
+    $mapperEdges = array();
     $mapperSources = array();
     $mappedUsbParents = array();
     foreach ($mappers as $mapper) {
@@ -31,6 +33,11 @@ function edm_registration_snapshots_consistent($devices, $mappers)
             || !is_array($mapper['parents']) || !$mapper['parents']
             || isset($mapperNames[$mapper['name']])) return false;
         $mapperNames[$mapper['name']] = true;
+        if (!isset($mapper['device']) || !is_string($mapper['device'])
+            || !preg_match('/^dm-[0-9]+$/D', $mapper['device'])
+            || isset($mapperDevices[$mapper['device']])) return false;
+        $mapperDevices[$mapper['device']] = true;
+        $mapperEdges[$mapper['device']] = $mapper['parents'];
         $source = strtolower($mapper['source_uuid']);
         if (isset($mapperSources[$source])) return false;
         $mapperSources[$source] = true;
@@ -52,6 +59,28 @@ function edm_registration_snapshots_consistent($devices, $mappers)
         // must identify that partition's LUKS UUID.
         foreach ($uuids as $uuid => $name) {
             if (isset($parents[$name]) && $uuid !== $source) return false;
+        }
+    }
+    // Reject nested mapper ancestry reaching a USB LUKS partition until
+    // nested device operations can be verified safely.
+    foreach ($mapperEdges as $device => $parents) {
+        $pending = array(array($device, 0));
+        $visited = array();
+        while ($pending) {
+            $item = array_pop($pending);
+            $node = $item[0];
+            $depth = $item[1];
+            if ($depth > count($mapperEdges)) return false;
+            if (isset($visited[$node])) continue;
+            $visited[$node] = true;
+            foreach ($mapperEdges[$node] as $parent) {
+                if (in_array($parent, $uuids, true) && $depth > 0) return false;
+                if (isset($mapperEdges[$parent])) {
+                    $pending[] = array($parent, $depth + 1);
+                } elseif (preg_match('/^dm-[0-9]+$/D', $parent)) {
+                    return false;
+                }
+            }
         }
     }
     return true;
