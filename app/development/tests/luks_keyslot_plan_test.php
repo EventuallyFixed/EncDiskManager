@@ -11,8 +11,10 @@ keyslot_assert($p['argv'][0] === '/usr/sbin/cryptsetup'
     && in_array('--test-passphrase', $p['argv'], true)
     && in_array('luks1', $p['argv'], true),
     'Fixed LUKS1 verification argv');
-keyslot_assert(edm_luks_keyslot_plan('add-key', 'sdb1') === null,
-    'Keyslot modification blocked without two-channel executor');
+$add = edm_luks_keyslot_plan('add-key', 'sdb1');
+keyslot_assert(is_array($add) && $add['stdin'] === 'recovery-secret'
+    && end($add['argv']) === '__PRIVATE_NEW_KEY_PATH__',
+    'Keyslot plan requires separately verified private new-key path');
 keyslot_assert(edm_luks_keyslot_plan('verify-recovery', '../sda') === null,
     'Traversal rejected');
 keyslot_assert(edm_luks_keyslot_plan('verify-recovery', 'sda') === null,
