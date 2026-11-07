@@ -8,6 +8,7 @@
  */
 require_once __DIR__ . '/registry_operations.php';
 require_once __DIR__ . '/disk_operation_lock.php';
+require_once __DIR__ . '/configuration_authorization.php';
 
 function edm_registry_transaction($registryPath, $operation)
 {
@@ -71,6 +72,11 @@ function edm_registry_change_details($registryPath, $uuid, $name, $mountFolder, 
         throw new RuntimeException('A live disk-state verifier is required.');
     }
     return edm_registry_transaction($registryPath, function ($current) use ($uuid, $name, $mountFolder, $verifyInactive) {
+        // Recheck registration identity and uniqueness against the locked, fresh registry.
+        edm_configuration_registration_preflight(array(
+            'action' => 'edit', 'luks_uuid' => $uuid,
+            'name' => $name, 'mount_folder' => $mountFolder
+        ), $current);
         // Verify after acquiring the transaction lock, not before waiting.
         if (call_user_func($verifyInactive, $uuid) !== true) {
             throw new RuntimeException('Disk is not confirmed inactive.');
@@ -91,6 +97,9 @@ function edm_registry_delete_registration($registryPath, $uuid, $verifyInactive)
         throw new RuntimeException('A live disk-state verifier is required.');
     }
     return edm_registry_transaction($registryPath, function ($current) use ($uuid, $verifyInactive) {
+        edm_configuration_registration_preflight(array(
+            'action' => 'delete', 'luks_uuid' => $uuid
+        ), $current);
         if (call_user_func($verifyInactive, $uuid) !== true) {
             throw new RuntimeException('Disk is not confirmed inactive.');
         }
