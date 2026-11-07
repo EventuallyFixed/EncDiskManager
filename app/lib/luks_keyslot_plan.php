@@ -22,8 +22,15 @@ function edm_luks_keyslot_plan($action, $deviceName, $mapperName = null)
             'requires_verified_usb_identity' => true
         );
     }
-    // luksAddKey needs two independent secret channels. A single pipe
-    // cannot safely distinguish arbitrary binary keys, so reject until
-    // an fd-based, audited executor is implemented.
-    return null;
+    // The new 64-byte key is supplied as an existing private root-owned
+    // keyfile, while the recovery passphrase arrives on stdin. Never put
+    // secret bytes into argv. This plan must be authorized under disk lock.
+    return array(
+        'action' => 'add-key',
+        'argv' => array('/usr/sbin/cryptsetup', 'luksAddKey',
+            '--type', 'luks1', '--key-file', '-', $device),
+        'stdin' => 'recovery-secret',
+        'new_key_file_required' => true,
+        'requires_verified_usb_identity' => true
+    );
 }
