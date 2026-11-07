@@ -61,24 +61,33 @@ function edm_registration_snapshots_consistent($devices, $mappers)
             if (isset($parents[$name]) && $uuid !== $source) return false;
         }
     }
-    // Reject nested mapper ancestry reaching a USB LUKS partition until
-    // nested device operations can be verified safely.
+    // Follow the full dm graph. A global visited set alone cannot detect
+    // cycles: distinguish nodes on the current path from completed nodes.
+    $completed = array();
     foreach ($mapperEdges as $device => $parents) {
-        $pending = array(array($device, 0));
-        $visited = array();
-        while ($pending) {
-            $item = array_pop($pending);
-            $node = $item[0];
-            $depth = $item[1];
-            if ($depth > count($mapperEdges)) return false;
-            if (isset($visited[$node])) continue;
-            $visited[$node] = true;
+        $stack = array(array('node' => $device, 'exit' => false, 'depth' => 0));
+        $active = array();
+        while ($stack) {
+            $frame = array_pop($stack);
+            $node = $frame['node'];
+            if ($frame['exit']) {
+                unset($active[$node]);
+                $completed[$node] = true;
+                continue;
+            }
+            if (isset($active[$node])) return false; // ancestry cycle
+            if (isset($completed[$node])) continue;
+            $active[$node] = true;
+            $stack[] = array('node' => $node, 'exit' => true, 'depth' => $frame['depth']);
             foreach ($mapperEdges[$node] as $parent) {
-                if (in_array($parent, $uuids, true) && $depth > 0) return false;
+                if (in_array($parent, $uuids, true) && $frame['depth'] > 0) {
+                    return false; // nested mapper reaches managed USB LUKS partition
+                }
                 if (isset($mapperEdges[$parent])) {
-                    $pending[] = array($parent, $depth + 1);
+                    $stack[] = array('node' => $parent, 'exit' => false,
+                        'depth' => $frame['depth'] + 1);
                 } elseif (preg_match('/^dm-[0-9]+$/D', $parent)) {
-                    return false;
+                    return false; // missing intermediate mapper
                 }
             }
         }
