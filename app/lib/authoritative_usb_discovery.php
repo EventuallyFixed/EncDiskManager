@@ -22,6 +22,16 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
         if (!isset($fields[0], $fields[1])) return $empty;
         $mounted[$fields[0]] = $fields[1];
     }
+    // /proc/mounts source paths can be aliases (/dev/disk/by-uuid, etc.).
+    // Cross-check kernel major:minor mount identities instead of trusting paths.
+    $mountInfoBefore = @file('/proc/self/mountinfo', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($mountInfoBefore)) return $empty;
+    $mountedDevIds = array();
+    foreach ($mountInfoBefore as $line) {
+        $fields = preg_split('/\\s+/', $line);
+        if (!isset($fields[2]) || !preg_match('/^[0-9]+:[0-9]+$/D', $fields[2])) return $empty;
+        $mountedDevIds[$fields[2]] = true;
+    }
     $devices = array();
     $partitionNames = array();
     $partitionPaths = array();
@@ -34,6 +44,9 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
         $resolved = realpath($base);
         if ($resolved === false) return $empty;
         $partitionPaths[$name] = $resolved;
+        $devId = @file_get_contents($base . '/dev');
+        if ($devId === false || !preg_match('/^[0-9]+:[0-9]+$/D', trim($devId))) return $empty;
+        $devId = trim($devId);
         if (!preg_match('~/(usb[0-9]+)(/|$)~', $resolved)) continue;
         try {
             $info = call_user_func($probe, $name);
@@ -48,7 +61,7 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
         }
         $devices[] = array(
             'name' => $name, 'uuid' => $info['uuid'],
-            'luks' => $luks, 'mount' => isset($mounted['/dev/' . $name]) ? $mounted['/dev/' . $name] : '',
+            'luks' => $luks, 'mount' => isset($mountedDevIds[$devId]) ? 'mounted' : '',
             'backup_mapper' => '', 'backup_mount' => ''
         );
     }
@@ -70,6 +83,8 @@ function edm_authoritative_usb_discovery($sysBlock = '/sys/class/block', $probe 
     // Do not return a complete snapshot if it changed during probing.
     $mountLinesAfter = @file('/proc/mounts', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     if (!is_array($mountLinesAfter) || $mountLinesAfter !== $mountLines) return $empty;
+    $mountInfoAfter = @file('/proc/self/mountinfo', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($mountInfoAfter) || $mountInfoAfter !== $mountInfoBefore) return $empty;
     return array('complete' => true, 'devices' => $devices);
 }
 
