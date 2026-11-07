@@ -3,6 +3,7 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/registry.php';
 require_once __DIR__ . '/../lib/inventory.php';
 require_once __DIR__ . '/../lib/configuration_request.php';
+require_once __DIR__ . '/../lib/configuration_authorization.php';
 
 try {
     edm_auth_start_session();
@@ -383,6 +384,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
                 $request['confirmation'] = isset($_POST['confirmation']) ? $_POST['confirmation'] : null;
             }
             $validated = edm_configuration_request($request);
+            $currentRegistry = edm_registry_load(edm_auth_data_path() . '/disks.json');
+            edm_configuration_registration_preflight($validated, $currentRegistry);
             $configValidationNotice = 'Configuration request validated for ' . $validated['luks_uuid']
                 . '. No changes were saved: live disk-state verification is not yet enabled.';
         } catch (Throwable $exception) {
