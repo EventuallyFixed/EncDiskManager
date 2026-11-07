@@ -8,6 +8,8 @@
  */
 function edm_luks_subprocess($argv, $secret = null, $timeoutSeconds = 30)
 {
+    if (!function_exists('posix_geteuid') || posix_geteuid() !== 0)
+        return false;
     if (!is_array($argv) || !in_array(count($argv), array(3, 6), true)
         || !is_int($timeoutSeconds) || $timeoutSeconds < 1 || $timeoutSeconds > 120)
         return false;
