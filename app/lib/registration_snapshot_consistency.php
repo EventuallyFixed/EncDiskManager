@@ -63,8 +63,8 @@ function edm_registration_snapshots_consistent($devices, $mappers)
     }
     // Follow the full dm graph. A global visited set alone cannot detect
     // cycles: distinguish nodes on the current path from completed nodes.
-    $completed = array();
     foreach ($mapperEdges as $device => $parents) {
+        $completed = array();
         $stack = array(array('node' => $device, 'exit' => false, 'depth' => 0));
         $active = array();
         while ($stack) {
