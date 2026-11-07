@@ -55,8 +55,8 @@ function edm_live_registration_verifier($action, $discoverDevices, $discoverMapp
 }
 
 /**
- * Production-ready callback wiring for read-only verification.
- * Call the returned verifier only while holding the shared disk-operation lock.
+ * Default callback wiring for read-only verification (not operation authorization).
+ * Call the returned verifier only while holding the shared disk-operation lock.\n * Further mount-alias and mapper ancestry checks are needed before mutations.
  * No UI snapshot or client-provided device path is accepted.
  */
 function edm_authoritative_registration_verifier($action)
