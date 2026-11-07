@@ -2,6 +2,8 @@
 /**
  * Bind a prevalidated keyslot-addition plan to a private keyfile.
  * This is pure command construction, not permission to execute.
+ * The privileged executor must verify file identity, ownership and mode
+ * immediately before invocation under the shared disk-operation lock.
  */
 require_once __DIR__ . '/luks_keyslot_plan.php';
 require_once __DIR__ . '/stored_key_policy.php';
@@ -24,7 +26,37 @@ function edm_luks_keyslot_bind_private_key($plan, $dataDirectory, $uuid)
         || !preg_match('#^/dev/[a-zA-Z0-9._+-]+$#D', $plan['argv'][6])
         || $plan['argv'][7] !== '__PRIVATE_NEW_KEY_PATH__')
         return null;
+    // A bound plan is still untrusted until the privileged executor checks
+    // the real keyfile and the currently attached USB device.
     $bound = $plan;
     $bound['argv'][7] = $policy['key_path'];
     return $bound;
+}
+
+/**
+ * Check the private keyfile immediately before cryptsetup invocation.
+ * The caller must already hold the disk-operation lock.
+ */
+function edm_luks_keyslot_private_file_ready($dataDirectory, $uuid)
+{
+    if (!function_exists('posix_geteuid') || posix_geteuid() !== 0)
+        return false;
+    $policy = edm_stored_key_policy($dataDirectory, $uuid, false, false);
+    if ($policy === null) return false;
+    $dir = $policy['key_directory'];
+    if (is_link($dir)) return false;
+    $directoryStat = @lstat($dir);
+    if (!is_array($directoryStat)
+        || ($directoryStat['mode'] & 0170000) !== 0040000
+        || $directoryStat['uid'] !== 0
+        || ($directoryStat['mode'] & 0777) !== 0700) return false;
+    $path = $policy['key_path'];
+    if (is_link($path)) return false;
+    $stat = @lstat($path);
+    return is_array($stat)
+        && ($stat['mode'] & 0170000) === 0100000
+        && $stat['uid'] === 0
+        && ($stat['mode'] & 0777) === 0600
+        && $stat['size'] === 64
+        && $stat['nlink'] === 1;
 }
