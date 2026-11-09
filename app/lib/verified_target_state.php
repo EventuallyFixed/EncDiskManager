@@ -19,12 +19,16 @@ function edm_verified_target_state_probe($uuid, $discoverUsb, $discoverMappers, 
         if ($bound === null) return null;
         $firstMappers = call_user_func($discoverMappers);
         $firstMounts = call_user_func($readMounts);
+        // A missing or malformed mountinfo snapshot must not be interpreted
+        // as "nothing mounted", even if no mapper appears in this snapshot.
+        if (!is_array($firstMounts)) return null;
         $first = edm_operation_target_state($bound, $firstUsb, $firstMappers, $firstMounts);
         if ($first === null) return null;
         $secondUsb = call_user_func($discoverUsb);
         if (!edm_operation_target_still_matches($bound, $secondUsb)) return null;
         $secondMappers = call_user_func($discoverMappers);
         $secondMounts = call_user_func($readMounts);
+        if (!is_array($secondMounts)) return null;
         $second = edm_operation_target_state($bound, $secondUsb, $secondMappers, $secondMounts);
         if ($second === null || $first !== $second
             || $firstMappers !== $secondMappers || $firstMounts !== $secondMounts) return null;
