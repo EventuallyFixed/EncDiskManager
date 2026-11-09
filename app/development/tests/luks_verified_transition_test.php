@@ -14,7 +14,7 @@ $open['mapper_name'] = 'edm_backup';
 $open['mapper_device'] = 'dm-2';
 $open['mapper_dev_id'] = '253:2';
 $open['mapper_mounted'] = false;
-$trusted = function () { return '/usr/sbin/cryptsetup'; };
+$trusted = function () { return '/usr/local/modules/usr/sbin/cryptsetup'; };
 $calls = 0;
 $execute = function ($plan) use (&$calls) {
     ++$calls;
