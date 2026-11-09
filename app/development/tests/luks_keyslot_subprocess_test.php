@@ -38,3 +38,8 @@ $p['argv'][0] = '/usr/sbin/cryptsetup';
 $p['argv'][7] = '/mnt/HD/HD_a2/Nas_Prog/_EncDiskManager/keys/12345678123412341234123456789abc.key';
 keyslot_runner_check(edm_luks_keyslot_subprocess($p, 'secret') === false,
     'Keyslot addition rejects symlink executable even with shaped key path');
+
+$add = edm_luks_keyslot_plan('add-key', 'sdb1');
+$add['argv'][7] = '/mnt/HD/HD_a2/Nas_Prog/_EncDiskManager/keys/12345678123412341234123456789abc.key';
+keyslot_runner_check(edm_luks_keyslot_subprocess($add, 'secret') === false,
+    'Well-formed add-key command remains disabled until verified executor exists');
