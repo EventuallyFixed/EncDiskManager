@@ -9,7 +9,7 @@ $closed = array('uuid' => $uuid, 'name' => 'sdb1', 'dev_id' => '8:17',
     'direct_mounted' => false, 'mapper_open' => false,
     'mapper_name' => null, 'mapper_device' => null,
     'mapper_dev_id' => null, 'mapper_mounted' => null);
-$trusted = function () { return '/usr/sbin/cryptsetup'; };
+$trusted = function () { return '/usr/local/modules/usr/sbin/cryptsetup'; };
 $unlock = edm_luks_execution_preflight('unlock', $closed, 'edm_backup', $trusted);
 check_preflight($unlock !== null && $unlock['argv'][2] === '/dev/sdb1',
     'Valid closed LUKS target produces a non-executing plan');
