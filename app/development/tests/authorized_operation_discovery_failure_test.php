@@ -48,6 +48,20 @@ try {
         check_failure_gate($result === false && $inspected === 0,
             $label . ' fails closed before inspector');
     }
+    $mountReads = 0;
+    $inspected = 0;
+    $result = edm_with_authorized_operation_inspection($directory,
+        'POST', true, true, $csrf, $csrf, $request,
+        function () use (&$inspected) { ++$inspected; return true; },
+        function () use ($validUsb) { return $validUsb; },
+        function () use ($validMappers) { return $validMappers; },
+        function () use (&$mountReads) {
+            ++$mountReads;
+            return $mountReads === 1 ? array() : null;
+        });
+    check_failure_gate($result === false && $inspected === 0
+        && $mountReads === 2,
+        'Mount discovery fails closed on second verification pass');
     $probeCount = 0;
     $inspected = 0;
     $result = edm_with_authorized_operation_inspection($directory,
