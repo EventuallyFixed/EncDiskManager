@@ -59,3 +59,16 @@ check_verified_state(edm_verified_target_state_probe($uuid,
     function () use ($mapper) { return $mapper; },
     function () use ($mounts) { return $mounts; }) === null,
     'Discovery exception fails closed');
+
+check_verified_state(!edm_verified_mountinfo_snapshot(array('malformed mountinfo')),
+    'Malformed mountinfo entry rejected');
+check_verified_state(!edm_verified_mountinfo_snapshot(array(123)),
+    'Non-string mountinfo entry rejected');
+check_verified_state(edm_verified_mountinfo_snapshot($mounts),
+    'Valid Linux mountinfo entry accepted');
+$lockedMappers = array('complete' => true, 'mappers' => array());
+check_verified_state(edm_verified_target_state_probe($uuid,
+    function () use ($usb) { return $usb; },
+    function () use ($lockedMappers) { return $lockedMappers; },
+    function () { return array('malformed mountinfo'); }) === null,
+    'Malformed mountinfo fails closed even when no mapper is open');
