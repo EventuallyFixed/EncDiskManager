@@ -19,7 +19,7 @@ function edm_verified_mountinfo_snapshot($lines)
         // mountinfo has six fixed fields, zero or more optional fields,
         // then a separator and at least three filesystem-specific fields.
         if ($separator === false || $separator < 6
-            || count($fields) < $separator + 4
+            || count($fields) !== $separator + 4
             || !ctype_digit($fields[0]) || !ctype_digit($fields[1])
             || !preg_match('/^[0-9]+:[0-9]+$/D', $fields[2])) return false;
         foreach ($fields as $field) {
