@@ -5,7 +5,7 @@
  */
 function edm_trusted_operation_binary($path)
 {
-    if (!in_array($path, array('/bin/mount', '/bin/umount', '/usr/sbin/cryptsetup'), true))
+    if (!in_array($path, array('/bin/mount', '/bin/umount', '/usr/local/modules/usr/sbin/cryptsetup'), true))
         return false;
     $parts = explode('/', trim($path, '/'));
     $current = '';
