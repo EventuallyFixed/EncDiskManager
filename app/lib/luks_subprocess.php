@@ -15,7 +15,7 @@ function edm_luks_subprocess($argv, $secret = null, $timeoutSeconds = 30)
         || !is_int($timeoutSeconds) || $timeoutSeconds < 1 || $timeoutSeconds > 120)
         return false;
     $unlock = count($argv) === 6
-        && $argv[0] === '/usr/sbin/cryptsetup'
+        && $argv[0] === '/usr/local/modules/usr/sbin/cryptsetup'
         && $argv[1] === 'luksOpen'
         && $argv[2] === '--key-file'
         && $argv[3] === '-'
@@ -24,7 +24,7 @@ function edm_luks_subprocess($argv, $secret = null, $timeoutSeconds = 30)
         && is_string($argv[5])
         && preg_match('/^edm_[a-zA-Z0-9_]{1,48}$/D', $argv[5]);
     $lock = count($argv) === 3
-        && $argv[0] === '/usr/sbin/cryptsetup'
+        && $argv[0] === '/usr/local/modules/usr/sbin/cryptsetup'
         && $argv[1] === 'luksClose'
         && is_string($argv[2])
         && preg_match('/^edm_[a-zA-Z0-9_]{1,48}$/D', $argv[2]);
