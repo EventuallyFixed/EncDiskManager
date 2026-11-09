@@ -20,14 +20,19 @@ WD My Cloud EX4100 hardware.
 
 ## Blocking verification before enabling any executor
 
-1. **Executable location mismatch:** The legacy helper references
-   `/usr/local/modules/usr/sbin/cryptsetup`, while the new trusted binary
-   resolver and subprocess runner require `/usr/sbin/cryptsetup`. Verify the
-   real installed EX4100 path, root ownership, permissions, and any symlinks.
-   Do not relax the allowlist based on assumptions.
-2. **Web privilege boundary:** Verify the actual PHP-FPM effective UID,
-   process isolation, application path ownership and private data permissions
-   on the target NAS. Running web PHP as root requires explicit threat review.
+1. **Executable location and trust mismatch (partially verified on EX4100):**
+   `/usr/sbin/cryptsetup` is a root-owned symlink to the root-owned executable
+   `/usr/local/modules/usr/sbin/cryptsetup` (mode 0755). The current trust
+   function rejects the symlink. Before changing the resolver, review a
+   canonical-path-only policy, all ancestor directory ownership/permissions,
+   and any executable replacement or path-race risks. Do not permit arbitrary
+   symlink traversal or unverified binary overrides.
+2. **Web privilege boundary (root confirmed):** The read-only EX4100 inventory
+   reported four PHP-FPM processes with real/effective/saved UID 0 and GID 0.
+   PHP CLI is 7.4.33 (also UID 0); Linux is 4.14.22-armada-18.09.3 on armv7l.
+   Root PHP-FPM is a high-impact execution boundary: review process isolation,
+   application path ownership, session/CSRF handling and private data security
+   before enabling any privileged action.
 3. **Execution-time identity:** A future executor must revalidate the target
    identity and action-specific state while holding the same lock immediately
    before execution, then verify the resulting state. A preview result must
@@ -35,9 +40,10 @@ WD My Cloud EX4100 hardware.
 4. **Process lifecycle:** Review `proc_open` array argv support, PHP version,
    signal handling, child reaping, and timeout behavior on WD OS5/armhf.
    The subprocess runner currently has no hardware-backed integration test.
-5. **Mount namespace and kernel state:** Confirm the mountinfo namespace
-   inspected by PHP matches the namespace where any future mount/unmount
-   subprocess operates. Verify USB identity, mapper identity and mount state
+5. **Mount namespace and kernel state:** All four reported PHP-FPM processes
+   share mount namespace `mnt:[4026531840]`. Confirm the namespace inspected
+   by PHP matches the namespace where any future mount/unmount subprocess
+   operates. Verify USB identity, mapper identity and mount state
    against real non-destructive EX4100 observations.
 6. **Credential handling:** Define a secure, non-logged passphrase/key
    transport and ensure no secrets appear in argv, environment, HTTP response,
