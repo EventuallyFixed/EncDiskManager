@@ -9,6 +9,18 @@ require_once __DIR__ . '/operation_target_state.php';
 require_once __DIR__ . '/authoritative_usb_discovery.php';
 require_once __DIR__ . '/kernel_mapper_discovery.php';
 
+function edm_verified_mountinfo_snapshot($lines)
+{
+    if (!is_array($lines)) return false;
+    foreach ($lines as $line) {
+        if (!is_string($line)
+            || !preg_match('/^[0-9]+ [0-9]+ [0-9]+:[0-9]+ \\S+ \\S+ \\S+ .* - \\S+ \\S+ \\S+/', $line)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 function edm_verified_target_state_probe($uuid, $discoverUsb, $discoverMappers, $readMounts)
 {
     if (!is_callable($discoverUsb) || !is_callable($discoverMappers)
@@ -21,14 +33,14 @@ function edm_verified_target_state_probe($uuid, $discoverUsb, $discoverMappers, 
         $firstMounts = call_user_func($readMounts);
         // A missing or malformed mountinfo snapshot must not be interpreted
         // as "nothing mounted", even if no mapper appears in this snapshot.
-        if (!is_array($firstMounts)) return null;
+        if (!edm_verified_mountinfo_snapshot($firstMounts)) return null;
         $first = edm_operation_target_state($bound, $firstUsb, $firstMappers, $firstMounts);
         if ($first === null) return null;
         $secondUsb = call_user_func($discoverUsb);
         if (!edm_operation_target_still_matches($bound, $secondUsb)) return null;
         $secondMappers = call_user_func($discoverMappers);
         $secondMounts = call_user_func($readMounts);
-        if (!is_array($secondMounts)) return null;
+        if (!edm_verified_mountinfo_snapshot($secondMounts)) return null;
         $second = edm_operation_target_state($bound, $secondUsb, $secondMappers, $secondMounts);
         if ($second === null || $first !== $second
             || $firstMappers !== $secondMappers || $firstMounts !== $secondMounts) return null;
