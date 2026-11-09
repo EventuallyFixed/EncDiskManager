@@ -15,7 +15,7 @@ foreach (array(
     'edm_auth_is_https()' => 'Derives HTTPS from server context',
     'edm_auth_is_authenticated()' => 'Uses the real administrator check',
     "\$_SESSION['csrf_token']" => 'Reads the session CSRF secret',
-    'edm_operation_preview_form_request($_POST)' => 'Parses only POST fields',
+    'edm_operation_preview_decision(' => 'Applies strict form and HTTP decision policy',
     'edm_with_authorized_operation_inspection(' => 'Uses combined locked inspection',
     "'execution_enabled' => false" => 'Execution is always disabled'
 ) as $needle => $label) {
