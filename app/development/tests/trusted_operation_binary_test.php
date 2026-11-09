@@ -11,3 +11,10 @@ check_binary(!edm_trusted_operation_binary('/bin/../bin/mount'),
     'Path traversal not allowed');
 check_binary(!edm_trusted_operation_binary('/tmp/mount'),
     'Untrusted directory not allowed');
+
+check_binary(!edm_trusted_operation_binary('/tmp/cryptsetup'),
+    'Untrusted cryptsetup path rejected');
+check_binary(!edm_trusted_operation_binary('/usr/sbin/../sbin/cryptsetup'),
+    'Cryptsetup path traversal rejected');
+check_binary(!edm_trusted_operation_binary('/sbin/cryptsetup'),
+    'Unreviewed cryptsetup alias rejected');
