@@ -18,3 +18,8 @@ check_binary(!edm_trusted_operation_binary('/usr/sbin/../sbin/cryptsetup'),
     'Cryptsetup path traversal rejected');
 check_binary(!edm_trusted_operation_binary('/sbin/cryptsetup'),
     'Unreviewed cryptsetup alias rejected');
+
+check_binary(!edm_trusted_operation_binary('/usr/sbin/cryptsetup'),
+    'Reject EX4100 symlink alias even when canonical executable is trusted');
+check_binary(!edm_trusted_operation_binary('/usr/local/modules/usr/sbin/../sbin/cryptsetup'),
+    'Reject path traversal within vendor module tree');
