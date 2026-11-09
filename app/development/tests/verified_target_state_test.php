@@ -99,3 +99,19 @@ foreach (array(1, 2) as $badPass) {
     check_verified_state($inspected === null && $mountReads === $badPass,
         'Malformed mountinfo on verification pass ' . $badPass . ' fails closed');
 }
+
+$duplicateMounts = array(
+    '20 1 253:2 / /mnt/usb rw - ext4 /dev/mapper/alias rw',
+    '020 1 8:17 / /mnt/other rw - ext4 /dev/sdb1 rw'
+);
+check_verified_state(!edm_verified_mountinfo_snapshot($duplicateMounts),
+    'Duplicate mount IDs, including leading-zero aliases, are rejected');
+check_verified_state(edm_verified_target_state_probe($uuid,
+    function () use ($usb) { return $usb; },
+    function () use ($lockedMappers) { return $lockedMappers; },
+    function () use ($duplicateMounts) { return $duplicateMounts; }) === null,
+    'Duplicate mount IDs fail closed before operation inspection');
+check_verified_state(edm_verified_mountinfo_snapshot(array(
+    '20 1 253:2 / /mnt/usb rw - ext4 /dev/mapper/alias rw',
+    '21 1 8:17 / /mnt/other rw - ext4 /dev/sdb1 rw'
+)), 'Distinct mount IDs remain accepted');
