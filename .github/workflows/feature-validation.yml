@@ -42,13 +42,9 @@ jobs:
       - name: Run isolated root-only registry and discovery tests
         run: |
           set -eu
-          for test in \
-            app/development/tests/registered_operation_inspection_test.php \\
-            app/development/tests/authorized_operation_inspection_test.php \\
-            app/development/tests/authorized_operation_discovery_failure_test.php; do
-            echo "Running as root: $test"
-            sudo php "$test"
-          done
+          sudo php app/development/tests/registered_operation_inspection_test.php
+          sudo php app/development/tests/authorized_operation_inspection_test.php
+          sudo php app/development/tests/authorized_operation_discovery_failure_test.php
 
   browser-regression:
     runs-on: ubuntu-latest
