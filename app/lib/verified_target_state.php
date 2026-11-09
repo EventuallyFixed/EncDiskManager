@@ -14,7 +14,7 @@ function edm_verified_mountinfo_snapshot($lines)
     if (!is_array($lines)) return false;
     foreach ($lines as $line) {
         if (!is_string($line)
-            || !preg_match('/^[0-9]+ [0-9]+ [0-9]+:[0-9]+ \\S+ \\S+ \\S+ .* - \\S+ \\S+ \\S+/', $line)) {
+            || !preg_match('/^[0-9]+ [0-9]+ [0-9]+:[0-9]+ \\S+ \\S+ \\S+(?: [^ ]+)* - \\S+ \\S+ \\S+/', $line)) {
             return false;
         }
     }
