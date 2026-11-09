@@ -85,3 +85,17 @@ foreach (array(
     check_verified_state(!edm_verified_mountinfo_snapshot(array($badMountinfo)),
         'Reject incomplete or malformed mountinfo field structure');
 }
+
+foreach (array(1, 2) as $badPass) {
+    $mountReads = 0;
+    $inspected = edm_verified_target_state_probe($uuid,
+        function () use ($usb) { return $usb; },
+        function () use ($lockedMappers) { return $lockedMappers; },
+        function () use (&$mountReads, $badPass, $mounts) {
+            ++$mountReads;
+            return $mountReads === $badPass
+                ? array('incomplete mountinfo') : $mounts;
+        });
+    check_verified_state($inspected === null && $mountReads === $badPass,
+        'Malformed mountinfo on verification pass ' . $badPass . ' fails closed');
+}
