@@ -5,10 +5,10 @@ function check_secret($ok, $label) {
     echo "PASS: $label\n";
 }
 $plan = array('action' => 'unlock', 'argv' => array(
-    '/usr/sbin/cryptsetup', 'luksOpen', '/dev/sdb1', 'edm_backup'));
+    '/usr/local/modules/usr/sbin/cryptsetup', 'luksOpen', '/dev/sdb1', 'edm_backup'));
 $stdin = edm_luks_stdin_command($plan);
 check_secret($stdin !== null && $stdin['argv'] === array(
-    '/usr/sbin/cryptsetup', 'luksOpen', '--key-file', '-',
+    '/usr/local/modules/usr/sbin/cryptsetup', 'luksOpen', '--key-file', '-',
     '/dev/sdb1', 'edm_backup'), 'Unlock uses explicit stdin key input');
 check_secret($stdin['secret_channel'] === 'stdin'
     && $stdin['secret_in_argv'] === false && $stdin['shell'] === false,
@@ -29,3 +29,8 @@ $bad = $plan;
 $bad['action'] = 'lock';
 check_secret(edm_luks_stdin_command($bad) === null,
     'Reject Lock through secret input channel');
+
+$bad = $plan;
+$bad['argv'][0] = '/usr/sbin/cryptsetup';
+check_secret(edm_luks_stdin_command($bad) === null,
+    'Reject EX4100 symlink alias in Unlock stdin plan');
