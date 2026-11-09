@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/trusted_operation_binary.php';
 /**
  * Restricted cryptsetup subprocess runner. Not wired to any web endpoint.
  * The caller must hold the shared disk-operation lock and independently
@@ -28,6 +29,8 @@ function edm_luks_subprocess($argv, $secret = null, $timeoutSeconds = 30)
         && is_string($argv[2])
         && preg_match('/^edm_[a-zA-Z0-9_]{1,48}$/D', $argv[2]);
     if (!$unlock && !$lock) return false;
+    // Validate the executable itself, not just the literal argv path.
+    if (!edm_trusted_operation_binary($argv[0])) return false;
     if ($unlock && (!is_string($secret) || $secret === '' || strlen($secret) > 4096))
         return false;
     if ($lock && $secret !== null) return false;
