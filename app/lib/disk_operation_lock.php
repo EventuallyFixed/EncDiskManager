@@ -38,6 +38,18 @@ function edm_with_disk_operation_lock($dataDirectory, $callback)
         if (!flock($handle, LOCK_EX)) {
             throw new RuntimeException('Disk-operation lock cannot be acquired.');
         }
+        // The path could have been replaced between the initial link check
+        // and fopen(), or while waiting for the lock. Reject a different inode.
+        clearstatcache(true, $path);
+        $pathStat = @lstat($path);
+        $lockedStat = @fstat($handle);
+        if ($pathStat === false || $lockedStat === false
+            || ($pathStat['mode'] & 0170000) !== 0100000
+            || $pathStat['uid'] !== 0 || ($pathStat['mode'] & 0777) !== 0600
+            || $pathStat['dev'] !== $lockedStat['dev']
+            || $pathStat['ino'] !== $lockedStat['ino']) {
+            throw new RuntimeException('Disk-operation lock path changed or is unsafe.');
+        }
         return call_user_func($callback);
     } finally {
         flock($handle, LOCK_UN);
