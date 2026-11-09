@@ -20,3 +20,6 @@ check_runner(edm_luks_subprocess(array('/usr/sbin/cryptsetup', 'luksOpen',
     'Reject oversized secret');
 check_runner(edm_luks_subprocess(array('/usr/sbin/cryptsetup', 'luksClose',
     'edm_backup'), null, 0) === false, 'Reject invalid timeout');
+
+check_runner(edm_luks_subprocess(array('/usr/sbin/cryptsetup', 'luksClose',
+    'edm_backup')) === false, 'Reject vendor symlink alias at execution boundary');
