@@ -22,11 +22,12 @@ WD My Cloud EX4100 hardware.
 
 1. **Executable location and trust mismatch (partially verified on EX4100):**
    `/usr/sbin/cryptsetup` is a root-owned symlink to the root-owned executable
-   `/usr/local/modules/usr/sbin/cryptsetup` (mode 0755). The current trust
-   function rejects the symlink. Before changing the resolver, review a
-   canonical-path-only policy, all ancestor directory ownership/permissions,
-   and any executable replacement or path-race risks. Do not permit arbitrary
-   symlink traversal or unverified binary overrides.
+   `/usr/local/modules/usr/sbin/cryptsetup` (mode 0755). The feature-branch
+   resolver, allowlist, and subprocess argv checks now use only the explicit
+   canonical module path and continue rejecting symlinks. Still verify all
+   ancestor directory ownership/permissions and review executable replacement
+   or path-race risks before enabling execution. This is not an approval to
+   invoke cryptsetup.
 2. **Web privilege boundary (root confirmed):** The read-only EX4100 inventory
    reported four PHP-FPM processes with real/effective/saved UID 0 and GID 0.
    PHP CLI is 7.4.33 (also UID 0); Linux is 4.14.22-armada-18.09.3 on armv7l.
