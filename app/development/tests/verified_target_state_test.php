@@ -115,3 +115,13 @@ check_verified_state(edm_verified_mountinfo_snapshot(array(
     '20 1 253:2 / /mnt/usb rw - ext4 /dev/mapper/alias rw',
     '21 1 8:17 / /mnt/other rw - ext4 /dev/sdb1 rw'
 )), 'Distinct mount IDs remain accepted');
+
+$mountReads = 0;
+check_verified_state(edm_verified_target_state_probe($uuid,
+    function () use ($usb) { return $usb; },
+    function () use ($lockedMappers) { return $lockedMappers; },
+    function () use (&$mountReads, $duplicateMounts, $mounts) {
+        ++$mountReads;
+        return $mountReads === 1 ? $mounts : $duplicateMounts;
+    }) === null && $mountReads === 2,
+    'Duplicate mount IDs on second verification pass fail closed');
