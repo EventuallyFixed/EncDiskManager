@@ -6,6 +6,8 @@
  * USB partition identity, cryptsetup binary, and private keyfile immediately
  * before this call. No secret bytes enter argv, logs, or process output.
  */
+require_once __DIR__ . '/trusted_operation_binary.php';
+
 function edm_luks_keyslot_subprocess($plan, $secret, $timeoutSeconds = 30)
 {
     if (!function_exists('posix_geteuid') || posix_geteuid() !== 0
@@ -21,13 +23,13 @@ function edm_luks_keyslot_subprocess($plan, $secret, $timeoutSeconds = 30)
         && $plan['stdin'] === 'secret'
         && count($argv) === 8
         && array_slice($argv, 0, 7) === array(
-            '/usr/sbin/cryptsetup', 'open', '--test-passphrase',
+            '/usr/local/modules/usr/sbin/cryptsetup', 'open', '--test-passphrase',
             '--type', 'luks1', '--key-file', '-');
     $add = $plan['action'] === 'add-key'
         && $plan['stdin'] === 'recovery-secret'
         && count($argv) === 8
         && array_slice($argv, 0, 6) === array(
-            '/usr/sbin/cryptsetup', 'luksAddKey',
+            '/usr/local/modules/usr/sbin/cryptsetup', 'luksAddKey',
             '--type', 'luks1', '--key-file', '-')
         && is_string($argv[7])
         && preg_match('#^/[^[:cntrl:]]+/keys/[a-f0-9]{32}\\.key$#D', $argv[7]);
@@ -35,6 +37,8 @@ function edm_luks_keyslot_subprocess($plan, $secret, $timeoutSeconds = 30)
     if (!isset($argv[7 - ($add ? 1 : 0)]) || !is_string($argv[7 - ($add ? 1 : 0)])
         || !preg_match('#^/dev/sd[a-z]+[0-9]+$#D', $argv[7 - ($add ? 1 : 0)]))
         return false;
+    // Check the canonical executable and every ancestor immediately before launch.
+    if (!edm_trusted_operation_binary($argv[0])) return false;
     $pipes = array();
     $proc = @proc_open($argv, array(
         0 => array('pipe', 'r'),
