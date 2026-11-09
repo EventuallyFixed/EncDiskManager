@@ -55,3 +55,16 @@ WD My Cloud EX4100 hardware.
 Do not merge, package, deploy, tag or enable privileged execution until the
 above checks are resolved, regression CI passes, and hardware-specific
 authorization is separately given. Stable v0.5.5 on `main` remains untouched.
+
+## Read-only EX4100 inventory procedure
+
+A non-mutating diagnostic script is available at
+`app/development/ex4100-readonly-inventory.sh`. Review the script before
+running it manually on the NAS with `sh`; it does not need to be installed
+as an application component. It prints executable path metadata, PHP CLI
+version and UID, and readable PHP-FPM process UIDs and mount namespace IDs.
+It does **not** run cryptsetup, mount, umount, or any disk operation.
+
+Do not assume the PHP CLI UID matches PHP-FPM worker identity. The inventory
+does not establish filesystem or disk-operation readiness by itself.
+Review its output locally; redact any identifying host details before sharing.
