@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/trusted_operation_binary.php';
 /**
  * Resolve a trusted, system-installed cryptsetup executable.
  * No PATH lookup, user-controlled override, symlinks or shell invocation.
@@ -11,13 +12,8 @@ function edm_resolve_cryptsetup_binary($candidates = null)
     }
     if (!is_array($candidates) || !$candidates) return null;
     foreach ($candidates as $path) {
-        if (!is_string($path)
-            || !in_array($path, array('/usr/sbin/cryptsetup'), true)
-            || is_link($path) || !is_file($path) || !is_executable($path)) continue;
-        $stat = @stat($path);
-        if (!is_array($stat) || $stat['uid'] !== 0
-            || ($stat['mode'] & 0022) !== 0
-            || (($stat['mode'] & 0170000) !== 0100000)) continue;
+        if (!is_string($path) || $path !== '/usr/sbin/cryptsetup'
+            || !edm_trusted_operation_binary($path)) continue;
         return $path;
     }
     return null;
