@@ -17,7 +17,7 @@ function edm_luks_execution_preflight($action, $state, $mapperName = null,
     if (!is_callable($binaryResolver)) return null;
     try {
         $binary = call_user_func($binaryResolver);
-        if ($binary !== '/usr/sbin/cryptsetup') return null;
+        if ($binary !== '/usr/local/modules/usr/sbin/cryptsetup') return null;
         $plan = edm_luks_command_plan($action, $state, $mapperName);
         if ($plan === null) return null;
         $bound = edm_bind_cryptsetup_binary($plan, $binary);
