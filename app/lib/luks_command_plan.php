@@ -20,7 +20,7 @@ function edm_luks_command_plan($action, $state, $mapperName = null)
             || !isset($state['mapper_open']) || $state['mapper_open'] !== false) return null;
         return array(
             'action' => 'unlock',
-            'argv' => array('/usr/sbin/cryptsetup', 'luksOpen',
+            'argv' => array('/usr/local/modules/usr/sbin/cryptsetup', 'luksOpen',
                 '/dev/' . $state['name'], $mapperName),
             'target_uuid' => strtolower($state['uuid']),
             'target_dev_id' => $state['dev_id'],
@@ -41,7 +41,7 @@ function edm_luks_command_plan($action, $state, $mapperName = null)
             || !preg_match('/^[0-9]+:[0-9]+$/D', $state['mapper_dev_id'])) return null;
         return array(
             'action' => 'lock',
-            'argv' => array('/usr/sbin/cryptsetup', 'luksClose', $state['mapper_name']),
+            'argv' => array('/usr/local/modules/usr/sbin/cryptsetup', 'luksClose', $state['mapper_name']),
             'target_uuid' => strtolower($state['uuid']),
             'target_dev_id' => $state['dev_id'],
             'mapper_dev_id' => $state['mapper_dev_id']
