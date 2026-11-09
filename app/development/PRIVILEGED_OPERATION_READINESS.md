@@ -75,3 +75,13 @@ It does **not** run cryptsetup, mount, umount, or any disk operation.
 Do not assume the PHP CLI UID matches PHP-FPM worker identity. The inventory
 does not establish filesystem or disk-operation readiness by itself.
 Review its output locally; redact any identifying host details before sharing.
+
+## Keyslot mutation gate
+
+The restricted keyslot subprocess explicitly rejects `add-key`, even when
+its command shape is valid. The keyslot planner and private-key binding are
+non-executing preparation only. Before this gate can be removed, implement
+and test a privileged caller that holds the shared disk lock, proves current
+USB device identity and LUKS1 UUID, validates the private keyfile and its
+ancestor paths, binds recovery credentials securely, and verifies the
+postcondition. Passing CI alone does not authorize keyslot mutation.
