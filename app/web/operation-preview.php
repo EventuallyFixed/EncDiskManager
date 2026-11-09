@@ -6,7 +6,7 @@
  */
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/authorized_operation_inspection.php';
-require_once __DIR__ . '/../lib/operation_preview_form_request.php';
+require_once __DIR__ . '/../lib/operation_preview_decision.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -19,24 +19,17 @@ try {
     $https = edm_auth_is_https();
     $authenticated = edm_auth_is_authenticated();
     $expectedCsrf = isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : null;
-    $postedCsrf = isset($_POST['csrf_token']) ? $_POST['csrf_token'] : null;
-    if (!edm_privileged_web_request_authorized($method, $https,
-        $authenticated, $expectedCsrf, $postedCsrf)) {
-        http_response_code(403);
-        echo json_encode(array('eligible' => false, 'execution_enabled' => false));
-        exit;
-    }
-    $input = edm_operation_preview_form_request($_POST);
-    if ($input === null) {
-        http_response_code(400);
-        echo json_encode(array('eligible' => false, 'execution_enabled' => false));
-        exit;
-    }
-    $eligible = edm_with_authorized_operation_inspection(
-        edm_auth_data_path(), $method, $https, $authenticated,
-        $expectedCsrf, $postedCsrf, $input,
-        function ($request, $state) { return true; }) === true;
-    echo json_encode(array('eligible' => $eligible, 'execution_enabled' => false));
+    $decision = edm_operation_preview_decision($method, $https,
+        $authenticated, $expectedCsrf, $_POST,
+        function ($input) use ($method, $https, $authenticated, $expectedCsrf) {
+            $postedCsrf = $_POST['csrf_token'];
+            return edm_with_authorized_operation_inspection(
+                edm_auth_data_path(), $method, $https, $authenticated,
+                $expectedCsrf, $postedCsrf, $input,
+                function ($request, $state) { return true; }) === true;
+        });
+    http_response_code($decision['status']);
+    echo json_encode($decision['body']);
 } catch (Throwable $exception) {
     // No disk paths, request data, secrets or exception details in the response.
     http_response_code(503);
