@@ -72,3 +72,16 @@ check_verified_state(edm_verified_target_state_probe($uuid,
     function () use ($lockedMappers) { return $lockedMappers; },
     function () { return array('malformed mountinfo'); }) === null,
     'Malformed mountinfo fails closed even when no mapper is open');
+
+check_verified_state(edm_verified_mountinfo_snapshot(array(
+    '20 1 253:2 / /mnt/usb rw shared:1 - ext4 /dev/mapper/alias rw')),
+    'Mountinfo optional fields accepted');
+foreach (array(
+    '20 1 253:2 / /mnt/usb rw - ext4 /dev/mapper/alias',
+    '20 1 253:2 / /mnt/usb rw - ext4 /dev/mapper/alias rw garbage',
+    '20 1 bad / /mnt/usb rw - ext4 /dev/mapper/alias rw',
+    '20 1 253:2 / /mnt/usb rw  - ext4 /dev/mapper/alias rw'
+) as $badMountinfo) {
+    check_verified_state(!edm_verified_mountinfo_snapshot(array($badMountinfo)),
+        'Reject incomplete or malformed mountinfo field structure');
+}
