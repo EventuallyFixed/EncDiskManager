@@ -17,6 +17,9 @@ function edm_luks_keyslot_subprocess($plan, $secret, $timeoutSeconds = 30)
         || $secret === '' || strlen($secret) > 4096
         || !is_int($timeoutSeconds) || $timeoutSeconds < 1 || $timeoutSeconds > 120)
         return false;
+    // Keyslot mutation is not yet wired to an identity- and keyfile-verified
+    // privileged executor. Fail closed even for otherwise well-formed plans.
+    if ($plan['action'] === 'add-key') return false;
     $argv = $plan['argv'];
     // Verification plans have the device as the eighth operand.
     $verify = in_array($plan['action'], array('verify-recovery', 'verify-new-key'), true)
