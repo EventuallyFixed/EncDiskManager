@@ -13,9 +13,17 @@ function edm_verified_mountinfo_snapshot($lines)
 {
     if (!is_array($lines)) return false;
     foreach ($lines as $line) {
-        if (!is_string($line)
-            || !preg_match('/^[0-9]+ [0-9]+ [0-9]+:[0-9]+ \\S+ \\S+ \\S+(?: [^ ]+)* - \\S+ \\S+ \\S+/', $line)) {
-            return false;
+        if (!is_string($line) || $line === '' || trim($line) !== $line) return false;
+        $fields = explode(' ', $line);
+        $separator = array_search('-', $fields, true);
+        // mountinfo has six fixed fields, zero or more optional fields,
+        // then a separator and at least three filesystem-specific fields.
+        if ($separator === false || $separator < 6
+            || count($fields) < $separator + 4
+            || !ctype_digit($fields[0]) || !ctype_digit($fields[1])
+            || !preg_match('/^[0-9]+:[0-9]+$/D', $fields[2])) return false;
+        foreach ($fields as $field) {
+            if ($field === '') return false;
         }
     }
     return true;
