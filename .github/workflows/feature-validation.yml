@@ -30,6 +30,26 @@ jobs:
             php "$test"
           done
 
+  root-authorization-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Run isolated root-only registry and discovery tests
+        run: |
+          set -eu
+          for test in \
+            app/development/tests/registered_operation_inspection_test.php \\
+            app/development/tests/authorized_operation_inspection_test.php \\
+            app/development/tests/authorized_operation_discovery_failure_test.php; do
+            echo "Running as root: $test"
+            sudo php "$test"
+          done
+
   browser-regression:
     runs-on: ubuntu-latest
     steps:
