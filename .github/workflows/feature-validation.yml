@@ -42,6 +42,7 @@ jobs:
       - name: Run isolated root-only registry and discovery tests
         run: |
           set -eu
+          sudo php -r 'if (!function_exists("posix_geteuid") || posix_geteuid() !== 0) { fwrite(STDERR, "Root-required tests cannot run\\n"); exit(1); }'
           sudo php app/development/tests/registered_operation_inspection_test.php
           sudo php app/development/tests/authorized_operation_inspection_test.php
           sudo php app/development/tests/authorized_operation_discovery_failure_test.php
