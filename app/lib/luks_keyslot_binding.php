@@ -16,7 +16,7 @@ function edm_luks_keyslot_bind_private_key($plan, $dataDirectory, $uuid)
         || $plan['action'] !== 'add-key'
         || $plan['stdin'] !== 'recovery-secret'
         || !is_array($plan['argv']) || count($plan['argv']) !== 8
-        || $plan['argv'][0] !== '/usr/sbin/cryptsetup'
+        || $plan['argv'][0] !== '/usr/local/modules/usr/sbin/cryptsetup'
         || $plan['argv'][1] !== 'luksAddKey'
         || $plan['argv'][2] !== '--type'
         || $plan['argv'][3] !== 'luks1'
