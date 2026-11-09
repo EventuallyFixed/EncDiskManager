@@ -6,6 +6,7 @@
  */
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/authorized_operation_inspection.php';
+require_once __DIR__ . '/../lib/operation_preview_form_request.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -25,17 +26,8 @@ try {
         echo json_encode(array('eligible' => false, 'execution_enabled' => false));
         exit;
     }
-    // Explicit field construction prevents csrf_token and transport metadata
-    // from becoming extra fields in the strict operation request.
-    $input = array(
-        'action' => isset($_POST['action']) ? $_POST['action'] : null,
-        'luks_uuid' => isset($_POST['luks_uuid']) ? $_POST['luks_uuid'] : null
-    );
-    // Reject all other posted fields, even when the two required ones are valid.
-    if (count($_POST) !== 3
-        || !array_key_exists('csrf_token', $_POST)
-        || !array_key_exists('action', $_POST)
-        || !array_key_exists('luks_uuid', $_POST)) {
+    $input = edm_operation_preview_form_request($_POST);
+    if ($input === null) {
         http_response_code(400);
         echo json_encode(array('eligible' => false, 'execution_enabled' => false));
         exit;
