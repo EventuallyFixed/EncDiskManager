@@ -12,6 +12,7 @@ require_once __DIR__ . '/kernel_mapper_discovery.php';
 function edm_verified_mountinfo_snapshot($lines)
 {
     if (!is_array($lines)) return false;
+    $seenMountIds = array();
     foreach ($lines as $line) {
         if (!is_string($line) || $line === '' || trim($line) !== $line) return false;
         $fields = explode(' ', $line);
@@ -25,6 +26,12 @@ function edm_verified_mountinfo_snapshot($lines)
         foreach ($fields as $field) {
             if ($field === '') return false;
         }
+        // Mount IDs are unique within a mount namespace. Duplicate IDs make
+        // the snapshot ambiguous and must not authorize disk operations.
+        $mountId = ltrim($fields[0], '0');
+        if ($mountId === '') $mountId = '0';
+        if (isset($seenMountIds[$mountId])) return false;
+        $seenMountIds[$mountId] = true;
     }
     return true;
 }
