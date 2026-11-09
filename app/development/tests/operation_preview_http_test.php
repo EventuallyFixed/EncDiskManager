@@ -64,16 +64,19 @@ try {
             'luks_uuid' => $uuid, 'device' => '/dev/sda',
             'csrf_token' => str_repeat('a', 64))))
     );
+    // A missing administrator session must reject even syntactically valid
+    // forms before any registry or live device access.
     foreach ($cases as $i => $case) {
         $result = preview_http_request($port, $case[0], $case[1]);
         check_preview_http(is_array($result)
-            && in_array($result['status'], array(400, 403, 503), true)
+            && $result['status'] === 403
             && $result['body'] === array('eligible' => false,
                 'execution_enabled' => false),
             'Unauthenticated HTTP request fails closed: ' . ($i + 1));
         $headerText = implode("\n", $result['headers']);
         check_preview_http(stripos($headerText, 'Cache-Control: no-store') !== false
-            && stripos($headerText, 'X-Content-Type-Options: nosniff') !== false,
+            && stripos($headerText, 'X-Content-Type-Options: nosniff') !== false
+            && stripos($headerText, 'X-Frame-Options: DENY') !== false,
             'Security headers present: ' . ($i + 1));
     }
 } finally {
