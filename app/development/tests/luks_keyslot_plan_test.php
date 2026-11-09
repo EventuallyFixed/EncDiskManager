@@ -7,7 +7,7 @@ function keyslot_assert($ok, $message) {
 $p = edm_luks_keyslot_plan('verify-recovery', 'sdb1');
 keyslot_assert(is_array($p) && $p['stdin'] === 'secret',
     'Recovery verification uses secret stdin');
-keyslot_assert($p['argv'][0] === '/usr/sbin/cryptsetup'
+keyslot_assert($p['argv'][0] === '/usr/local/modules/usr/sbin/cryptsetup'
     && in_array('--test-passphrase', $p['argv'], true)
     && in_array('luks1', $p['argv'], true),
     'Fixed LUKS1 verification argv');
