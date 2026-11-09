@@ -10,7 +10,7 @@ function check_preview_source($ok, $label) {
 $source = file_get_contents(__DIR__ . '/../../web/operation-preview.php');
 check_preview_source(is_string($source), 'Preview endpoint source available');
 check_preview_source(strpos($source, 'edm_auth_start_session()') !== false
-    && strpos($source, 'edm_privileged_web_request_authorized(') !== false,
+    && strpos($source, 'edm_operation_preview_decision(') !== false,
     'Session and web authorization required');
 check_preview_source(strpos($source, 'edm_with_authorized_operation_inspection(') !== false,
     'Registry and live-state inspection required');
@@ -19,5 +19,6 @@ foreach (array('proc_open(', 'shell_exec(', 'system(', 'passthru(', 'exec(',
     check_preview_source(strpos($source, $unsafe) === false,
         'Preview contains no direct executor: ' . $unsafe);
 }
-check_preview_source(strpos($source, "'execution_enabled' => false") !== false,
+$policy = file_get_contents(__DIR__ . '/../../lib/operation_preview_decision.php');
+check_preview_source(strpos($policy, "'execution_enabled' => false") !== false,
     'Preview explicitly reports execution disabled');
