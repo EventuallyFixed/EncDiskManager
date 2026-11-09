@@ -27,3 +27,11 @@ check_binary(edm_bind_cryptsetup_binary($bad, '/usr/sbin/cryptsetup') === null,
 
 check_binary(edm_bind_cryptsetup_binary($plan, '/sbin/cryptsetup') === null,
     'Reject legacy fallback executable path');
+
+// Resolution must use the same full-path trust policy as subprocess execution.
+$trusted = edm_trusted_operation_binary('/usr/sbin/cryptsetup');
+$resolved = edm_resolve_cryptsetup_binary(array('/usr/sbin/cryptsetup'));
+check_binary(($resolved === '/usr/sbin/cryptsetup') === $trusted,
+    'Resolver agrees with executable and parent-directory trust checks');
+check_binary(edm_resolve_cryptsetup_binary(array('/bin/mount')) === null,
+    'Cryptsetup resolver rejects a different trusted executable');
