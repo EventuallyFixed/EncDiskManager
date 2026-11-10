@@ -46,3 +46,31 @@ so invoking it independently would not establish safe serialization.
 
 The existing native marker helper is **not** a lock-aware executor. This
 document is a design boundary, not a claim that these tests have passed.
+
+## EX4100 fixed-path trust model (design only)
+
+The user has chosen to retain
+`/mnt/HD/HD_a2/Nas_Prog/_EncDiskManager`. Read-only inventory shows
+`/mnt/HD/HD_a2` and `Nas_Prog` are root-owned **0777**, while the
+private directory is root-owned **0700**. No listed SMB share points
+directly at `Nas_Prog`; this does not eliminate local rename attacks.
+
+A future implementation should start from a trusted directory FD and
+traverse each path component with `openat(O_DIRECTORY|O_NOFOLLOW)`,
+checking directory type, ownership, and expected device/mount boundary.
+Use descriptor-relative `openat`/`fstatat` for lock and marker files,
+and compare open inode identities to the expected pathname under the
+same trusted context. A stable opened FD protects operations on that
+opened inode but **does not guarantee** that the pathname continues to
+refer to it. Re-check identity at critical transitions and fail closed
+on mismatches.
+
+**Fundamental unresolved risk:** a non-root local process with write
+permission on `Nas_Prog` can replace the private directory entry
+between checks. No sequence of pathname checks can turn a
+world-writable, non-sticky parent into a trusted namespace. Production
+authorization requires a separately reviewed mechanism that prevents
+or reliably contains this replacement risk, or an explicit redesign
+of the security boundary. Do not silently chmod vendor directories,
+assume root-only SSH proves local isolation, or treat the absence of
+a direct SMB share as sufficient. Privileged operations remain BLOCKED.
