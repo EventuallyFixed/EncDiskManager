@@ -22,7 +22,7 @@ path=sys.argv[1]
 fd=os.open(path,os.O_RDWR)
 fcntl.flock(fd,fcntl.LOCK_EX)
 child=subprocess.Popen([sys.executable,"-c",sys.argv[2],str(fd)],
-    pass_fds=(fd),stdout=subprocess.PIPE,text=True,start_new_session=True)
+    pass_fds=(fd,),stdout=subprocess.PIPE,text=True,start_new_session=True)
 if child.stdout.readline().strip()!="CHILD_READY": sys.exit(3)
 print(child.pid,flush=True)
 child.stdout.close()
