@@ -312,3 +312,16 @@ NAS inventory of the dynamic linker, common libc paths, and
 USB disk contents. Review output before sharing host metadata. Compare
 with symbol-version requirements from the final cross-build before any
 runtime evaluation.
+
+### Observed EX4100 glibc and version gate
+
+User-supplied read-only NAS inventory confirms
+`/lib/ld-linux-armhf.so.3 -> ld-2.31.so`,
+`/lib/libc.so.6 -> libc-2.31.so`, and `glibc 2.31`.
+The absence of Debian multiarch library paths is expected for this
+firmware layout and is not itself an incompatibility.
+
+The ARM cross-compile CI now inspects ELF GLIBC symbol requirements
+and fails if a required version is newer than 2.31. This check does
+not prove complete runtime compatibility, but catches one common
+cross-toolchain mismatch before any on-device execution.
