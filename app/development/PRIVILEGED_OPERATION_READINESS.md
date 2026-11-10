@@ -421,3 +421,25 @@ This confirms descriptor 3 is visible to a child shell when explicitly
 mapped from a PHP stream via `proc_open` on EX4100 PHP 7.4.33.
 It does not prove inherited `flock` lifetime, inode authentication,
 or crash-safe coordination. No privileged operation is authorized.
+
+### EX4100 inherited lock lifetime result
+
+User-reported execution of
+`php app/development/tests/ex4100_php_inherited_lock_lifetime.php`:
+
+```text
+PASS: child received descriptor 3
+PASS: independent process blocked while parent holds lock
+PASS: child retains lock after parent closes descriptor
+PASS: lock released after child exit
+PHP: 7.4.33
+NOTE: temporary-file lifetime test only; no disk operations
+```
+
+This confirms the intended `flock` open-file-description lifetime
+behavior for a PHP `proc_open` child shell on the actual EX4100:
+closing the parent's copy does not unlock while the child retains
+the inherited descriptor, and the lock is released after child exit.
+The experiment does not test parent crashes, orphaned children,
+native helper lock-inode authentication, durable marker writes, or
+any privileged disk operation. Those integration gates remain blocked.
