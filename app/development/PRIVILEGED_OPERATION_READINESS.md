@@ -191,3 +191,36 @@ postcondition still requires recovery; do not clear on exit code alone.
 **Status: DESIGN ONLY.** No pending-record writer, state-clearance
 function, subprocess integration, or web executor is authorized by this
 section. Stable v0.5.5 and deployed NAS behavior must remain unchanged.
+
+### EX4100 persistence capability assessment (no disk-data sync feature)
+
+This section concerns only EncDiskManager's tiny internal safety journal,
+**not** copying, mirroring, or synchronizing user files on USB disks.
+
+On the target firmware, inspect the actual PHP CLI/FPM versions and whether
+`fsync`/`fdatasync` functions are available. PHP 7.4 normally lacks
+these stream functions; do not assume the NAS uses a newer PHP version.
+Also inspect whether the installed, trusted system utilities can durably
+sync a file **and its containing directory**. A plain `sync` command or
+`fflush` alone is not proof of the required ordering or crash safety.
+No helper is approved merely because a binary exists.
+
+Implementation options to evaluate, in order:
+1. A narrowly scoped, root-owned native helper using `openat` with
+   `O_NOFOLLOW|O_CLOEXEC`, exclusive file creation, complete writes,
+   `fsync(file)`, `fsync(directory)`, and explicit error reporting.
+   Audit and test its ownership, ancestor trust, argv policy, and
+   packaging for armhf before allowing it to be invoked.
+2. A supported PHP runtime providing reliable stream synchronization
+   and directory-entry persistence, if proven on the target firmware.
+3. If neither is viable, retain the operation-execution block and use
+   non-executing preview/registration functionality only.
+
+Do not use the USB device as journal storage: keep the internal safety
+record in the root-owned private NAS application data directory. A helper
+must never accept arbitrary paths from an HTTP request or run a disk
+command. A pending record must be durably committed before a child is
+launched, and clearing it must be an independently durable, reviewed
+transition after verified completion. Test failure injection, partial
+writes, power-loss/restart behavior and filesystem semantics separately.
+No EX4100 capability or durability has yet been verified by this design.
