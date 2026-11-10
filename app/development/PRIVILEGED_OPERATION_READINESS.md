@@ -125,3 +125,20 @@ A subsequent disk operation must be denied until the uncertainty is
 resolved by authoritative reconciliation. A plain boolean failure return
 does not enforce this requirement. Do not wire up execution while this
 boundary is unresolved.
+
+### Persistent recovery stop marker (partial safeguard)
+
+While holding `disk-operations.lock`, the lock wrapper now refuses to
+invoke callbacks if `disk-operation-recovery-required` exists in the
+private registry directory. A root-owned regular marker with mode 0600
+blocks operations; symlinks or unsafe marker metadata also fail closed.
+Regression tests exercise both paths. The marker is never automatically
+removed.
+
+**This is not a complete recovery implementation.** No subprocess currently
+writes the marker on uncertain termination, and there is no reviewed
+reconciliation or clearance workflow. A marker also does not by itself
+stop a child already running. Crash-safe marker creation and persistence,
+the process-to-operation binding, recovery verification, and preventing
+unresolved children from outliving lock ownership remain release blockers.
+Do not enable privileged execution on the strength of this guard alone.
