@@ -325,3 +325,15 @@ The ARM cross-compile CI now inspects ELF GLIBC symbol requirements
 and fails if a required version is newer than 2.31. This check does
 not prove complete runtime compatibility, but catches one common
 cross-toolchain mismatch before any on-device execution.
+
+### Critical ARM libc incompatibility found
+
+Although CI runs #240 and #241 were green, their ARM build logs
+explicitly showed `GLIBC_2.34` as a required symbol version. The
+EX4100 has glibc 2.31, so **the produced ARM binary is incompatible**.
+The initial grep-based version gate had an escaping bug and missed this
+requirement. The CI gate has been replaced with numeric parsing of
+`readelf --version-info` requirements; the next cross-compile must
+fail until the toolchain is changed or symbol requirements are reduced.
+Do not deploy or run the current binary on the NAS. Passing host-side
+tests does not override this incompatibility.
