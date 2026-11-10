@@ -635,3 +635,22 @@ symlink/wide-link behavior, or other local services. The root-owned
 untrusted local pathname replacement remains a design blocker.
 Keep state at the user-selected path and do not change NAS share or
 filesystem permissions without separate authorization.
+
+### EX4100 ext4 attribute inventory
+
+User-reported read-only filesystem inspection:
+- `/mnt/HD/HD_a2` is ext4 on `/dev/mapper/md1`, mounted
+  read/write with `noatime,nodiratime,nobarrier,quota,usrquota,grpquota,resgid=990,stripe=32,data=ordered`.
+- `lsattr -d` shows no special flags on `Nas_Prog` or
+  `_EncDiskManager`.
+- `/bin/lsattr` and `/bin/chattr` exist; `getfacl`,
+  `setfacl`, and `findmnt` were not reported.
+
+This confirms ext4 attribute tooling exists, **not** that immutable
+flags are appropriate or supported for the intended lifecycle.
+Marking `_EncDiskManager` immutable would prevent normal changes
+to directory entries inside it, and marking `Nas_Prog` immutable
+could disrupt WD application installation/removal. Do not set
+`chattr +i` or change filesystem attributes on the live NAS without
+a separate, reviewed compatibility and recovery plan. The
+world-writable ancestor threat remains unresolved.
