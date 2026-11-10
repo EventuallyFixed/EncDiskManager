@@ -558,3 +558,19 @@ Do not chmod/chown vendor-managed parent directories without an
 explicitly validated NAS compatibility plan. Design a trusted storage
 anchor and mount/identity policy first; keep native marker integration
 and all privileged disk operations **BLOCKED**.
+
+### EX4100 candidate trusted-anchor inspection (2026-11-10)
+
+User-reported read-only directory inspection:
+- `/var`, `/var/lib`, `/etc`, `/root`, and `/usr/local`:
+  root-owned (0:0), mode 0755, device 256.
+- `/tmp`: world-writable with sticky bit (1777); no device number
+  supplied in this inspection.
+
+`/var/lib` is a **candidate for further investigation only**, not
+an approved replacement for persistent recovery state. The read-only
+results do not establish reboot persistence, write policy, mount
+characteristics, capacity, upgrade behavior, or WD OS5 compatibility.
+Do not create state under these paths, relocate existing state, or
+alter vendor directory permissions until those questions are answered.
+Existing `Nas_Prog` writable ancestors remain a blocker.
