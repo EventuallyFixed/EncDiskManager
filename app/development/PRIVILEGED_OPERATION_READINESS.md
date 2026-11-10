@@ -457,3 +457,19 @@ crash experiment, review containment and cleanup of orphaned processes;
 the existing successful EX4100 temporary-file tests establish normal
 parent descriptor closure, not abnormal parent death. Privileged
 execution remains blocked.
+
+### Parent-crash test containment decision
+
+CI #271 passed all five jobs, including the isolated parent-crash
+test with PID, session and process-start-time checks. **Do not run this
+SIGKILL test on the EX4100 yet.** A `/proc/PID/stat` identity check
+followed by `kill(PID)` is not atomic; PID reuse can still occur between
+the check and signal. The current host test also does not provide a
+NAS-validated process supervision and cleanup mechanism.
+
+Prefer non-destructive EX4100 experiments already completed. Before any
+NAS-side abnormal-termination test, design a supervisor that owns and
+reaps the test child, guarantees bounded cleanup, and avoids signaling
+unverified PIDs. Consider kernel-supported PID handles only after
+verifying support on the actual EX4100 kernel. This remains a test
+containment issue, not authorization to integrate privileged operations.
