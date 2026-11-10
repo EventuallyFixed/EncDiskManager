@@ -41,12 +41,13 @@ jobs:
 
   native-helper-armhf-cross-compile:
     runs-on: ubuntu-latest
+    container: debian:bullseye
     steps:
       - uses: actions/checkout@v4
       - name: Install ARM hard-float cross-compiler
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-arm-linux-gnueabihf libc6-dev-armhf-cross file
+          apt-get update
+          apt-get install -y --no-install-recommends gcc-arm-linux-gnueabihf libc6-dev-armhf-cross file
       - name: Cross-compile only (no execution or artifact upload)
         run: |
           set -eu
