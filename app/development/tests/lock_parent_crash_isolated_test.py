@@ -49,28 +49,37 @@ with tempfile.TemporaryDirectory(prefix="edm-parent-crash-") as tmp:
         stdout=subprocess.PIPE,text=True,
     )
     child_pid = None
+    child_starttime = None
+    def child_matches():
+        if child_pid is None or child_starttime is None:
+            return False
+        try:
+            with open("/proc/%d/stat" % child_pid, encoding="ascii") as stream:
+                stat = stream.read()
+            fields = stat.rsplit(")", 1)[1].strip().split()
+            # fields[3] is session ID (field 6), fields[19] is
+            # kernel process starttime (field 22).
+            return (int(fields[3]) == child_pid
+                    and fields[19] == child_starttime
+                    and fields[0] != "Z")
+        except (FileNotFoundError, ProcessLookupError, IndexError, ValueError):
+            return False
     try:
         ready, _, _ = select.select([parent.stdout], [], [], 10)
         if not ready:
             raise TimeoutError("parent did not report child readiness")
         line = parent.stdout.readline().strip()
         child_pid = int(line)
+        with open("/proc/%d/stat" % child_pid, encoding="ascii") as stream:
+            child_starttime = stream.read().rsplit(")", 1)[1].strip().split()[19]
+        if not child_matches():
+            raise AssertionError("child identity not established")
         assert probe(path) == 9, "lock not held before parent termination"
         parent.kill()
         parent.wait(timeout=10)
         assert probe(path) == 9, "parent death released child-held lock"
         print("PASS: child-held lock survives parent SIGKILL")
-        # The child is a fresh session leader. Check its exact /proc identity
-        # before signaling; do not signal a PID that has been recycled.
-        def child_matches():
-            try:
-                with open("/proc/%d/stat" % child_pid, encoding="ascii") as stream:
-                    stat = stream.read()
-                fields = stat.rsplit(")", 1)[1].strip().split()
-                # /proc stat field 6 is session ID; offset 4 after comm.
-                return int(fields[3]) == child_pid and fields[0] != "Z"
-            except (FileNotFoundError, ProcessLookupError):
-                return False
+        # Verify session and original kernel starttime before signaling.
         if not child_matches():
             raise AssertionError("orphan child identity cannot be verified")
         os.kill(child_pid, signal.SIGKILL)
@@ -88,7 +97,7 @@ with tempfile.TemporaryDirectory(prefix="edm-parent-crash-") as tmp:
         parent.wait(timeout=10)
         parent.stdout.close()
         if child_pid is not None:
-            if "child_matches" in locals() and child_matches():
+            if child_matches():
                 try:
                     os.kill(child_pid, signal.SIGKILL)
                 except ProcessLookupError:
