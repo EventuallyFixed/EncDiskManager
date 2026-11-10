@@ -3,6 +3,7 @@
 import fcntl
 import os
 import pathlib
+import select
 import signal
 import subprocess
 import sys
@@ -49,6 +50,9 @@ with tempfile.TemporaryDirectory(prefix="edm-parent-crash-") as tmp:
     )
     child_pid = None
     try:
+        ready, _, _ = select.select([parent.stdout], [], [], 10)
+        if not ready:
+            raise TimeoutError("parent did not report child readiness")
         line = parent.stdout.readline().strip()
         child_pid = int(line)
         assert probe(path) == 9, "lock not held before parent termination"
@@ -69,6 +73,7 @@ with tempfile.TemporaryDirectory(prefix="edm-parent-crash-") as tmp:
         if parent.poll() is None:
             parent.kill()
         parent.wait(timeout=10)
+        parent.stdout.close()
         if child_pid is not None:
             try:
                 os.kill(child_pid, signal.SIGKILL)
