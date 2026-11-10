@@ -473,3 +473,32 @@ reaps the test child, guarantees bounded cleanup, and avoids signaling
 unverified PIDs. Consider kernel-supported PID handles only after
 verifying support on the actual EX4100 kernel. This remains a test
 containment issue, not authorization to integrate privileged operations.
+
+### Durable marker failure-window review
+
+The experimental C marker writer uses `O_CREAT|O_EXCL|O_NOFOLLOW`,
+writes the complete fixed record, checks file metadata, then calls
+`fsync(file)` and `fsync(directory)`. This is an appropriate
+durability-oriented sequence but is **not a verified crash-safe
+transaction** on the EX4100 filesystem.
+
+Failure windows and required fail-closed behavior:
+- A crash after exclusive create but before a complete record may leave
+  an empty or partial marker. Treat **any existing marker**, even
+  malformed, as an unresolved recovery state; never overwrite or
+  silently repair it.
+- A crash before directory `fsync` may lose the directory entry after
+  power failure. Therefore no destructive child may start until the
+  marker helper has returned success and its lock ownership and target
+  path have been verified.
+- An `fsync`, `close`, or metadata validation error is a hard stop;
+  retain any existing marker and do not launch operations.
+- A successful helper return is still not evidence of EX4100 power-loss
+  durability. Filesystem/mount behavior, trusted ancestors, inode
+  identity, single-owner lock protocol, and reboot recovery remain
+  unverified.
+- The existing PHP marker writer is not a substitute for the C
+  durability sequence on PHP 7.4. It cannot authorize a disk operation.
+
+No automatic marker deletion or privileged executor integration is
+approved. Readiness remains **BLOCKED**.
