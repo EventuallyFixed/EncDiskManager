@@ -12,6 +12,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#if defined(PRIVATE_DIR) && !defined(EDM_ISOLATED_TEST_BUILD)
+#error "PRIVATE_DIR override is restricted to isolated test builds"
+#endif
 #ifndef PRIVATE_DIR
 #define PRIVATE_DIR "/mnt/HD/HD_a2/Nas_Prog/_EncDiskManager"
 #endif
