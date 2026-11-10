@@ -224,3 +224,14 @@ launched, and clearing it must be an independently durable, reviewed
 transition after verified completion. Test failure injection, partial
 writes, power-loss/restart behavior and filesystem semantics separately.
 No EX4100 capability or durability has yet been verified by this design.
+
+### Read-only EX4100 journal capability inventory
+
+Run `sh app/development/ex4100-recovery-capabilities.sh` manually from
+a checked-out feature branch **only when convenient**. The script prints
+kernel architecture, PHP CLI function availability, compiler/tool presence
+and metadata about the private application-data filesystem. It does not
+write files or invoke cryptsetup. Do not mistake PHP CLI capability for
+PHP-FPM worker capability. Do not upload the output publicly without
+reviewing host-specific path and filesystem metadata. No result has yet
+been collected from the NAS.
