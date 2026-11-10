@@ -350,3 +350,24 @@ It does **not** prove on-device execution, ancestor-path security,
 concurrent lock coordination, journal recovery, or crash durability.
 No executable is uploaded, packaged or deployed by CI. Privileged
 operation readiness remains BLOCKED.
+
+### Native marker coordination review
+
+The PHP disk-operation lock uses an exclusive `flock` on the root-owned
+`disk-operations.lock` inode, validates the path/inode after acquisition,
+and checks `disk-operation-recovery-required` while locked. The PHP
+marker writer documents a **caller-held lock** requirement but does not
+acquire or verify the lock itself. The experimental C marker helper
+does not acquire or verify this lock either. It is **not integrated**
+with the PHP operation lifecycle and must not be treated as safe for
+concurrent production use. Any future integration must establish one
+unambiguous lock owner, avoid deadlock/reentrant acquisition, validate
+the lock inode, and keep the lock held through durable marker creation
+and all relevant child-process lifecycle transitions.
+
+The C helper currently opens its private directory using an absolute
+path with `O_NOFOLLOW` on the final component. This does **not** validate
+each ancestor component. Ancestor-path trust and mount replacement
+risks remain blockers. CI compile tests now additionally reject
+production `PRIVATE_DIR` overrides; isolated test builds must explicitly
+opt in. None of these checks authorizes a disk operation.
