@@ -108,3 +108,20 @@ processes, including forced termination, ambiguous status, exit-code handling
 and cleanup while holding the lock. Any unresolved child must prevent
 authorization of subsequent operations; do not rely on a failed return value
 alone to imply the device was unchanged.
+
+### Shared-lock failure boundary
+
+The shared `flock` is released in a `finally` block when its callback
+returns or throws. A harmless regression test now checks that exception
+path. This is appropriate for ordinary callback errors, **but unsafe as a
+complete containment mechanism for an unconfirmed subprocess**: after
+`edm_luks_subprocess()` returns false, the callback can finish and the lock
+can be released even if process cleanup was not conclusively observed.
+
+**Release blocker:** implement and test a persistent, root-owned
+fail-closed recovery/quarantine state for uncertain child termination, or
+otherwise prove every child is reaped before releasing the operation lock.
+A subsequent disk operation must be denied until the uncertainty is
+resolved by authoritative reconciliation. A plain boolean failure return
+does not enforce this requirement. Do not wire up execution while this
+boundary is unresolved.
