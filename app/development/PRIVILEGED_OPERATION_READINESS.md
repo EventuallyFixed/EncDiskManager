@@ -371,3 +371,20 @@ each ancestor component. Ancestor-path trust and mount replacement
 risks remain blockers. CI compile tests now additionally reject
 production `PRIVATE_DIR` overrides; isolated test builds must explicitly
 opt in. None of these checks authorizes a disk operation.
+
+### EX4100 PHP 7.4 flock compatibility result
+
+User-reported execution of
+`php app/development/tests/ex4100_php_flock_inventory.php` on EX4100:
+
+```text
+PASS: PHP child cannot acquire parent-held flock
+PASS: PHP child acquires released flock
+PHP: 7.4.33
+NOTE: temporary-file experiment only; no disk operations
+```
+
+This confirms basic cross-process PHP `flock` contention and release on
+the target NAS. It does **not** establish native helper FD inheritance,
+lock ownership across PHP-to-native `proc_open`, orphaned child handling,
+durable recovery state, or safe privileged execution. Those remain blocked.
