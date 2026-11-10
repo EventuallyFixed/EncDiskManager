@@ -18,6 +18,20 @@ try {
     });
     check_disk_lock($result === 'held' && $called === 1,
         'Valid root-owned lock executes callback');
+    $threw = false;
+    try {
+        edm_with_disk_operation_lock($dir, function () {
+            throw new RuntimeException('Simulated operation failure');
+        });
+    } catch (RuntimeException $e) {
+        $threw = $e->getMessage() === 'Simulated operation failure';
+    }
+    check_disk_lock($threw, 'Callback failure propagates');
+    $afterFailure = edm_with_disk_operation_lock($dir, function () {
+        return 'reacquired';
+    });
+    check_disk_lock($afterFailure === 'reacquired',
+        'Shared lock can be reacquired after callback failure');
     $lock = $dir . '/disk-operations.lock';
     check_disk_lock(is_file($lock), 'Lock file created');
     unlink($lock);
