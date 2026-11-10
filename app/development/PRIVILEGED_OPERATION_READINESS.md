@@ -95,3 +95,16 @@ remaining release blocker is to prove on PHP 7.4/EX4100 that timeout,
 SIGKILL, `proc_get_status`, and `proc_close` reliably reap the exact
 child before the shared operation lock is released. No disk-changing
 integration tests are authorized.
+
+### Cleanup uncertainty (still blocking)
+
+The Unlock/Lock runner records cleanup confirmation only after an explicit
+non-running child status, and treats malformed status as uncertain. However,
+`proc_close()` may block beyond the requested timeout, and a short reaping
+window is **not** proof that an unobserved child has stopped. The code must
+not be represented as having a hard execution-time bound. Before enabling
+execution, validate PHP 7.4 process handling on EX4100 using harmless test
+processes, including forced termination, ambiguous status, exit-code handling
+and cleanup while holding the lock. Any unresolved child must prevent
+authorization of subsequent operations; do not rely on a failed return value
+alone to imply the device was unchanged.
