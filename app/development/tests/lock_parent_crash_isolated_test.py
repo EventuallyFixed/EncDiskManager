@@ -60,6 +60,19 @@ with tempfile.TemporaryDirectory(prefix="edm-parent-crash-") as tmp:
         parent.wait(timeout=10)
         assert probe(path) == 9, "parent death released child-held lock"
         print("PASS: child-held lock survives parent SIGKILL")
+        # The child is a fresh session leader. Check its exact /proc identity
+        # before signaling; do not signal a PID that has been recycled.
+        def child_matches():
+            try:
+                with open("/proc/%d/stat" % child_pid, encoding="ascii") as stream:
+                    stat = stream.read()
+                fields = stat.rsplit(")", 1)[1].strip().split()
+                # /proc stat field 6 is session ID; offset 4 after comm.
+                return int(fields[3]) == child_pid and fields[0] != "Z"
+            except (FileNotFoundError, ProcessLookupError):
+                return False
+        if not child_matches():
+            raise AssertionError("orphan child identity cannot be verified")
         os.kill(child_pid, signal.SIGKILL)
         # A short bounded retry accommodates kernel process cleanup.
         for _ in range(50):
@@ -75,8 +88,9 @@ with tempfile.TemporaryDirectory(prefix="edm-parent-crash-") as tmp:
         parent.wait(timeout=10)
         parent.stdout.close()
         if child_pid is not None:
-            try:
-                os.kill(child_pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            if "child_matches" in locals() and child_matches():
+                try:
+                    os.kill(child_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 print("NOTE: isolated Linux CI test only; EX4100 parent-crash behavior unverified")
