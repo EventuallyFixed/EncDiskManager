@@ -57,6 +57,12 @@ jobs:
           readelf -h /tmp/edm-recovery-marker-armhf | grep -E 'Class:|Machine:|Flags:'
           readelf -h /tmp/edm-recovery-marker-armhf | grep -q 'Machine:.*ARM'
           readelf -h /tmp/edm-recovery-marker-armhf | grep -q 'hard-float ABI'
+          echo '=== ARM ELF interpreter and shared libraries ==='
+          readelf -l /tmp/edm-recovery-marker-armhf | grep 'Requesting program interpreter' || true
+          readelf -d /tmp/edm-recovery-marker-armhf | grep -E 'NEEDED|RUNPATH|RPATH' || true
+          echo '=== ARM cross-toolchain libc version ==='
+          arm-linux-gnueabihf-gcc -dumpmachine
+          echo 'NOTE: ELF metadata does not prove compatibility with NAS libc'
           rm -f /tmp/edm-recovery-marker-armhf
 
   root-authorization-regression:
