@@ -32,6 +32,28 @@ try {
     });
     check_disk_lock($afterFailure === 'reacquired',
         'Shared lock can be reacquired after callback failure');
+    $recovery = $dir . '/disk-operation-recovery-required';
+    check_disk_lock(file_put_contents($recovery, 'manual recovery required') !== false,
+        'Create persistent recovery marker');
+    chmod($recovery, 0600);
+    $blockedByRecovery = false;
+    try {
+        edm_with_disk_operation_lock($dir, function () use (&$called) { ++$called; });
+    } catch (RuntimeException $e) {
+        $blockedByRecovery = strpos($e->getMessage(), 'pending recovery') !== false;
+    }
+    check_disk_lock($blockedByRecovery && $called === 1,
+        'Persistent recovery marker blocks callback');
+    unlink($recovery);
+    check_disk_lock(symlink('/dev/null', $recovery),
+        'Create unsafe recovery marker symlink');
+    $blockedBySymlink = false;
+    try {
+        edm_with_disk_operation_lock($dir, function () use (&$called) { ++$called; });
+    } catch (RuntimeException $e) { $blockedBySymlink = true; }
+    check_disk_lock($blockedBySymlink && $called === 1,
+        'Recovery marker symlink blocks callback');
+    unlink($recovery);
     $lock = $dir . '/disk-operations.lock';
     check_disk_lock(is_file($lock), 'Lock file created');
     unlink($lock);
