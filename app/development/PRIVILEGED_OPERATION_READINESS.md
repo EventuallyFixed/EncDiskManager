@@ -617,3 +617,21 @@ claims about remote SMB access. Do not change share configuration or
 parent permissions without separate approval. Storage remains in the
 user-selected `_EncDiskManager` directory; privileged execution
 remains blocked.
+
+### EX4100 Samba share mapping inspection
+
+User-reported `testparm -s` share mappings:
+- `Public` -> `/mnt/HD/HD_a2/Public` (writable)
+- `TimeMachineBackup` -> `/mnt/HD/HD_a2/TimeMachineBackup` (writable)
+- `steven`, `andrea`, `jessica`, `docker` -> their respective
+  `/mnt/HD/HD_a2/<share>` paths, with corresponding valid-user rules
+- `Ultra_Fit-1` -> `/mnt/USB/USB3_d1` (writable)
+
+No reported share maps directly to `Nas_Prog` or
+`_EncDiskManager`. This reduces the apparent direct SMB exposure,
+but the filtered output is not a full audit of Samba policy,
+symlink/wide-link behavior, or other local services. The root-owned
+0700 private directory remains under a root-owned 0777 parent, so
+untrusted local pathname replacement remains a design blocker.
+Keep state at the user-selected path and do not change NAS share or
+filesystem permissions without separate authorization.
