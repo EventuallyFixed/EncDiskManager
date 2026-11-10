@@ -12,7 +12,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifndef PRIVATE_DIR
 #define PRIVATE_DIR "/mnt/HD/HD_a2/Nas_Prog/_EncDiskManager"
+#endif
 #define MARKER "disk-operation-recovery-required"
 
 static int fail(const char *message) {
