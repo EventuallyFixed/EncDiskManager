@@ -72,8 +72,7 @@ with tempfile.TemporaryDirectory(prefix="edm-flock-child-") as tmp:
         fd = -1
         assert probe(path) == 9, "parent close released child-inherited lock"
         print("PASS: child retains inherited lock after parent closes FD")
-        child.stdin.write("\\n")
-        child.stdin.flush()
+        child.stdin.close()
         assert child.wait(timeout=10) == 0
         assert probe(path) == 0, "lock remained held after child exit"
         print("PASS: inherited lock released after final holder exits")
