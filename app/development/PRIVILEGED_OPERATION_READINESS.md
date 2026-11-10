@@ -502,3 +502,30 @@ Failure windows and required fail-closed behavior:
 
 No automatic marker deletion or privileged executor integration is
 approved. Readiness remains **BLOCKED**.
+
+### Trusted path and lock-ownership design gates
+
+The native marker helper's `open(PRIVATE_DIR, O_NOFOLLOW)` only
+protects the final path component. A production design must resolve the
+private directory using a trusted starting directory and component-wise
+directory-descriptor traversal (`openat` with `O_DIRECTORY|O_NOFOLLOW`
+where supported), rejecting symlinks and unexpected owner/mode at
+**every** component. Document and verify expected NAS mount boundaries
+and prevent replacement of any writable ancestor; an already-open
+directory descriptor alone does not establish trusted ancestry. Do not
+assume that every ancestor should have mode 0700: apply explicit
+per-component ownership and write-permission policy appropriate to the
+actual EX4100 layout. Validate the final directory and relevant lock
+and marker inode identities using `fstat`/`fstatat` as applicable.
+Avoid unsafe check-then-open pathname races.
+
+The current C marker helper neither receives nor authenticates the
+PHP-held lock descriptor. Future integration must define a single
+owner of the `flock` open-file description, verify the inherited
+descriptor refers to the expected regular lock inode and is locked
+under the intended protocol, and hold it until durable marker creation,
+child termination/reaping, and postcondition checks are complete.
+Merely receiving an FD or comparing inode metadata does **not**
+independently prove lock ownership. Any uncertain state must fail
+closed. No privileged operation or automatic recovery-clear action
+may be enabled until these requirements are implemented and tested.
