@@ -39,6 +39,26 @@ jobs:
       - name: Isolated native recovery helper runtime test
         run: sudo sh app/development/tests/native_recovery_marker_isolated_test.sh
 
+  native-helper-armhf-cross-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM hard-float cross-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-linux-gnueabihf file
+      - name: Cross-compile only (no execution or artifact upload)
+        run: |
+          set -eu
+          arm-linux-gnueabihf-gcc -std=c11 -Wall -Wextra -Werror -pedantic \\
+            -O2 app/development/native/disk_recovery_marker.c \\
+            -o /tmp/edm-recovery-marker-armhf
+          file /tmp/edm-recovery-marker-armhf
+          readelf -h /tmp/edm-recovery-marker-armhf | grep -E 'Class:|Machine:|Flags:'
+          readelf -h /tmp/edm-recovery-marker-armhf | grep -q 'Machine:.*ARM'
+          readelf -h /tmp/edm-recovery-marker-armhf | grep -q 'hard-float ABI'
+          rm -f /tmp/edm-recovery-marker-armhf
+
   root-authorization-regression:
     runs-on: ubuntu-latest
     steps:
