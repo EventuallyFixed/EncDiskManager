@@ -52,13 +52,13 @@ try {
     $lock = null;
     if ($probe() !== 9) throw new RuntimeException('Child did not retain lock after parent close');
     echo "PASS: child retains lock after parent closes descriptor\n";
-    fclose($pipes[0]);
+    fclose($pipes[0]); // EOF releases the waiting child.
     unset($pipes[0]);
-    $exit = proc_close($child);
-    $child = null;
     fclose($pipes[1]);
     fclose($pipes[2]);
     $pipes = array();
+    $exit = proc_close($child);
+    $child = null;
     if ($exit !== 0) throw new RuntimeException('Child failed');
     if ($probe() !== 0) throw new RuntimeException('Lock not released after child exit');
     echo "PASS: lock released after child exit\n";
