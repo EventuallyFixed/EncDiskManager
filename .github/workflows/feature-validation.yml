@@ -50,8 +50,8 @@ jobs:
       - name: Cross-compile only (no execution or artifact upload)
         run: |
           set -eu
-          arm-linux-gnueabihf-gcc -std=c11 -Wall -Wextra -Werror -pedantic \\
-            -O2 app/development/native/disk_recovery_marker.c \\
+          arm-linux-gnueabihf-gcc -std=c11 -Wall -Wextra -Werror -pedantic \
+            -O2 app/development/native/disk_recovery_marker.c \
             -o /tmp/edm-recovery-marker-armhf
           file /tmp/edm-recovery-marker-armhf
           readelf -h /tmp/edm-recovery-marker-armhf | grep -E 'Class:|Machine:|Flags:'
