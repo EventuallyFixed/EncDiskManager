@@ -50,6 +50,18 @@ function edm_with_disk_operation_lock($dataDirectory, $callback)
             || $pathStat['ino'] !== $lockedStat['ino']) {
             throw new RuntimeException('Disk-operation lock path changed or is unsafe.');
         }
+        // A persistent unresolved-child marker is a fail-closed stop signal.
+        // Never clear it automatically; recovery requires a separate reviewed
+        // reconciliation procedure. This check occurs while holding the lock.
+        $recoveryPath = $dataDirectory . '/disk-operation-recovery-required';
+        clearstatcache(true, $recoveryPath);
+        if (is_link($recoveryPath)) {
+            throw new RuntimeException('Disk-operation recovery marker is unsafe.');
+        }
+        if (file_exists($recoveryPath)) {
+            edm_registry_assert_file($recoveryPath, 'Disk-operation recovery marker');
+            throw new RuntimeException('Disk operations blocked pending recovery.');
+        }
         return call_user_func($callback);
     } finally {
         flock($handle, LOCK_UN);
