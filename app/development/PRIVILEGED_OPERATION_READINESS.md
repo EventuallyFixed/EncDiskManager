@@ -587,3 +587,14 @@ does not prevent pathname replacement by a user able to write its
 parent. Future designs must address this risk without silently
 changing WD-managed parent permissions or weakening fail-closed
 behavior. No privileged disk operations are authorized.
+
+### EX4100 SSH access clarification
+
+User reports that only the `root` (`sshd`) account can SSH into
+the NAS. This reduces exposure to non-root interactive SSH sessions
+but does **not** establish that all local processes run as root or
+that world-writable `Nas_Prog` ancestors are trusted. NAS services,
+web-facing application code, and other local identities may still
+have write access to directory entries. Retain the user's selected
+`_EncDiskManager` storage path; assess service identities and
+effective permissions read-only before relaxing any blocker.
