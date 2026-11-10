@@ -62,9 +62,18 @@ jobs:
           readelf -d /tmp/edm-recovery-marker-armhf | grep -E 'NEEDED|RUNPATH|RPATH' || true
           echo '=== Required GLIBC symbol versions ==='
           readelf --version-info /tmp/edm-recovery-marker-armhf | grep 'Name: GLIBC_' || true
-          if readelf --version-info /tmp/edm-recovery-marker-armhf |
-             grep -E 'Name: GLIBC_([3-9][0-9]|2\\.(3[2-9]|[4-9][0-9]))([ .]|$)'; then
-            echo 'FAIL: executable requires glibc newer than EX4100 2.31'
+          if ! readelf --version-info /tmp/edm-recovery-marker-armhf |
+             awk '/Name: GLIBC_/ {
+               for (i = 1; i <= NF; i++) {
+                 if ($i ~ /^GLIBC_[0-9]+[.][0-9]+$/) {
+                   split(substr($i, 7), v, ".");
+                   if (v[1] + 0 > 2 || (v[1] + 0 == 2 && v[2] + 0 > 31)) {
+                     print "FAIL: required " $i " exceeds EX4100 glibc 2.31";
+                     bad = 1;
+                   }
+                 }
+               }
+             } END { exit bad ? 1 : 0 }'; then
             exit 1
           fi
           echo '=== ARM cross-toolchain libc version ==='
