@@ -574,3 +574,16 @@ characteristics, capacity, upgrade behavior, or WD OS5 compatibility.
 Do not create state under these paths, relocate existing state, or
 alter vendor directory permissions until those questions are answered.
 Existing `Nas_Prog` writable ancestors remain a blocker.
+
+### Storage-location decision
+
+The user explicitly prefers retaining EncDiskManager recovery and
+persistent state under
+`/mnt/HD/HD_a2/Nas_Prog/_EncDiskManager`. Do not propose a
+`/var/lib` relocation as the default or move/create files without
+separate authorization. The existing world-writable `Nas_Prog`
+ancestor remains a security blocker: mode 0700 on the final directory
+does not prevent pathname replacement by a user able to write its
+parent. Future designs must address this risk without silently
+changing WD-managed parent permissions or weakening fail-closed
+behavior. No privileged disk operations are authorized.
