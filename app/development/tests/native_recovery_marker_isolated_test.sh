@@ -17,7 +17,7 @@ chmod 700 "$tmp"
 mkdir "$tmp/private"
 chmod 700 "$tmp/private"
 marker="$tmp/private/disk-operation-recovery-required"
-cc -std=c11 -Wall -Wextra -Werror -pedantic -DPRIVATE_DIR="\"$tmp/private\"" \
+cc -std=c11 -Wall -Wextra -Werror -pedantic -DEDM_ISOLATED_TEST_BUILD -DPRIVATE_DIR="\"$tmp/private\"" \
   "$src_dir/native/disk_recovery_marker.c" -o "$tmp/marker-helper"
 "$tmp/marker-helper" mark
 test -f "$marker"
