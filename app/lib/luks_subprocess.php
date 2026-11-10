@@ -47,6 +47,7 @@ function edm_luks_subprocess($argv, $secret = null, $timeoutSeconds = 30)
     if (!is_resource($process)) return false;
     $ok = true;
     $exitCode = null;
+    $confirmedExited = false;
     try {
         if ($unlock) {
             // Binary key material is passed verbatim, with no implicit newline.
@@ -66,14 +67,18 @@ function edm_luks_subprocess($argv, $secret = null, $timeoutSeconds = 30)
         }
         if (isset($pipes[0]) && is_resource($pipes[0])) fclose($pipes[0]);
         while ($ok) {
-            $status = proc_get_status($process);
-            if (!$status['running']) {
-                $exitCode = $status['exitcode'];
-                break;
-            }
+            $status = @proc_get_status($process);
+            if (!is_array($status) || !isset($status['running'], $status['exitcode'])
+                || !is_bool($status['running'])) { $ok = false; break; }
+            // A late exit is not a successful bounded operation.
             if (microtime(true) >= $deadline) {
                 $ok = false;
-                @proc_terminate($process);
+                @proc_terminate($process, 9);
+                break;
+            }
+            if (!$status['running']) {
+                $confirmedExited = true;
+                $exitCode = $status['exitcode'];
                 break;
             }
             usleep(20000);
@@ -93,5 +98,5 @@ function edm_luks_subprocess($argv, $secret = null, $timeoutSeconds = 30)
         }
         @proc_close($process);
     }
-    return $ok && $exitCode === 0;
+    return $ok && $confirmedExited && $exitCode === 0;
 }
