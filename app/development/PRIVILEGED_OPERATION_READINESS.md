@@ -142,3 +142,14 @@ stop a child already running. Crash-safe marker creation and persistence,
 the process-to-operation binding, recovery verification, and preventing
 unresolved children from outliving lock ownership remain release blockers.
 Do not enable privileged execution on the strength of this guard alone.
+
+### Recovery marker writer (not integrated)
+
+`edm_disk_operation_mark_recovery_required()` provides an exclusive-create,
+root-owned mode-0600 marker writer and rejects unsafe existing markers.
+It must only be called while holding the shared disk-operation lock.
+Harmless root-only tests cover creation, repeat calls, and symlink rejection.
+The writer is **not** called by subprocess code, does **not** clear markers,
+and does **not** claim power-loss durability: PHP 7.4 has no portable fsync
+for the marker and containing directory. Validate durable persistence and
+the full process/lock recovery protocol before enabling disk execution.
