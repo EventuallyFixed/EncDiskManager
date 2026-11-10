@@ -388,3 +388,20 @@ This confirms basic cross-process PHP `flock` contention and release on
 the target NAS. It does **not** establish native helper FD inheritance,
 lock ownership across PHP-to-native `proc_open`, orphaned child handling,
 durable recovery state, or safe privileged execution. Those remain blocked.
+
+### EX4100 PHP-to-native shell lock contention result
+
+User-reported execution of
+`php app/development/tests/ex4100_php_native_fd_inventory.php`:
+
+```text
+PASS: independent native shell cannot acquire PHP-held lock
+PHP: 7.4.33
+NOTE: no descriptor inheritance proven; temporary-file test only
+```
+
+This confirms cross-process contention between PHP and an independently
+launched native shell on the EX4100. It does not demonstrate that the shell
+inherits the PHP lock file descriptor, that an inherited lock survives
+parent exit, or that a future C helper can authenticate ownership of the
+correct lock inode. Those remain explicit integration blockers.
