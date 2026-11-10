@@ -48,6 +48,7 @@ function edm_luks_subprocess($argv, $secret = null, $timeoutSeconds = 30)
     $ok = true;
     $exitCode = null;
     $confirmedExited = false;
+    $cleanupConfirmed = false;
     try {
         if ($unlock) {
             // Binary key material is passed verbatim, with no implicit newline.
@@ -86,17 +87,26 @@ function edm_luks_subprocess($argv, $secret = null, $timeoutSeconds = 30)
     } finally {
         if (isset($pipes[0]) && is_resource($pipes[0])) fclose($pipes[0]);
         if (!$ok) {
-            // Kill and reap: a timed-out cryptsetup must not survive after
-            // the caller releases the disk-operation lock.
+            // Request immediate termination and observe child exit. A failed
+            // or ambiguous status is NOT evidence that cleanup succeeded.
             @proc_terminate($process, 9);
             $reapDeadline = microtime(true) + 2.0;
             do {
                 $status = @proc_get_status($process);
-                if (!is_array($status) || !$status['running']) break;
+                if (!is_array($status) || !isset($status['running'])
+                    || !is_bool($status['running'])) break;
+                if ($status['running'] === false) {
+                    $cleanupConfirmed = true;
+                    break;
+                }
                 usleep(20000);
             } while (microtime(true) < $reapDeadline);
+        } else {
+            $cleanupConfirmed = $confirmedExited;
         }
+        // PHP proc_close may block beyond the deadline; this code cannot
+        // guarantee bounded reaping on EX4100 without hardware validation.
         @proc_close($process);
     }
-    return $ok && $confirmedExited && $exitCode === 0;
+    return $ok && $confirmedExited && $cleanupConfirmed && $exitCode === 0;
 }
