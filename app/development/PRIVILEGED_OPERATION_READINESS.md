@@ -598,3 +598,22 @@ web-facing application code, and other local identities may still
 have write access to directory entries. Retain the user's selected
 `_EncDiskManager` storage path; assess service identities and
 effective permissions read-only before relaxing any blocker.
+
+### EX4100 local service identity inspection
+
+User-reported read-only process and permissions inspection:
+- Apache `httpd` and PHP-FPM master and `www` pool processes
+  appear as `root` in the supplied process output.
+- Samba includes a non-root `smbd` process running as `steven`.
+- `Nas_Prog` is root-owned mode 0777; `_EncDiskManager` is
+  root-owned mode 0700.
+- `getfacl` is not installed; ACL restrictions were not inspected.
+
+Root-only SSH and root-run web workers do not remove the writable
+ancestor threat: a non-root local identity exists, although this
+observation does **not** prove that SMB shares expose `Nas_Prog`.
+Assess Samba share mappings and access policy read-only before making
+claims about remote SMB access. Do not change share configuration or
+parent permissions without separate approval. Storage remains in the
+user-selected `_EncDiskManager` directory; privileged execution
+remains blocked.
