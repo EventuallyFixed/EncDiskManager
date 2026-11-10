@@ -654,3 +654,42 @@ could disrupt WD application installation/removal. Do not set
 `chattr +i` or change filesystem attributes on the live NAS without
 a separate, reviewed compatibility and recovery plan. The
 world-writable ancestor threat remains unresolved.
+
+### Administrator decision: retain WD-managed directory permissions (2026-11-10)
+
+**Decision / accepted environmental risk.** The NAS administrator
+explicitly elects to retain the existing WD My Cloud OS5 directory
+layout and permissions, including root-owned mode 0777 on
+`/mnt/HD/HD_a2` and `/mnt/HD/HD_a2/Nas_Prog`. Do **not** change
+WD-managed directory permissions, ownership, sticky bits, ext4
+attributes, mount options, or SMB configuration as part of this
+project. Do not relocate persistent application state.
+
+**Operating context reported by administrator:** the EX4100 sits
+behind a router with no port forwards and is not directly exposed to
+the Internet; only root can log in via SSH. Inspected Samba share
+mappings do not directly expose `Nas_Prog`. The administrator judges
+interference with these directories unlikely except by the NAS
+administrator or a compromised process.
+
+**Retained storage:** keep
+`/mnt/HD/HD_a2/Nas_Prog/_EncDiskManager` root-owned mode 0700.
+Continue checking directory identity, ownership, mode, symlinks,
+lock-file identity and recovery-marker state, and fail closed on
+unexpected changes.
+
+**Explicit residual risk:** writable ancestors can still permit a
+local non-root process to replace the private directory entry.
+Router isolation and root-only SSH reduce exposure but do not remove
+that risk. The administrator accepts this *environmental* risk for
+the development plan; it must not be represented as a technical
+guarantee of path integrity. Earlier design notes describing it as
+a blocker should be read subject to this recorded risk decision,
+not as authorization to weaken validation.
+
+**Separate safety gates remain:** this decision does not authorize
+packaging, deployment, privileged disk operations, encryption,
+formatting, recovery-marker clearance, or merging to stable.
+Authenticated lock ownership, durable write-ahead recovery,
+disk identity/state checks, failure handling and independent
+regression validation remain required. Status: **BLOCKED**.
