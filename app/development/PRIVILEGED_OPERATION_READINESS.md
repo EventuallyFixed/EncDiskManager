@@ -274,3 +274,14 @@ for trusted ancestor path resolution, lock ownership, partial-failure
 handling, error injection, packaging or firmware behavior. No runtime
 integration is authorized. Native compilation and harmless isolated tests
 must precede any on-device evaluation.
+
+### Native helper compile-only validation
+
+`sh app/development/tests/native_recovery_marker_compile_test.sh`
+checks the experimental C source with host `cc -fsyntax-only` and
+strict warnings when a host compiler exists. It **never runs** the
+helper, never creates a marker, and does not cross-compile an ARM
+binary. It prints SKIP if no compiler is present. A passing compile
+check is not evidence of secure runtime behavior, armhf compatibility,
+or durability on the NAS. The helper remains source-only and unapproved
+for deployment.
