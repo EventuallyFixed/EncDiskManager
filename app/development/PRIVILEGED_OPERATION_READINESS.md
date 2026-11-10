@@ -153,3 +153,41 @@ The writer is **not** called by subprocess code, does **not** clear markers,
 and does **not** claim power-loss durability: PHP 7.4 has no portable fsync
 for the marker and containing directory. Validate durable persistence and
 the full process/lock recovery protocol before enabling disk execution.
+
+### Proposed crash-safe operation lifecycle (design only)
+
+A post-failure marker alone is insufficient: a PHP worker can die after
+launching a child but before writing the marker. The future privileged
+executor therefore needs a **write-ahead pending-operation record**,
+persisted before `proc_open`, while the shared disk-operation lock is held.
+The record must bind a unique operation identifier to the action, verified
+LUKS UUID, USB device identity, expected mapper, and phase. It must never
+contain passphrases, key bytes or untrusted argv.
+
+Required phases:
+1. Under the lock, revalidate authorization, registry ownership, USB
+   identity, and process policy; reject any pending/recovery record.
+2. Create a pending record using exclusive, root-owned storage; verify
+   durable file contents and directory entry before launching a child.
+   A failed persistence step must prevent launch.
+3. Launch only the separately approved restricted command. Keep the lock
+   throughout execution, termination, reaping and postcondition checks.
+4. On a confirmed clean child exit **and** authoritative postcondition
+   verification, durably transition the pending record to resolved before
+   allowing another operation. Unexpected exit, timeout, uncertain child,
+   PHP crash, or failed postcondition leaves recovery required.
+5. Recovery after restart must be a separately authenticated, reviewed
+   reconciliation path. Never infer safety from PID alone (PID reuse);
+   inspect the device/mapper state and process identity, and never clear
+   the record automatically based on elapsed time.
+
+Durability is a release blocker: `fflush` alone does not provide an
+on-disk commit after power loss. A supported fsync/fdatasync strategy for
+both the file and containing directory is required and must be tested on
+the EX4100 firmware/filesystem. The current PHP 7.4 writer is not
+sufficient. Also consider that a confirmed child exit with a failed
+postcondition still requires recovery; do not clear on exit code alone.
+
+**Status: DESIGN ONLY.** No pending-record writer, state-clearance
+function, subprocess integration, or web executor is authorized by this
+section. Stable v0.5.5 and deployed NAS behavior must remain unchanged.
