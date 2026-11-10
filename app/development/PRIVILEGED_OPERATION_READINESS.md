@@ -297,3 +297,18 @@ dynamic-library requirements, but no resulting executable is uploaded,
 packaged, deployed or run on the NAS. Before any on-device test, compare
 those requirements with the NAS's actual libc and dynamic linker and
 review ancestor-path trust, lock ownership, error handling and durability.
+
+### ARM runtime dependency inventory
+
+GitHub Actions runs #236 and #237 passed all five jobs. The cross-built
+prototype is ELF32 ARM EABI5 hard-float, dynamically linked with
+`/lib/ld-linux-armhf.so.3`, and requires `libc.so.6`.
+This is a build result, not confirmation of the NAS runtime ABI or
+minimum GLIBC symbol versions.
+
+`sh app/development/ex4100-arm-runtime.sh` is an optional read-only
+NAS inventory of the dynamic linker, common libc paths, and
+`getconf GNU_LIBC_VERSION`. It never invokes the prototype or touches
+USB disk contents. Review output before sharing host metadata. Compare
+with symbol-version requirements from the final cross-build before any
+runtime evaluation.
