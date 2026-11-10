@@ -256,3 +256,21 @@ A helper should accept a fixed operation and fixed, trusted private
 directory only, use no USB disk paths, and must not execute cryptsetup.
 Any helper testing must be non-destructive and separately approved.
 **Execution remains blocked.**
+
+### Experimental native marker prototype (not packaged)
+
+`app/development/native/disk_recovery_marker.c` is source-only and
+unintegrated. Its sole `mark` command attempts exclusive creation of
+`disk-operation-recovery-required` in the fixed private NAS data directory,
+followed by `fsync` of the marker and directory. It refuses non-root
+invocation, symlink traversal at the final directory component and marker,
+unsafe directory/marker metadata, and existing markers. It never clears
+a marker, runs cryptsetup, or accesses a USB disk.
+
+**Do not run this prototype on the NAS**: a successful invocation leaves
+a recovery-required marker that deliberately blocks disk-operation lock
+callbacks. It has not been cross-compiled, tested on the EX4100, or audited
+for trusted ancestor path resolution, lock ownership, partial-failure
+handling, error injection, packaging or firmware behavior. No runtime
+integration is authorized. Native compilation and harmless isolated tests
+must precede any on-device evaluation.
