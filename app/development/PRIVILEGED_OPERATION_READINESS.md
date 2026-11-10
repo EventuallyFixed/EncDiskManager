@@ -235,3 +235,24 @@ write files or invoke cryptsetup. Do not mistake PHP CLI capability for
 PHP-FPM worker capability. Do not upload the output publicly without
 reviewing host-specific path and filesystem metadata. No result has yet
 been collected from the NAS.
+
+### EX4100 observed inventory (2026-11-10; user-supplied)
+
+Read-only script output from WDMyCloudEX4100:
+- Linux `4.14.22-armada-18.09.3`, `armv7l`.
+- PHP CLI `7.4.33`; `fsync` and `fdatasync` unavailable.
+- PHP CLI exposes `posix_geteuid`, `proc_open`,
+  `proc_get_status`, `proc_terminate`, `proc_close`.
+- No `cc`, `gcc`, or `arm-linux-gnueabihf-gcc` on the NAS;
+  `sync` and `stat` available, `findmnt` unavailable.
+- `/mnt/HD/HD_a2/Nas_Prog/_EncDiskManager` is root:root,
+  mode 0700, on ext4 filesystem `/dev/mapper/md1`.
+
+Implication: native helper must be cross-compiled off-device for armhf
+and separately reviewed before packaging. PHP CLI feature presence
+does not establish FPM identity or subprocess safety. ext4 and the
+presence of `sync` do not demonstrate durable ordered writes.
+A helper should accept a fixed operation and fixed, trusted private
+directory only, use no USB disk paths, and must not execute cryptsetup.
+Any helper testing must be non-destructive and separately approved.
+**Execution remains blocked.**
