@@ -529,3 +529,32 @@ Merely receiving an FD or comparing inode metadata does **not**
 independently prove lock ownership. Any uncertain state must fail
 closed. No privileged operation or automatic recovery-clear action
 may be enabled until these requirements are implemented and tested.
+
+### EX4100 actual ancestor-directory inspection (2026-11-10)
+
+User-reported read-only `ls -ld` and `stat` results for the live NAS:
+
+| Path | UID:GID | Mode | Device | Inode |
+| --- | --- | --- | --- | --- |
+| `/mnt` | 0:0 | 1777 | 21 | 7979 |
+| `/mnt/HD` | 0:0 | 755 | 21 | 7988 |
+| `/mnt/HD/HD_a2` | 0:0 | 777 | 64768 | 2 |
+| `/mnt/HD/HD_a2/Nas_Prog` | 0:0 | 777 | 64768 | 11010049 |
+| `/mnt/HD/HD_a2/Nas_Prog/_EncDiskManager` | 0:0 | 700 | 64768 | 68159870 |
+
+**BLOCKER:** `HD_a2` and `Nas_Prog` are world-writable
+without sticky-bit protection. A process with sufficient traversal
+access and write permission on `Nas_Prog` can rename or replace its
+root-owned `_EncDiskManager` entry despite the target's mode 0700.
+The sticky `/mnt` directory is a different case and does not mitigate
+the lower writable ancestors. The `/mnt/HD` -> `HD_a2` transition
+also crosses a device boundary (21 -> 64768).
+
+Consequently, component-wise `O_NOFOLLOW` traversal and checking the
+final directory alone are **not sufficient** to establish durable path
+trust. Inode checks and open directory FDs mitigate some races but
+cannot by themselves make a replaceable parent safe across restarts.
+Do not chmod/chown vendor-managed parent directories without an
+explicitly validated NAS compatibility plan. Design a trusted storage
+anchor and mount/identity policy first; keep native marker integration
+and all privileged disk operations **BLOCKED**.
