@@ -337,3 +337,16 @@ requirement. The CI gate has been replaced with numeric parsing of
 fail until the toolchain is changed or symbol requirements are reduced.
 Do not deploy or run the current binary on the NAS. Passing host-side
 tests does not override this incompatibility.
+
+### Bullseye ARM ABI compatibility check — CI #245
+
+CI run #245 passed all five jobs. The native helper cross-built in
+the Debian Bullseye container for ELF32 ARM EABI5 hard-float, using
+`/lib/ld-linux-armhf.so.3`, and the ELF symbol-version inspection
+reported only `GLIBC_2.4`. The user's EX4100 inventory reports
+glibc 2.31 with the matching interpreter path. This resolves the
+previously observed `GLIBC_2.34` mismatch at the ELF symbol level.
+It does **not** prove on-device execution, ancestor-path security,
+concurrent lock coordination, journal recovery, or crash durability.
+No executable is uploaded, packaged or deployed by CI. Privileged
+operation readiness remains BLOCKED.
