@@ -36,6 +36,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compile-only native recovery helper check
         run: sh app/development/tests/native_recovery_marker_compile_test.sh
+      - name: Isolated native recovery helper runtime test
+        run: sudo sh app/development/tests/native_recovery_marker_isolated_test.sh
 
   root-authorization-regression:
     runs-on: ubuntu-latest
