@@ -285,3 +285,15 @@ binary. It prints SKIP if no compiler is present. A passing compile
 check is not evidence of secure runtime behavior, armhf compatibility,
 or durability on the NAS. The helper remains source-only and unapproved
 for deployment.
+
+### ARM cross-compilation outcome
+
+GitHub Actions run #235 passed the native ARM hard-float cross-compile,
+the native host compile and isolated runtime tests, PHP tests, browser
+tests and root-authorization tests. This establishes successful
+cross-compilation, **not** runtime compatibility with EX4100 firmware.
+The CI workflow now also prints the ELF program interpreter and
+dynamic-library requirements, but no resulting executable is uploaded,
+packaged, deployed or run on the NAS. Before any on-device test, compare
+those requirements with the NAS's actual libc and dynamic linker and
+review ancestor-path trust, lock ownership, error handling and durability.
