@@ -85,3 +85,13 @@ and test a privileged caller that holds the shared disk lock, proves current
 USB device identity and LUKS1 UUID, validates the private keyfile and its
 ancestor paths, binds recovery credentials securely, and verifies the
 postcondition. Passing CI alone does not authorize keyslot mutation.
+
+## Subprocess lifecycle review
+
+The restricted Unlock/Lock runner now rejects malformed process status,
+requires a confirmed child exit, and rejects exit observed after the deadline.
+These are defensive source-level checks, **not** hardware validation. The
+remaining release blocker is to prove on PHP 7.4/EX4100 that timeout,
+SIGKILL, `proc_get_status`, and `proc_close` reliably reap the exact
+child before the shared operation lock is released. No disk-changing
+integration tests are authorized.
