@@ -45,4 +45,42 @@ with tempfile.TemporaryDirectory(prefix="edm-flock-test-") as tmp:
         print("PASS: independent process acquires released lock")
     finally:
         os.close(fd)
+# Separate experiment: closing the parent FD must not release an inherited
+# open-file-description lock until the child also closes its copy.
+with tempfile.TemporaryDirectory(prefix="edm-flock-child-") as tmp:
+    path = pathlib.Path(tmp) / "disk-operations.lock"
+    path.touch(mode=0o600)
+    fd = os.open(path, os.O_RDWR)
+    child = None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        child_code = (
+            "import os,sys; "
+            "os.fstat(int(sys.argv[1])); "
+            "print('READY', flush=True); "
+            "sys.stdin.readline()"
+        )
+        child = subprocess.Popen(
+            [sys.executable, "-c", child_code, str(fd)],
+            pass_fds=(fd,),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        assert child.stdout.readline().strip() == "READY"
+        os.close(fd)
+        fd = -1
+        assert probe(path) == 9, "parent close released child-inherited lock"
+        print("PASS: child retains inherited lock after parent closes FD")
+        child.stdin.write("\\n")
+        child.stdin.flush()
+        assert child.wait(timeout=10) == 0
+        assert probe(path) == 0, "lock remained held after child exit"
+        print("PASS: inherited lock released after final holder exits")
+    finally:
+        if fd >= 0:
+            os.close(fd)
+        if child is not None and child.poll() is None:
+            child.kill()
+            child.wait(timeout=10)
 print("NOTE: Linux host experiment only; PHP/EX4100 semantics unverified")
