@@ -47,7 +47,7 @@ jobs:
       - name: Install ARM hard-float cross-compiler
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends gcc-arm-linux-gnueabihf libc6-dev-armhf-cross file
+          apt-get install -y --no-install-recommends gcc-arm-linux-gnueabihf libc6-dev-armhf-cross file binutils
       - name: Cross-compile only (no execution or artifact upload)
         run: |
           set -eu
