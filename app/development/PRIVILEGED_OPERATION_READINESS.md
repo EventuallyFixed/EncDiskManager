@@ -443,3 +443,17 @@ the inherited descriptor, and the lock is released after child exit.
 The experiment does not test parent crashes, orphaned children,
 native helper lock-inode authentication, durable marker writes, or
 any privileged disk operation. Those integration gates remain blocked.
+
+### Isolated Linux parent-crash CI validation
+
+Feature validation CI #267 (commit `1a40d595f`) passed all five jobs,
+including `lock_parent_crash_isolated_test.py`. This isolated host test
+checks that a child-inherited `flock` survives parent SIGKILL and releases
+after child SIGKILL. The preceding CI #266 failure was a test-harness
+`pass_fds` tuple error, corrected in #267.
+
+This result is **not** an EX4100 parent-crash test. Before any NAS-side
+crash experiment, review containment and cleanup of orphaned processes;
+the existing successful EX4100 temporary-file tests establish normal
+parent descriptor closure, not abnormal parent death. Privileged
+execution remains blocked.
