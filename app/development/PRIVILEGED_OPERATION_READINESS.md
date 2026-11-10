@@ -405,3 +405,19 @@ launched native shell on the EX4100. It does not demonstrate that the shell
 inherits the PHP lock file descriptor, that an inherited lock survives
 parent exit, or that a future C helper can authenticate ownership of the
 correct lock inode. Those remain explicit integration blockers.
+
+### EX4100 PHP proc_open descriptor visibility result
+
+User-reported execution of
+`php app/development/tests/ex4100_php_fd_pass_inventory.php`:
+
+```text
+FD3_PRESENT
+PHP: 7.4.33
+NOTE: FD visibility only; lock lifetime and ownership remain unverified
+```
+
+This confirms descriptor 3 is visible to a child shell when explicitly
+mapped from a PHP stream via `proc_open` on EX4100 PHP 7.4.33.
+It does not prove inherited `flock` lifetime, inode authentication,
+or crash-safe coordination. No privileged operation is authorized.
