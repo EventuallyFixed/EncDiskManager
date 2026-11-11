@@ -38,6 +38,8 @@ jobs:
         run: sh app/development/tests/native_recovery_marker_compile_test.sh
       - name: Isolated native recovery helper runtime test
         run: sudo sh app/development/tests/native_recovery_marker_isolated_test.sh
+      - name: Isolated native inherited FD identity regression
+        run: python3 app/development/tests/lock_fd_probe_isolated_test.py
       - name: Isolated Linux flock inheritance experiment
         run: python3 app/development/tests/lock_inheritance_isolated_test.py
       - name: Isolated parent crash lock-lifetime experiment
