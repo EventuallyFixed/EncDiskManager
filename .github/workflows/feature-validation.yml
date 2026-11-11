@@ -42,6 +42,8 @@ jobs:
         run: python3 app/development/tests/lock_fd_probe_isolated_test.py
       - name: Isolated inherited flock ownership semantics
         run: python3 app/development/tests/lock_fd_ownership_isolated_test.py
+      - name: Isolated abrupt coordinator exit restart gate
+        run: python3 app/development/tests/lock_pending_abrupt_exit_isolated_test.py
       - name: Isolated pending-record restart gate
         run: python3 app/development/tests/lock_pending_restart_isolated_test.py
       - name: Isolated pending-record failure injection
