@@ -92,3 +92,50 @@ record deletion or marker clearance is authorized by this design.
    approved non-destructive EX4100 tests.
 
 **No implementation of this specification is approved yet.**
+
+## Existing-code compatibility review (2026-11-11)
+
+Reviewed `privileged_operation_request.php`,
+`verified_operation_authorization.php`,
+`operation_target_identity.php`, `operation_target_state.php`,
+and `web/operation-preview.php` on the feature branch.
+
+**Current read-only coverage:** existing request parser accepts exactly
+`action` and `luks_uuid` for unlock/mount/unmount/lock. Registered
+LUKS target binding checks UUID, kernel name and major:minor device
+ID against complete USB snapshots; fresh mapper/mount inspection
+rejects ambiguous or inconsistent states. The preview endpoint
+checks session authentication and CSRF, and returns
+`execution_enabled: false`. None of these paths enables execution.
+
+**Protocol mismatch:** the proposed v1 request schema adds
+`version`, `operation_id`, `target_id` and confirmation; it is
+not implemented by the current two-field parser. Do not silently
+reinterpret or weaken the existing parser. Implement a separately
+versioned, tested boundary if approved.
+
+**Critical encryption distinction:** an unencrypted USB disk has
+no LUKS UUID, so `encrypt_ext4` cannot use the registered-UUID
+identity contract. Define a separate, strong pre-encryption device
+identity using fresh authoritative USB topology, stable hardware
+evidence when available, whole-disk versus partition semantics,
+major:minor and explicit system-disk exclusions. Device names and
+major:minor numbers alone can be reused and must not be treated as
+persistent identifiers. Reject ambiguous or changing identities.
+
+**Confirmation binding:** the destructive confirmation must bind
+the exact resolved target, operation, current observed state and a
+short-lived single-use server-side authorization; a client checkbox
+or previously rendered preview is insufficient. Server-side
+eligibility must require a locked, unmounted target for re-encryption
+and must independently reject inapplicable unlock/mount actions on
+unencrypted media.
+
+**Open review items:** inspect the complete authorization chain,
+the authoritative USB discovery schema, registered/unregistered
+disk handling, and any UI action-state logic before implementing a
+new request parser or coordinator. This is a gap analysis, not a
+claim that the existing code meets the proposed v1 contract.
+
+Status remains **BLOCKED**. No NAS changes, production executor,
+packaging or stable-branch changes are authorized.
