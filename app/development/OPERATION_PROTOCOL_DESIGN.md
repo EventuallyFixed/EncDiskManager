@@ -187,3 +187,41 @@ Reviewed `app/lib/authoritative_usb_discovery.php`,
 
 **Status:** design-only. No encryption target is currently authorized.
 No privileged execution or WD-managed filesystem changes are allowed.
+
+## Administrator decision: whole-USB-disk encryption scope (2026-11-11)
+
+**Approved product behavior, not execution authorization:** the
+administrator explicitly selected **erase and repartition the entire
+selected physical USB disk** for the `Encrypt + ext4` action.
+The target is the whole USB block device; a partition row must never
+implicitly authorize wiping its parent disk.
+
+Proposed workflow, subject to separate safety review:
+
+1. Resolve the selected whole USB disk from trusted, fresh sysfs
+   topology; bind identity, capacity, parent/child partitions and
+   hardware evidence, and revalidate under the coordinator lock.
+2. Exclude NAS/internal/system disks and any device with mounted,
+   swap, open mapper, holder, dependent, busy or ambiguous state.
+   Re-encryption requires prior unmount and lock. Fail closed if
+   any probe is incomplete or identity changes.
+3. Display an explicit entire-disk warning listing the target
+   identity and stating **all partitions and all data will be
+   permanently destroyed**. Require a fresh, single-use,
+   server-validated confirmation bound to that disk and action.
+4. Only after all separately reviewed authorization and recovery
+   gates are satisfied may a future executor replace the partition
+   table, create the intended partition, initialize LUKS1 on that
+   partition and create ext4 inside the unlocked LUKS mapping.
+   Partition table type/alignment, secure secret handling and
+   exact tool invocation remain to be specified.
+5. Persist the recovery state before any destructive child launch;
+   failures must block further operations pending reconciliation.
+
+Existing read-only partition inventory is not itself sufficient
+for whole-disk authorization. UI must make disk-versus-partition
+scope unmistakable; disabled actions remain non-activatable and
+backend rules are authoritative.
+
+**No destructive execution, deployment, merge or NAS changes are
+authorized by this decision.**
