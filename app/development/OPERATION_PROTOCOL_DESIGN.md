@@ -139,3 +139,51 @@ claim that the existing code meets the proposed v1 contract.
 
 Status remains **BLOCKED**. No NAS changes, production executor,
 packaging or stable-branch changes are authorized.
+
+## Unencrypted USB discovery and encryption identity review (2026-11-11)
+
+Reviewed `app/lib/authoritative_usb_discovery.php`,
+`app/lib/usb_discovery.php`, and
+`app/lib/locked_operation_target.php`.
+
+**Observed limitations:**
+- Both USB discovery functions enumerate sysfs **partitions**
+  (`/sys/class/block/<name>/partition`); a blank whole USB disk
+  with no partitions is not represented by this inventory.
+- The display inventory tolerates missing `blkid` metadata, but
+  authoritative discovery fails closed if `blkid` exits nonzero.
+  This is appropriate for registered LUKS inspection; it cannot
+  establish that an unknown disk is empty or safe to erase.
+- Current authoritative identity uses sysfs resolved USB ancestry,
+  kernel partition name and major:minor, plus filesystem/LUKS UUID
+  where present. These are not sufficient persistent identities for
+  a blank disk, and kernel names and major:minor can be reused.
+- Existing locked target checks intentionally require a LUKS UUID;
+  they cannot authorize initial encryption of unencrypted media.
+
+**Proposed separate read-only discovery contract:**
+1. Enumerate complete USB **whole-disk and partition topology**
+   from sysfs, explicitly distinguishing whole disks, partitions,
+   parent-child relationships and all dependent holders/slaves.
+2. Require successful, complete, repeatable probing of disk identity,
+   transport ancestry, capacity, partition table, signatures,
+   mounts, swap, holders and system/root-device exclusion.
+   Missing data or probe errors mean **ineligible**, not empty.
+3. Capture stable USB hardware identifiers when reliably available,
+   such as serial/WWN, with collision and absence checks. A serial
+   is not guaranteed unique or trustworthy; reject ambiguous cases.
+   Bind a fresh in-process identity to kernel major:minor, resolved
+   sysfs path and full topology, then revalidate immediately before
+   any destructive transition.
+4. Treat `encrypt_ext4` target scope (whole disk versus partition)
+   as an explicit, reviewed product decision. Never infer permission
+   to wipe an entire physical disk from a partition row.
+5. Require explicit server-side destructive confirmation bound to
+   that exact identity and state, and reject mounted, unlocked,
+   busy, system, ambiguous or changed targets. No client-supplied
+   `/dev` path is accepted as authority.
+6. Preserve the existing display and registered-LUKS discovery
+   paths; do not retrofit destructive authorization into them.
+
+**Status:** design-only. No encryption target is currently authorized.
+No privileged execution or WD-managed filesystem changes are allowed.
