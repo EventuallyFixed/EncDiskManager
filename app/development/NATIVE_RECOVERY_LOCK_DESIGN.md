@@ -139,3 +139,56 @@ deploy, package, merge or perform privileged disk operations. The
 administrator's accepted WD directory-permissions risk remains as
 documented in `PRIVILEGED_OPERATION_READINESS.md`; no changes to
 WD-managed directories are proposed.
+
+## Integration readiness review after CI #299 (2026-11-11)
+
+**Decision: design only; production integration is not yet approved.**
+The isolated experiments demonstrate useful Linux behavior, but none
+authenticates a privileged request from the web UI or authorizes a disk
+operation. The following are distinct boundaries:
+
+| Boundary | Current evidence | Missing proof |
+| --- | --- | --- |
+| Web request to coordinator | Existing PHP lock and read-only inspection | Authenticated intent, CSRF protection, allowlisted action and target, privilege separation and rejection of forged inputs |
+| Coordinator to native child | CI inherited-FD identity, contention and handoff experiments | Trusted executable launch, controlled FD provenance, fixed protocol, verified invocation authority and fail-closed error handling |
+| Recovery durability | Isolated file and directory fsync and injected failures | Atomic on-disk record format, real crash consistency, replay rules and reviewed reconciliation |
+| Coordinator/child lifecycle | Isolated abrupt-exit and surviving-child tests | Real child tracking, bounded wait/reap, interruption states, restart coordination and orphan containment |
+| Target disk | Read-only discovery/preview exists | Fresh immutable target identity, device topology and mount/LUKS state checks immediately before action, no stale UI authorization |
+| EX4100 deployment | armhf compile and selected NAS read-only experiments | Runtime compatibility and safe non-destructive validation plan |
+
+### Concrete coordinator contract proposed for review
+
+- **Single entry point:** a fixed, root-controlled coordinator; no
+  generic shell command, arbitrary executable path, caller-provided
+  device path, or caller-provided lock FD.
+- **Request:** versioned, bounded, allowlisted operation identifier
+  and stable device identity. Reject unknown fields and mismatches;
+  do not trust an earlier preview as authorization.
+- **Serialization:** coordinator opens the known private directory and
+  lock using no-follow, descriptor-relative operations; verifies
+  metadata and identity; acquires the exclusive lock before inspecting
+  current recovery state and live target state.
+- **Write-ahead record:** a durable, unambiguous operation ID, target
+  identity and phase persisted before any action capable of changing
+  disk state. Failure at any durability step blocks launch. A pending
+  record remains a stop signal after process death or restart.
+- **Child handoff:** only a hard-coded, verified native executable may
+  be launched; pass only controlled descriptors and validated context.
+  Inherited inode checks detect mistakes, but do not confer authority.
+- **Completion:** coordinator reaps the child, rechecks live
+  postconditions, and transitions recovery state only through a
+  separately reviewed durable protocol. Never clear an uncertain
+  record automatically.
+
+### Required next deliverable
+
+Before implementing an executor, specify the **request and recovery
+record schemas**, operation state machine, failure transitions and
+read-only authorization tests. Review these against PHP 7.4 and the
+EX4100 process model. Do not interpret the CI success as validation of
+actual power-loss durability or native privileged authorization.
+
+The administrator's acceptance of WD-managed ancestor permissions is
+recorded separately in `PRIVILEGED_OPERATION_READINESS.md`. That
+environmental decision stands; it does not authorize changing WD
+permissions or bypassing independent disk-operation safety gates.
