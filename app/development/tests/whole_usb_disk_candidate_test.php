@@ -47,3 +47,37 @@ $other['dev_id'] = '8:32';
 check_whole(edm_whole_usb_disk_candidate(array('complete' => true,
     'disks' => array($disk, $other)), 'sdb') === null, 'Duplicate serial rejected');
 check_whole(edm_whole_usb_disk_candidate($snapshot, 'sdc') === null, 'Unknown disk rejected');
+
+foreach (array(
+    array(), array('complete' => true), array('complete' => true, 'disks' => 'invalid'),
+    array('complete' => 1, 'disks' => array($disk)),
+    array('complete' => true, 'disks' => array('malformed'))
+) as $malformed) {
+    check_whole(edm_whole_usb_disk_candidate($malformed, 'sdb') === null,
+        'Malformed snapshot rejected');
+}
+foreach (array(
+    'name' => '../sdb', 'dev_id' => 'not-a-device',
+    'sysfs_path' => 'relative/sysfs', 'serial' => '',
+    'size_bytes' => 0, 'whole_disk' => 'yes',
+    'system_dependency' => 0, 'busy' => null,
+    'topology_complete' => 1, 'signatures_complete' => null
+) as $field => $value) {
+    $malformedDisk = $disk;
+    $malformedDisk[$field] = $value;
+    check_whole(edm_whole_usb_disk_candidate(array('complete' => true,
+        'disks' => array($malformedDisk)), 'sdb') === null,
+        'Malformed field rejected: ' . $field);
+}
+$duplicateName = $disk;
+$duplicateName['dev_id'] = '8:32';
+$duplicateName['serial'] = 'fixture-unique-002';
+check_whole(edm_whole_usb_disk_candidate(array('complete' => true,
+    'disks' => array($disk, $duplicateName)), 'sdb') === null,
+    'Duplicate kernel name rejected');
+$duplicateDevId = $disk;
+$duplicateDevId['name'] = 'sdc';
+$duplicateDevId['serial'] = 'fixture-unique-002';
+check_whole(edm_whole_usb_disk_candidate(array('complete' => true,
+    'disks' => array($disk, $duplicateDevId)), 'sdb') === null,
+    'Duplicate major:minor rejected');
