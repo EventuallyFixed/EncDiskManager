@@ -81,3 +81,29 @@ $duplicateDevId['serial'] = 'fixture-unique-002';
 check_whole(edm_whole_usb_disk_candidate(array('complete' => true,
     'disks' => array($disk, $duplicateDevId)), 'sdb') === null,
     'Duplicate major:minor rejected');
+
+$disconnected = array('complete' => true, 'disks' => array());
+check_whole(!edm_whole_usb_disk_still_matches($bound, $disconnected),
+    'Unplugged USB disk invalidates bound identity');
+$reconnected = $disk;
+$reconnected['name'] = 'sdc';
+$reconnected['dev_id'] = '8:32';
+$reconnected['sysfs_path'] = '/sys/devices/pci/usb2/2-1/block/sdc';
+check_whole(!edm_whole_usb_disk_still_matches($bound,
+    array('complete' => true, 'disks' => array($reconnected))),
+    'Reconnected disk with changed kernel identity rejected');
+$replacement = $disk;
+$replacement['serial'] = 'fixture-replacement';
+check_whole(!edm_whole_usb_disk_still_matches($bound,
+    array('complete' => true, 'disks' => array($replacement))),
+    'Replacement disk reusing kernel name and device number rejected');
+$changedSafety = $disk;
+$changedSafety['mounted'] = true;
+check_whole(!edm_whole_usb_disk_still_matches($bound,
+    array('complete' => true, 'disks' => array($changedSafety))),
+    'Newly mounted disk invalidates previous eligibility');
+$changedSafety = $disk;
+$changedSafety['has_holders'] = true;
+check_whole(!edm_whole_usb_disk_still_matches($bound,
+    array('complete' => true, 'disks' => array($changedSafety))),
+    'New holder invalidates previous eligibility');
