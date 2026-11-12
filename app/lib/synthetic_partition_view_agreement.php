@@ -10,7 +10,8 @@
 function edm_synthetic_partition_views_agree($left, $right)
 {
     $normalize = function ($view) {
-        if (!is_array($view) || count($view) > 256) return false;
+        if (!is_array($view) || count($view) > 256
+            || array_keys($view) !== range(0, count($view) - 1) && count($view) !== 0) return false;
         $byDev = array();
         $names = array();
         $numbers = array();
