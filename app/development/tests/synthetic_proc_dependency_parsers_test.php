@@ -41,3 +41,23 @@ foreach (array(
     check_proc_parse(edm_synthetic_swaps_parse($invalid) === false,
         'Reject malformed synthetic swaps input');
 }
+
+$escapedMount = "32 22 8:17 / /mnt/USB\\\\040Disk rw - ext4 /dev/sdb1 rw\n";
+$escapedParsed = edm_synthetic_mountinfo_parse($escapedMount);
+check_proc_parse(is_array($escapedParsed) && count($escapedParsed) === 1,
+    'Accept kernel-style escaped whitespace in synthetic mountpoint');
+foreach (array(
+    "32 22 8:17 / /mnt/bad\\\\999 rw - ext4 /dev/sdb1 rw\n",
+    "32 22 8:17 / /mnt/bad\\\\ rw - ext4 /dev/sdb1 rw\n",
+    "32 22 8:17 / /mnt/usb rw - ext4 /dev/sdb1 rw - extra\n",
+    "32 22 8:17 / /mnt/usb rw - ext4 /dev/sdb1 rw\n" .
+        "32 22 8:18 / /mnt/other rw - ext4 /dev/sdb2 rw\n",
+    "32 22 8:17 / /mnt/usb rw - ext4 /dev/sdb1 rw\n" .
+        "33 22 8:18 / /mnt/other rw - ext4 /dev/sdb2\n",
+) as $invalid) {
+    check_proc_parse(edm_synthetic_mountinfo_parse($invalid) === false,
+        'Reject invalid escape duplicate mount ID or incomplete record');
+}
+check_proc_parse(edm_synthetic_mountinfo_parse("32 22 8:17 / /mnt/usb rw - ext4 /dev/sdb1 rw\n" .
+    "33 22 8:18 / /mnt/other rw - ext4 /dev/sdb2 rw\n") !== false,
+    'Accept distinct well-formed synthetic mount IDs');
