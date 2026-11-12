@@ -44,3 +44,25 @@ $invalid = $graph;
 unset($invalid['nodes']['sdb1']['swap']);
 check_topology(!edm_whole_disk_topology_safe($invalid, 'sdb'),
     'Reject missing dependency state');
+
+$duplicate = $graph;
+$duplicate['nodes']['sdb']['children'][] = 'sdb1';
+check_topology(!edm_whole_disk_topology_safe($duplicate, 'sdb'),
+    'Reject duplicate child relationship');
+$selfCycle = $graph;
+$selfCycle['nodes']['sdb1']['children'][] = 'sdb1';
+check_topology(!edm_whole_disk_topology_safe($selfCycle, 'sdb'),
+    'Reject self-referential child');
+$rootCycle = $graph;
+$rootCycle['nodes']['sdb1']['children'][] = 'sdb';
+check_topology(!edm_whole_disk_topology_safe($rootCycle, 'sdb'),
+    'Reject cycle returning to disk root');
+$multiParent = $graph;
+$multiParent['nodes']['sdb1']['children'][] = 'sdb2';
+check_topology(!edm_whole_disk_topology_safe($multiParent, 'sdb'),
+    'Reject partition with multiple parents');
+$duplicateHolder = $graph;
+$duplicateHolder['nodes']['sdb1']['holders'] = array('dm-0', 'dm-0');
+$duplicateHolder['nodes']['dm-0'] = clean_node();
+check_topology(!edm_whole_disk_topology_safe($duplicateHolder, 'sdb'),
+    'Reject duplicate holder relationship');
