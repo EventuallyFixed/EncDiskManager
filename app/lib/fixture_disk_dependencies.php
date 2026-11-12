@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/fixture_partition_tree.php';
-require_once __DIR__ . '/fixture_block_holders.php';
+require_once __DIR__ . '/fixture_block_links.php';
 require_once __DIR__ . '/fixture_mount_swap.php';
 
 /**
@@ -13,6 +13,6 @@ function edm_fixture_disk_dependencies_clear($root, $disk, $mountSwapReport)
     if (!isset($tree['complete'], $tree['nodes'])
         || $tree['complete'] !== true || !is_array($tree['nodes'])) return false;
     $devices = array_keys($tree['nodes']);
-    if (!edm_fixture_block_holders_clear($root, $devices)) return false;
+    if (!edm_fixture_block_links_clear($root, $devices)) return false;
     return edm_fixture_mount_swap_clear($mountSwapReport, $devices);
 }
