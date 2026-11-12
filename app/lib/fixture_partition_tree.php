@@ -24,9 +24,11 @@ function edm_fixture_partition_tree($root, $disk)
         $path = $base . '/' . $name;
         $resolved = realpath($path);
         if ($resolved === false || !is_dir($resolved)) return $fail;
-        if (!is_file($path . '/partition')) continue;
         $parent = dirname($resolved);
         if ($parent !== $diskPath) continue;
+        // Any immediate child block entry of this disk must provide a
+        // readable, valid partition marker; omission is not safe emptiness.
+        if (!is_file($path . '/partition')) return $fail;
         $number = @file_get_contents($path . '/partition');
         if ($number === false || !preg_match('/^[1-9][0-9]*$/D', trim($number))) return $fail;
         $nodes[$name] = array('children' => array(), 'partition_number' => (int)trim($number));
