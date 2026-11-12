@@ -10,13 +10,15 @@ function edm_fixture_partition_tree($root, $disk)
     $fail = array('complete' => false, 'nodes' => array());
     if (!is_string($root) || $root === '' || !is_string($disk)
         || !preg_match('/^[a-zA-Z0-9._+-]+$/D', $disk)) return $fail;
-    $base = $root . '/class/block';
+    $canonicalRoot = realpath($root);
+    if ($canonicalRoot === false || !is_dir($canonicalRoot)) return $fail;
+    $base = $canonicalRoot . '/class/block';
     if (!is_dir($base) || !is_dir($base . '/' . $disk)
         || is_file($base . '/' . $disk . '/partition')) return $fail;
     $entries = @scandir($base);
     if (!is_array($entries)) return $fail;
     $diskPath = realpath($base . '/' . $disk);
-    if ($diskPath === false) return $fail;
+    if ($diskPath === false || strpos($diskPath, $canonicalRoot . '/') !== 0) return $fail;
     $nodes = array($disk => array('children' => array()));
     $seenNumbers = array();
     $seenPaths = array($diskPath => true);
@@ -27,7 +29,8 @@ function edm_fixture_partition_tree($root, $disk)
         if ($name === $disk) continue;
         $path = $base . '/' . $name;
         $resolved = realpath($path);
-        if ($resolved === false || !is_dir($resolved)) return $fail;
+        if ($resolved === false || !is_dir($resolved)
+            || strpos($resolved, $canonicalRoot . '/') !== 0) return $fail;
         if (isset($seenPaths[$resolved])) return $fail;
         $seenPaths[$resolved] = true;
         $parent = dirname($resolved);
