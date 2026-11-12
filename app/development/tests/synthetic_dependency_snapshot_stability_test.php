@@ -48,3 +48,32 @@ assert_stability(!edm_synthetic_dependency_snapshots_stable($original, $changed,
     'Reject unreadable second mountinfo probe');
 assert_stability(!edm_synthetic_dependency_snapshots_stable($original, null, 'sdb'),
     'Reject missing second snapshot');
+
+// A device disappearing or being replaced between observations must not
+// be interpreted as a stable safe disk.
+$changed = $original;
+unset($changed['identity']);
+assert_stability(!edm_synthetic_dependency_snapshots_stable($original, $changed, 'sdb'),
+    'Reject disappeared device identity');
+$changed = $original;
+unset($changed['graph']['nodes']['sdb']);
+assert_stability(!edm_synthetic_dependency_snapshots_stable($original, $changed, 'sdb'),
+    'Reject disappeared root block node');
+$changed = $original;
+$changed['identity']['serial'] = 'SERIAL-REPLACEMENT';
+$changed['identity']['sysfs_path'] = '/synthetic/usb2/sdb';
+assert_stability(!edm_synthetic_dependency_snapshots_stable($original, $changed, 'sdb'),
+    'Reject reconnect at same device name with replaced physical identity');
+$changed = $original;
+$changed['identity']['dev_id'] = '8:32';
+assert_stability(!edm_synthetic_dependency_snapshots_stable($original, $changed, 'sdb'),
+    'Reject changed major minor after reconnect');
+$changed = $original;
+$changed['sources']['sysfs_partitions']['complete'] = false;
+assert_stability(!edm_synthetic_dependency_snapshots_stable($original, $changed, 'sdb'),
+    'Reject incomplete partition observation after reconnect');
+$changed = $original;
+$changed['graph']['nodes']['sdb']['children'][] = 'sdb2';
+$changed['graph']['nodes']['sdb2'] = $partition;
+assert_stability(!edm_synthetic_dependency_snapshots_stable($original, $changed, 'sdb'),
+    'Reject new partition after first observation');
