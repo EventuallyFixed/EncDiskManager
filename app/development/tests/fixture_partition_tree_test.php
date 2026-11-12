@@ -18,6 +18,15 @@ try {
     assert_partition($tree['complete'] === true
         && $tree['nodes']['sdb']['children'] === array('sdb1', 'sdb2'),
         'Discover two synthetic disk partitions');
+    // Demonstrate a known limitation: the fixture's class/block inventory
+    // can omit a real-looking child directory. This is NOT a safety proof.
+    unlink($root . '/class/block/sdb2');
+    $omitted = edm_fixture_partition_tree($root, 'sdb');
+    assert_partition($omitted['complete'] === true
+        && $omitted['nodes']['sdb']['children'] === array('sdb1')
+        && is_dir($root . '/devices/usb1/sdb/sdb2'),
+        'Document undetected omitted partition link (not authoritative)');
+    symlink($root . '/devices/usb1/sdb/sdb2', $root . '/class/block/sdb2');
     unlink($root . '/devices/usb1/sdb/sdb2/partition');
     assert_partition(edm_fixture_partition_tree($root, 'sdb')['complete'] === false,
         'Reject missing partition marker beneath selected disk');
