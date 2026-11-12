@@ -36,3 +36,25 @@ assert_views(!edm_synthetic_partition_views_agree($c, $c),
 $c = $a; $c[0]['name'] = '../sdb1';
 assert_views(!edm_synthetic_partition_views_agree($c, $c),
     'Reject invalid partition name');
+
+foreach (array(null, false, 'not-an-array', 7) as $invalid) {
+    assert_views(!edm_synthetic_partition_views_agree($invalid, $a),
+        'Reject non-array inventory');
+}
+foreach (array(
+    array('name' => 'sdb1', 'dev' => '8:17'),
+    array('name' => 'sdb1', 'dev' => '8:17', 'partition_number' => 1, 'extra' => true),
+    array('dev' => '8:17', 'partition_number' => 1, 'name' => 'sdb1'),
+    array('name' => 'sdb1', 'dev' => '8:17', 'partition_number' => '1'),
+    array('name' => 'sdb1', 'dev' => '8:17', 'partition_number' => 0),
+    array('name' => '', 'dev' => '8:17', 'partition_number' => 1),
+    array('name' => 'sdb1', 'dev' => '8:017', 'partition_number' => 1),
+    array('name' => 'sdb1', 'dev' => '-1:17', 'partition_number' => 1),
+) as $invalidEntry) {
+    assert_views(!edm_synthetic_partition_views_agree(array($invalidEntry), array($invalidEntry)),
+        'Reject malformed or ambiguous partition entry');
+}
+assert_views(!edm_synthetic_partition_views_agree(array_fill(0, 257, $a[0]), array()),
+    'Reject oversized inventory');
+assert_views(!edm_synthetic_partition_views_agree(array('unexpected' => $a[0]), array('unexpected' => $a[0])),
+    'Reject associative inventory index');
