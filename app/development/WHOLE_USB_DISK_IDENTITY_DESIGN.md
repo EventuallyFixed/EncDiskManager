@@ -88,3 +88,48 @@ and confirmation token lifecycle. Review EX4100 sysfs and block-device
 layout using only separately approved read-only inspection.
 
 Stable v0.5.5 and WD-managed directory permissions are unchanged.
+
+## Discovery-to-topology interface review (2026-11-12)
+
+CI #316 passed the isolated cycle, duplicate-edge and multiple-parent
+tests. These tests do **not** establish live dependency completeness.
+
+The current `whole_usb_disk_fixture_discovery.php` adapter produces
+synthetic whole-disk records with conservative unsafe flags; it does
+not enumerate partition, holder, swap, mount or system dependency
+graphs. The separate `whole_disk_topology.php` validator accepts a
+caller-supplied `complete: true` graph and checks structural
+consistency and unsafe flags. A graph omitting a real holder or mount
+could appear safe if an adapter asserted completeness incorrectly.
+
+**Required interface contract before wiring the two:**
+
+1. A trusted read-only collector, not browser input, must construct
+   the graph from authoritative kernel sources. The collector alone
+   may set `complete: true`, and only after every required probe
+   succeeds and is cross-checked.
+2. Enumerate every partition and all holder/slave relationships,
+   including dm, md and RAID ancestors/dependents; do not silently
+   discard unexpected links or treat missing directories as empty.
+3. Cross-check mountinfo, swap, root/system and NAS persistent-storage
+   dependency graphs. Any unresolved node, unsupported relationship,
+   changed enumeration or failed read yields `complete: false`.
+4. Graph edges must have explicit semantics. A physical disk's
+   partition-child tree and the holder/dependency graph are distinct:
+   do not treat an active mapper as an ordinary partition child.
+   Reject holders rather than flattening them into the partition tree.
+5. Require two independent, complete snapshots to match relevant
+   identity and safety state under the coordinator lock. A successful
+   synthetic graph check alone never authorizes a disk operation.
+6. Keep all discovered disks ineligible until the collector has
+   implemented and tested every required source and the executor
+   authorization boundary is separately reviewed.
+
+**Test priorities:** missing holder directories, unreadable sysfs,
+mountinfo and swap, stale partition enumeration, unexpected dm/md
+links, cycles and duplicate edges, and source changes between probes.
+Fixtures must model source failures explicitly rather than assuming
+that an absent entry means a safe empty set.
+
+No live sysfs integration, disk operations or NAS modifications are
+authorized by this review.
