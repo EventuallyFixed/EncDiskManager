@@ -19,8 +19,8 @@ try {
         && $tree['nodes']['sdb']['children'] === array('sdb1', 'sdb2'),
         'Discover two synthetic disk partitions');
     unlink($root . '/devices/usb1/sdb/sdb2/partition');
-    assert_partition(edm_fixture_partition_tree($root, 'sdb')['complete'] === true,
-        'Missing partition marker is not interpreted as a known partition');
+    assert_partition(edm_fixture_partition_tree($root, 'sdb')['complete'] === false,
+        'Reject missing partition marker beneath selected disk');
     file_put_contents($root . '/devices/usb1/sdb/sdb2/partition', "bad\n");
     assert_partition(edm_fixture_partition_tree($root, 'sdb')['complete'] === false,
         'Reject malformed partition metadata');
