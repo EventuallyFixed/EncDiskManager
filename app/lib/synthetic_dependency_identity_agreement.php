@@ -10,7 +10,7 @@
 function edm_synthetic_dependency_identity_agrees($first, $second)
 {
     $normalize = function ($items) {
-        if (!is_array($items) || array_keys($items) !== range(0, count($items) - 1)
+        if (!is_array($items) || array_keys($items) !== (count($items) === 0 ? array() : range(0, count($items) - 1))
             || count($items) > 256) return false;
         $seen = array();
         foreach ($items as $item) {
