@@ -23,6 +23,8 @@ function edm_fixture_partition_tree($root, $disk)
     foreach ($entries as $name) {
         if ($name === '.' || $name === '..') continue;
         if (!preg_match('/^[a-zA-Z0-9._+-]+$/D', $name)) return $fail;
+        // The selected root disk is already recorded in seenPaths.
+        if ($name === $disk) continue;
         $path = $base . '/' . $name;
         $resolved = realpath($path);
         if ($resolved === false || !is_dir($resolved)) return $fail;
