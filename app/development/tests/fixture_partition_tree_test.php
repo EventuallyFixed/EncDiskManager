@@ -47,6 +47,14 @@ try {
         'Reject unexpected nested block-device relationship');
     unlink($root . '/class/block/nested');
     rmdir($root . '/devices/usb1/sdb/sdb1/nested');
+    // An entry pointing outside the fixture root must never be trusted.
+    $outside = sys_get_temp_dir() . '/edm-outside-partition-' . bin2hex(random_bytes(8));
+    mkdir($outside, 0700);
+    symlink($outside, $root . '/class/block/outside');
+    assert_partition(edm_fixture_partition_tree($root, 'sdb')['complete'] === false,
+        'Reject block symlink escaping synthetic fixture root');
+    unlink($root . '/class/block/outside');
+    rmdir($outside);
     file_put_contents($root . '/devices/usb1/sdb/sdb2/partition', "9999999999999999999999999999999999\n");
     assert_partition(edm_fixture_partition_tree($root, 'sdb')['complete'] === false,
         'Reject overflowing partition number');
