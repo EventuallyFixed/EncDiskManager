@@ -54,3 +54,17 @@ check_partition_topology($agree(array(), array(), $empty),
     'Explicit empty partition views agree with empty graph');
 check_partition_topology(!$agree(array(), array(), $graph),
     'Empty views reject graph with partitions');
+
+$associative = array('partition-one' => $parts[0], 'partition-two' => $parts[1]);
+check_partition_topology(!$agree($associative, $associative, $graph),
+    'Reject matching but associative partition inventories');
+$sparse = array(0 => $parts[0], 2 => $parts[1]);
+check_partition_topology(!$agree($sparse, $sparse, $graph),
+    'Reject matching but sparse partition inventories');
+$repeated = array($parts[0], $parts[0]);
+check_partition_topology(!$agree($repeated, $repeated, $graph),
+    'Reject matching but duplicate partition identities');
+$malformed = $parts;
+$malformed[0]['partition_number'] = '1';
+check_partition_topology(!$agree($malformed, $malformed, $graph),
+    'Reject matching but malformed partition numbers');
