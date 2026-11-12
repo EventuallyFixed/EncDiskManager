@@ -30,6 +30,26 @@ try {
         'Reject unresolved block-device link');
     assert_partition(edm_fixture_partition_tree($root, '../sdb')['complete'] === false,
         'Reject unsafe disk name');
+    // Restore the valid fixture before testing ambiguous relationships.
+    unlink($root . '/class/block/sdb1');
+    symlink($root . '/devices/usb1/sdb/sdb1', $root . '/class/block/sdb1');
+    file_put_contents($root . '/devices/usb1/sdb/sdb2/partition', "1\n");
+    assert_partition(edm_fixture_partition_tree($root, 'sdb')['complete'] === false,
+        'Reject duplicate partition numbers');
+    file_put_contents($root . '/devices/usb1/sdb/sdb2/partition', "2\n");
+    symlink($root . '/devices/usb1/sdb/sdb1', $root . '/class/block/alias1');
+    assert_partition(edm_fixture_partition_tree($root, 'sdb')['complete'] === false,
+        'Reject duplicate canonical block-device paths');
+    unlink($root . '/class/block/alias1');
+    mkdir($root . '/devices/usb1/sdb/sdb1/nested', 0700);
+    symlink($root . '/devices/usb1/sdb/sdb1/nested', $root . '/class/block/nested');
+    assert_partition(edm_fixture_partition_tree($root, 'sdb')['complete'] === false,
+        'Reject unexpected nested block-device relationship');
+    unlink($root . '/class/block/nested');
+    rmdir($root . '/devices/usb1/sdb/sdb1/nested');
+    file_put_contents($root . '/devices/usb1/sdb/sdb2/partition', "9999999999999999999999999999999999\n");
+    assert_partition(edm_fixture_partition_tree($root, 'sdb')['complete'] === false,
+        'Reject overflowing partition number');
 } finally {
     foreach (array('sdb','sdb1','sdb2') as $name) @unlink($root . '/class/block/' . $name);
     foreach (array('sdb1','sdb2') as $name) @unlink($root . '/devices/usb1/sdb/' . $name . '/partition');
