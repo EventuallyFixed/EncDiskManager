@@ -42,13 +42,13 @@ foreach (array(
         'Reject malformed synthetic swaps input');
 }
 
-$escapedMount = "32 22 8:17 / /mnt/USB\\\\040Disk rw - ext4 /dev/sdb1 rw\n";
+$escapedMount = "32 22 8:17 / /mnt/USB\\040Disk rw - ext4 /dev/sdb1 rw\n";
 $escapedParsed = edm_synthetic_mountinfo_parse($escapedMount);
 check_proc_parse(is_array($escapedParsed) && count($escapedParsed) === 1,
     'Accept kernel-style escaped whitespace in synthetic mountpoint');
 foreach (array(
-    "32 22 8:17 / /mnt/bad\\\\999 rw - ext4 /dev/sdb1 rw\n",
-    "32 22 8:17 / /mnt/bad\\\\ rw - ext4 /dev/sdb1 rw\n",
+    "32 22 8:17 / /mnt/bad\\999 rw - ext4 /dev/sdb1 rw\n",
+    "32 22 8:17 / /mnt/bad\\ rw - ext4 /dev/sdb1 rw\n",
     "32 22 8:17 / /mnt/usb rw - ext4 /dev/sdb1 rw - extra\n",
     "32 22 8:17 / /mnt/usb rw - ext4 /dev/sdb1 rw\n" .
         "32 22 8:18 / /mnt/other rw - ext4 /dev/sdb2 rw\n",
