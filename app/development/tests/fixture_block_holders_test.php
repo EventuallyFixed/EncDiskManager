@@ -23,6 +23,22 @@ try {
         'Reject unsafe block identity');
     check_holders(!edm_fixture_block_holders_clear($root, array('sdb', 'missing')),
         'Reject missing block entry');
+    // An external block directory must not be accepted even if holders is empty.
+    $outside = sys_get_temp_dir() . '/edm-outside-holders-' . bin2hex(random_bytes(8));
+    mkdir($outside . '/holders', 0700, true);
+    symlink($outside, $root . '/class/block/outside');
+    check_holders(!edm_fixture_block_holders_clear($root, array('outside')),
+        'Reject block symlink escaping fixture root');
+    unlink($root . '/class/block/outside');
+    rmdir($outside . '/holders');
+    rmdir($outside);
+    // A holder directory symlink must not masquerade as an empty directory.
+    mkdir($root . '/class/block/sdb1/actual-holders', 0700);
+    symlink($root . '/class/block/sdb1/actual-holders', $root . '/class/block/sdb1/holders');
+    check_holders(!edm_fixture_block_holders_clear($root, array('sdb1')),
+        'Reject symlinked holder directory');
+    unlink($root . '/class/block/sdb1/holders');
+    rmdir($root . '/class/block/sdb1/actual-holders');
     check_holders(!edm_fixture_block_holders_clear($root, array()),
         'Reject empty block inventory');
 } finally {
