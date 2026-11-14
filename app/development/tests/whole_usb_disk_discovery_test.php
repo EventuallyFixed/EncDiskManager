@@ -46,11 +46,19 @@ try {
         && $result['disks'][0]['partitions'] === array('sdb1')
         && $result['disks'][0]['serial'] === 'TEST-USB-001'
         && $result['disks'][0]['dev_id'] === '8:16'
-        && $result['disks'][0]['size_bytes'] === 1048576
+        && $result['disks'][0]['size_bytes'] == 1048576
         && $result['disks'][0]['read_only'] === false
         && $result['disks'][0]['mounted'] === true
         && $result['disks'][0]['encryption_eligible'] === false,
         'USB parent discovered but mounted partition cannot be encrypted');
+    file_put_contents($usb . '/size', '7814037168');
+    $large = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps');
+    check_discovery($large['complete'] === true
+        && count($large['disks']) === 1
+        && $large['disks'][0]['size_bytes'] > 3000000000000
+        && $large['disks'][0]['encryption_eligible'] === false,
+        'Multi-terabyte USB disk is visible on 32-bit PHP without enabling encryption');
+    file_put_contents($usb . '/size', '2048');
     file_put_contents($base . '/mounts', '');
     file_put_contents($base . '/swaps', "Filename Type Size Used Priority\n/dev/sdb1 partition 1024 0 -2\n");
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps');
