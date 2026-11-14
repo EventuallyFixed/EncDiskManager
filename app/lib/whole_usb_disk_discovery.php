@@ -90,7 +90,7 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             }
             if (count($slaves) > 2) $hasSlaves = true;
         }
-         $devId = @file_get_contents($path . '/dev');
+        $devId = @file_get_contents($path . '/dev');
         $sectors = @file_get_contents($path . '/size');
         $readOnly = @file_get_contents($path . '/ro');
         if ($devId === false || $sectors === false || $readOnly === false
@@ -101,8 +101,9 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
         }
         // ARMHF PHP may use 32-bit integers. Use floating-point only for
         // read-only capacity display; never use it to identify an erase target.
-        $sectorCount = (float) trim($sectors);
-        if (!is_finite($sectorCount) || $sectorCount <= 0
+        $exactSectors = ltrim(trim($sectors), '0');
+        $sectorCount = (float) $exactSectors;
+        if ($exactSectors === '' || !is_finite($sectorCount) || $sectorCount <= 0
             || $sectorCount > PHP_FLOAT_MAX / 512) {
             return array('complete' => false, 'disks' => array());
         }
@@ -139,7 +140,7 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             'serial' => $serial,
             'size_bytes' => $sectorCount * 512,
             // Exact decimal sector count for identity checks on 32-bit PHP.
-            'size_sectors' => ltrim(trim($sectors), '0') ?: '0',
+            'size_sectors' => $exactSectors,
             'read_only' => trim($readOnly) === '1',
             'partitions' => $children,
             'partition_dev_ids' => $partitionIds,
