@@ -107,3 +107,26 @@ $changedSafety['has_holders'] = true;
 check_whole(!edm_whole_usb_disk_still_matches($bound,
     array('complete' => true, 'disks' => array($changedSafety))),
     'New holder invalidates previous eligibility');
+
+$id = edm_whole_usb_disk_identifier($disk);
+check_whole(is_string($id) && strlen($id) === 64,
+    'Whole disk gets an opaque inventory identifier');
+check_whole(edm_whole_usb_disk_by_identifier($snapshot, $id) === $disk,
+    'Opaque identifier resolves against fresh eligible inventory');
+check_whole(edm_whole_usb_disk_by_identifier($snapshot, '/dev/sdb') === null,
+    'Client device path is not an identifier');
+check_whole(edm_whole_usb_disk_by_identifier($snapshot, str_repeat('0', 64)) === null,
+    'Unknown identifier is rejected');
+check_whole(edm_whole_usb_disk_by_identifier(array('complete' => false,
+    'disks' => array($disk)), $id) === null,
+    'Incomplete live inventory cannot resolve identifier');
+$replaced = $disk;
+$replaced['serial'] = 'another-device';
+check_whole(edm_whole_usb_disk_by_identifier(array('complete' => true,
+    'disks' => array($replaced)), $id) === null,
+    'Replacement device cannot reuse previous identifier');
+$nowMounted = $disk;
+$nowMounted['mounted'] = true;
+check_whole(edm_whole_usb_disk_by_identifier(array('complete' => true,
+    'disks' => array($nowMounted)), $id) === null,
+    'Newly mounted disk cannot resolve as eligible');
