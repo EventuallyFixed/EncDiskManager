@@ -28,4 +28,6 @@ foreach (array('../sdb', 'sdb1', 'nvme0n1', '/dev/sdb') as $bad) {
 }
 $changed = $disk; $changed['size_sectors'] = '0';
 verify(edm_whole_disk_identity_matches($changed, $changed), false, 'Zero capacity rejected');
+$changed = $disk; $changed['size_sectors'] = '30031250';
+verify(edm_whole_disk_identity_matches($disk, $changed), false, 'Different exact sector count rejected');
 verify(edm_whole_disk_identity_matches(null, $disk), false, 'Invalid identity rejected');
