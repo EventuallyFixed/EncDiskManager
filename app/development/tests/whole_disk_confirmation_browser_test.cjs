@@ -71,6 +71,32 @@ async function run() {
   pending.shift().resolve({ok: true, json: async () => ({confirmed: true, execution_enabled: true})});
   await flush();
   assert.match(status.textContent, /could not be validated/, 'execution-enabled response rejected');
+  // An old response must not update the dialog after a different disk is selected.
+  buttons[0].click();
+  ack.checked = true; ack.dispatchEvent(new window.Event('change'));
+  phrase.value = 'ERASE ALL DATA'; phrase.dispatchEvent(new window.Event('input'));
+  confirm.click();
+  const stale = pending.shift();
+  buttons[1].click();
+  assert.equal(status.textContent, '', 'new disk starts with no prior result');
+  stale.resolve({ok: true, json: async () => ({confirmed: true, execution_enabled: false})});
+  await flush();
+  assert.equal(status.textContent, '', 'stale success does not appear for new disk');
+  assert.equal(confirm.disabled, true, 'new disk still requires acknowledgement');
+  // A stale rejection must not replace a newer validation result.
+  ack.checked = true; ack.dispatchEvent(new window.Event('change'));
+  phrase.value = 'ERASE ALL DATA'; phrase.dispatchEvent(new window.Event('input'));
+  confirm.click();
+  const oldRequest = pending.shift();
+  phrase.value = 'wrong'; phrase.dispatchEvent(new window.Event('input'));
+  phrase.value = 'ERASE ALL DATA'; phrase.dispatchEvent(new window.Event('input'));
+  confirm.click();
+  const currentRequest = pending.shift();
+  currentRequest.resolve({ok: true, json: async () => ({confirmed: true, execution_enabled: false})});
+  await flush();
+  oldRequest.reject(new Error('stale network error'));
+  await flush();
+  assert.match(status.textContent, /Server validated/, 'stale rejection cannot overwrite current result');
   console.log('PASS: whole disk confirmation preview reset, validation, rejection and no execution');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });
