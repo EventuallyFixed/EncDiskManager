@@ -33,6 +33,7 @@ try {
     file_put_contents($base . '/usb1/1-1/serial', 'TEST-USB-001');
     mkdir($usb, 0700);
     mkdir($usb . '/holders', 0700);
+    mkdir($usb . '/slaves', 0700);
     file_put_contents($usb . '/dev', '8:16');
     file_put_contents($usb . '/size', '2048');
     file_put_contents($usb . '/ro', '0');
@@ -40,6 +41,7 @@ try {
     file_put_contents($usb . '/sdb1/partition', '1');
     file_put_contents($usb . '/sdb1/dev', '8:17');
     mkdir($usb . '/sdb1/holders', 0700);
+    mkdir($usb . '/sdb1/slaves', 0700);
     symlink($usb, $base . '/block/sdb');
     file_put_contents($base . '/mounts', "/dev/sdb1 /mnt/test ext4 rw 0 0\n");
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
@@ -79,6 +81,12 @@ try {
     check_discovery($result['disks'][0]['has_holders'] === true
         && $result['disks'][0]['encryption_eligible'] === false,
         'Partition holder is detected without enabling encryption');
+    file_put_contents($usb . '/sdb1/slaves/dm-test', '');
+    $dependent = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
+    check_discovery($dependent['disks'][0]['has_slaves'] === true
+        && $dependent['disks'][0]['encryption_eligible'] === false,
+        'Partition block-device slave dependency is reported without enabling encryption');
+    unlink($usb . '/sdb1/slaves/dm-test');
     file_put_contents($usb . '/ro', '1');
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
     check_discovery($result['complete'] === true
@@ -105,8 +113,10 @@ try {
     unlink($usb . '/sdb1/dev');
     unlink($usb . '/sdb1/partition');
     rmdir($usb . '/sdb1/holders');
+    rmdir($usb . '/sdb1/slaves');
     rmdir($usb . '/sdb1');
     rmdir($usb . '/holders');
+    rmdir($usb . '/slaves');
     unlink($usb . '/dev');
     unlink($usb . '/size');
     unlink($usb . '/ro');
