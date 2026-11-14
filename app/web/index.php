@@ -145,8 +145,9 @@ function h($value) {
 require_once __DIR__ . '/../lib/usb_discovery.php';
 $discovery = edm_discover_usb_inventory();
 require_once __DIR__ . '/../lib/whole_usb_disk_discovery.php';
-require_once __DIR__ . '/../lib/whole_usb_disk_preflight.php';
+require_once __DIR__ . '/../lib/whole_usb_disk_stable_candidate.php';
 $wholeDiskInventory = edm_discover_whole_usb_disks();
+$wholeDiskSecondSnapshot = edm_discover_whole_usb_disks();
 $devices = $discovery['devices'];
 $mapperDevices = $discovery['mapperDevices'];
 $sysEntries = $discovery['sysEntries'];
@@ -443,12 +444,12 @@ try {
                 <thead><tr><th>Disk</th><th>Size</th><th>Partitions</th><th>State</th><th>Action</th></tr></thead>
                 <tbody>
                 <?php foreach ($wholeDiskInventory['disks'] as $wholeDisk): ?>
-                    <?php $wholeDiskPreflight = edm_whole_usb_disk_preflight($wholeDiskInventory, $wholeDisk['name']); ?>
+                    <?php $wholeDiskPreflight = edm_whole_usb_disk_stable_candidate($wholeDiskInventory, $wholeDiskSecondSnapshot, $wholeDisk['name']); ?>
                     <tr>
                         <td><?php echo h('/dev/' . $wholeDisk['name']); ?></td>
                         <td><?php echo h(number_format($wholeDisk['size_bytes'] / 1073741824, 2) . ' GiB'); ?></td>
                         <td><?php echo h(implode(', ', $wholeDisk['partitions'])); ?></td>
-                        <td><?php echo h($wholeDisk['mounted'] ? 'In use' : (($wholeDisk['has_holders'] || $wholeDisk['has_slaves']) ? 'Has device dependencies' : ($wholeDisk['read_only'] ? 'Read-only' : ($wholeDiskPreflight ? 'Preliminary checks passed (encryption disabled)' : 'Preliminary checks incomplete')))); ?></td>
+                        <td><?php echo h($wholeDisk['mounted'] ? 'In use' : (($wholeDisk['has_holders'] || $wholeDisk['has_slaves']) ? 'Has device dependencies' : ($wholeDisk['read_only'] ? 'Read-only' : ($wholeDiskPreflight ? 'Two read-only checks agree (encryption disabled)' : 'Preliminary checks incomplete')))); ?></td>
                         <td><button type="button" disabled title="Whole-disk encryption is not yet available">Encrypt + ext4</button> <button type="button" class="whole-disk-preview-button" data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>">Preview erase warning</button></td>
                     </tr>
                 <?php endforeach; ?>
