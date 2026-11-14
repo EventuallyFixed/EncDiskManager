@@ -12,7 +12,7 @@ $valid = array('csrf_token' => $token, 'warning_accepted' => 'yes',
     'confirmation_phrase' => 'ERASE ALL DATA');
 $decide = function ($method, $https, $authenticated, $csrf, $post) {
     return edm_whole_disk_confirmation_preview_decision(
-        $method, $https, $authenticated, $token, $post);
+        $method, $https, $authenticated, $csrf, $post);
 };
 $ok = $decide('POST', true, true, $token, $valid);
 check_confirmation_preview($ok['status'], 200, 'Valid confirmation accepted');
