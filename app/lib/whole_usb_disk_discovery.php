@@ -55,9 +55,26 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             }
         }
 
+        $devId = @file_get_contents($path . '/dev');
+        $sectors = @file_get_contents($path . '/size');
+        $readOnly = @file_get_contents($path . '/ro');
+        if ($devId === false || $sectors === false || $readOnly === false
+            || !preg_match('/^[0-9]+:[0-9]+$/D', trim($devId))
+            || !preg_match('/^[0-9]+$/D', trim($sectors))
+            || !preg_match('/^[01]$/D', trim($readOnly))) {
+            return array('complete' => false, 'disks' => array());
+        }
+        $sectorCount = (int) trim($sectors);
+        if ($sectorCount <= 0 || $sectorCount > intdiv(PHP_INT_MAX, 512)) {
+            return array('complete' => false, 'disks' => array());
+        }
+
         $disks[] = array(
             'name' => $name,
             'sysfs_path' => $resolved,
+            'dev_id' => trim($devId),
+            'size_bytes' => $sectorCount * 512,
+            'read_only' => trim($readOnly) === '1',
             'partitions' => $children,
             'mounted' => $isMounted,
             'has_holders' => $hasHolders,
