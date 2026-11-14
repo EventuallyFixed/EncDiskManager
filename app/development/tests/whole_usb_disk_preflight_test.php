@@ -5,7 +5,7 @@ $disk = array(
     'sysfs_path' => '/sys/devices/usb1/block/sdb',
     'partitions' => array('sdb1'),
     'partition_dev_ids' => array('sdb1' => '8:17'),
-    'size_bytes' => 1000000000000.0,
+    'size_sectors' => '1953125000',
     'mounted' => false, 'has_holders' => false,
     'has_slaves' => false, 'read_only' => false
 );
