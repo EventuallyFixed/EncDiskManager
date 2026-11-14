@@ -461,13 +461,14 @@ try {
         <p>Selected disk: <strong id="whole-disk-preview-name">None</strong></p>
         <p><strong>Warning:</strong> Encrypting a whole USB disk will erase and repartition
             the entire selected disk, permanently destroying all existing data.</p>
-        <label><input type="checkbox" disabled> I understand that the entire disk will be erased.</label>
+        <label><input id="whole-disk-erase-ack" type="checkbox"> I understand that the entire disk will be erased.</label>
         <p>Are you sure? Your data will be permanently lost!</p>
         <label for="whole-disk-erase-phrase">Final confirmation phrase</label>
-        <input id="whole-disk-erase-phrase" type="text" placeholder="ERASE ALL DATA" disabled>
+        <input id="whole-disk-erase-phrase" type="text" placeholder="ERASE ALL DATA" autocomplete="off">
         <p class="muted">This is a non-operational preview. The disk name is shown for illustration only;
             no encryption request can be submitted.</p>
-        <button type="button" disabled title="Encryption is not available">Confirm erase (disabled)</button>
+        <p id="whole-disk-preview-status" role="status" aria-live="polite"></p>
+        <button id="whole-disk-preview-confirm" type="button" disabled title="Preview only; no disk operation is available">Validate confirmation (preview)</button>
         <form method="dialog"><button type="submit">Close preview</button></form>
     </dialog>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
@@ -549,10 +550,28 @@ try {
 (function () {
     var dialog = document.getElementById('whole-disk-erase-preview');
     var selected = document.getElementById('whole-disk-preview-name');
-    if (!dialog || !selected || typeof dialog.showModal !== 'function') return;
+    var acknowledgement = document.getElementById('whole-disk-erase-ack');
+    var phrase = document.getElementById('whole-disk-erase-phrase');
+    var confirm = document.getElementById('whole-disk-preview-confirm');
+    var status = document.getElementById('whole-disk-preview-status');
+    if (!dialog || !selected || !acknowledgement || !phrase || !confirm || !status
+        || typeof dialog.showModal !== 'function') return;
+    function refresh() {
+        confirm.disabled = !acknowledgement.checked || phrase.value !== 'ERASE ALL DATA';
+        status.textContent = '';
+    }
+    acknowledgement.addEventListener('change', refresh);
+    phrase.addEventListener('input', refresh);
+    confirm.addEventListener('click', function () {
+        if (confirm.disabled) return;
+        status.textContent = 'Confirmation format valid in this preview only. No request was sent and no disk was modified.';
+    });
     document.querySelectorAll('.whole-disk-preview-button').forEach(function (button) {
         button.addEventListener('click', function () {
             selected.textContent = button.getAttribute('data-disk') || 'Unknown';
+            acknowledgement.checked = false;
+            phrase.value = '';
+            refresh();
             dialog.showModal();
         });
     });
