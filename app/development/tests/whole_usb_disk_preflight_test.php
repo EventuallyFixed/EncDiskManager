@@ -44,3 +44,8 @@ foreach (array('0', '00', '01', '', '-1', '1.5') as $badSize) {
     check_preflight(!edm_whole_usb_disk_preflight($blocked, 'sdb'),
         'Invalid sector count rejected: ' . var_export($badSize, true));
 }
+
+foreach (array('sdb1', '/dev/sdb', '../sdb', 'nvme0n1', '') as $badName) {
+    check_preflight(!edm_whole_usb_disk_preflight($inventory, $badName),
+        'Non-whole-disk selection rejected: ' . var_export($badName, true));
+}
