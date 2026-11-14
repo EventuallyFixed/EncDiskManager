@@ -72,4 +72,17 @@ printf 'Filename Type Size Used Priority\n/dev/sdde1 partition 1024 0 -2\n' > "$
 if ! awk -v mode=swap -v disk=/dev/sdd -f "$busy_check" "$tmpdir/swaps"; then
     echo 'FAIL: unrelated disk prefix treated as swap' >&2; exit 1
 fi
+# Whole-disk mounts and malformed mount records must also be rejected.
+printf '32 22 8:48 / /mnt/usb rw - ext4 /dev/sdd rw\n' > "$tmpdir/mountinfo"
+if awk -v mode=mount -v ids='8:48 8:49' -f "$busy_check" "$tmpdir/mountinfo"; then
+    echo 'FAIL: mounted whole disk not detected' >&2; exit 1
+fi
+printf 'broken mount record\n' > "$tmpdir/mountinfo"
+if awk -v mode=mount -v ids='8:48' -f "$busy_check" "$tmpdir/mountinfo"; then
+    echo 'FAIL: malformed mount record accepted' >&2; exit 1
+fi
+printf 'Filename Type Size Used Priority\n/dev/sdd partition 1024 0 -2\n' > "$tmpdir/swaps"
+if awk -v mode=swap -v disk=/dev/sdd -f "$busy_check" "$tmpdir/swaps"; then
+    echo 'FAIL: whole-disk swap not detected' >&2; exit 1
+fi
 echo 'PASS: disabled helper validates input, busy disks, and rejects all operations'
