@@ -1,0 +1,36 @@
+name: USB disk encryption validation
+
+on:
+  push:
+    branches:
+      - feature/usb-disk-encryption
+  pull_request:
+    paths:
+      - 'app/bin/**'
+      - 'app/lib/whole_disk_*.php'
+      - 'app/development/tests/whole_disk_*'
+      - '.github/workflows/usb-disk-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: |
+          sh -n app/bin/encdiskmanager-whole-disk-helper
+          sh -n app/bin/whole-disk-identity-check.sh
+          sh -n app/bin/whole-disk-dependencies.sh
+          sh -n app/development/tests/whole_disk_helper_interface_test.sh
+      - name: Run read-only helper fixture tests
+        run: sh app/development/tests/whole_disk_helper_interface_test.sh
+      - name: Run PHP tests
+        run: |
+          for test in app/development/tests/whole_disk_*_test.php; do
+            php -l "$test"
+            php "$test"
+          done
