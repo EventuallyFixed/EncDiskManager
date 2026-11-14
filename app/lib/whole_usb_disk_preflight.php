@@ -8,7 +8,7 @@ function edm_whole_usb_disk_preflight($inventory, $name)
 {
     if (!is_array($inventory) || !isset($inventory['complete'], $inventory['disks'])
         || $inventory['complete'] !== true || !is_array($inventory['disks'])
-        || !is_string($name)) return false;
+        || !is_string($name) || !preg_match('/^sd[a-z]+$/D', $name)) return false;
     $matches = 0;
     foreach ($inventory['disks'] as $disk) {
         if (!is_array($disk) || !isset($disk['name']) || !is_string($disk['name'])) {
