@@ -449,7 +449,7 @@ try {
                         <td><?php echo h(number_format($wholeDisk['size_bytes'] / 1073741824, 2) . ' GiB'); ?></td>
                         <td><?php echo h(implode(', ', $wholeDisk['partitions'])); ?></td>
                         <td><?php echo h($wholeDisk['mounted'] ? 'In use' : (($wholeDisk['has_holders'] || $wholeDisk['has_slaves']) ? 'Has device dependencies' : ($wholeDisk['read_only'] ? 'Read-only' : ($wholeDiskPreflight ? 'Preliminary checks passed (encryption disabled)' : 'Preliminary checks incomplete')))); ?></td>
-                        <td><button type="button" disabled title="Whole-disk encryption is not yet available">Encrypt + ext4</button> <button type="button" class="whole-disk-preview-button">Preview erase warning</button></td>
+                        <td><button type="button" disabled title="Whole-disk encryption is not yet available">Encrypt + ext4</button> <button type="button" class="whole-disk-preview-button" data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>">Preview erase warning</button></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -458,14 +458,15 @@ try {
     </section>
     <dialog id="whole-disk-erase-preview" aria-labelledby="whole-disk-erase-title">
         <h2 id="whole-disk-erase-title">Whole-disk erase confirmation preview</h2>
+        <p>Selected disk: <strong id="whole-disk-preview-name">None</strong></p>
         <p><strong>Warning:</strong> Encrypting a whole USB disk will erase and repartition
             the entire selected disk, permanently destroying all existing data.</p>
         <label><input type="checkbox" disabled> I understand that the entire disk will be erased.</label>
         <p>Are you sure? Your data will be permanently lost!</p>
         <label for="whole-disk-erase-phrase">Final confirmation phrase</label>
         <input id="whole-disk-erase-phrase" type="text" placeholder="ERASE ALL DATA" disabled>
-        <p class="muted">This is a non-operational preview. No disk is selected,
-            and no encryption request can be submitted.</p>
+        <p class="muted">This is a non-operational preview. The disk name is shown for illustration only;
+            no encryption request can be submitted.</p>
         <button type="button" disabled title="Encryption is not available">Confirm erase (disabled)</button>
         <form method="dialog"><button type="submit">Close preview</button></form>
     </dialog>
@@ -547,9 +548,11 @@ try {
 <script>
 (function () {
     var dialog = document.getElementById('whole-disk-erase-preview');
-    if (!dialog || typeof dialog.showModal !== 'function') return;
+    var selected = document.getElementById('whole-disk-preview-name');
+    if (!dialog || !selected || typeof dialog.showModal !== 'function') return;
     document.querySelectorAll('.whole-disk-preview-button').forEach(function (button) {
         button.addEventListener('click', function () {
+            selected.textContent = button.getAttribute('data-disk') || 'Unknown';
             dialog.showModal();
         });
     });
