@@ -33,7 +33,7 @@ verify(edm_whole_disk_identity_matches($disk, $changed), false, 'Different exact
 foreach (array('', 'abc', '1.5', '-1', '00') as $badSize) {
     $changed = $disk;
     $changed['size_sectors'] = $badSize;
-    verify(edm_whole_disk_identity_matches($changed, $changed), $badSize === '00',
+    verify(edm_whole_disk_identity_matches($changed, $changed), false,
         'Sector count input: ' . var_export($badSize, true));
 }
 $large = $disk;
