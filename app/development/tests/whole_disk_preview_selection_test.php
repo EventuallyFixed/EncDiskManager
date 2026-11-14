@@ -16,23 +16,23 @@ $disk = array(
     'read_only' => false
 );
 $first = array('complete' => true, 'disks' => array($disk));
-check_selection(edm_whole_disk_preview_selection(array('disk' => '/dev/sdb'), $first, $first),
-    true, 'Selected USB disk passes two snapshots');
+check_selection(edm_whole_disk_preview_selection(array('disk' => '/dev/sdb'), $first),
+    true, 'Selected USB disk passes read-only preview');
 foreach (array('/dev/sda', '/dev/sdb1', '/dev/../sdb', '/dev/sdb;id', 'sdb', '', array('/dev/sdb')) as $bad) {
-    check_selection(edm_whole_disk_preview_selection(array('disk' => $bad), $first, $first),
+    check_selection(edm_whole_disk_preview_selection(array('disk' => $bad), $first),
         false, 'Invalid or absent disk rejected');
 }
-check_selection(edm_whole_disk_preview_selection(array(), $first, $first),
+check_selection(edm_whole_disk_preview_selection(array(), $first),
     false, 'Missing disk rejected');
 $changed = $first;
-$changed['disks'][0]['dev_id'] = '8:32';
-check_selection(edm_whole_disk_preview_selection(array('disk' => '/dev/sdb'), $first, $changed),
-    false, 'Changing disk identity rejected');
+unset($changed['disks'][0]['dev_id']);
+check_selection(edm_whole_disk_preview_selection(array('disk' => '/dev/sdb'), $changed),
+    false, 'Invalid disk identity rejected');
 $mounted = $first;
 $mounted['disks'][0]['mounted'] = true;
-check_selection(edm_whole_disk_preview_selection(array('disk' => '/dev/sdb'), $first, $mounted),
+check_selection(edm_whole_disk_preview_selection(array('disk' => '/dev/sdb'), $mounted),
     false, 'Mounted disk rejected');
 $incomplete = $first;
 $incomplete['complete'] = false;
-check_selection(edm_whole_disk_preview_selection(array('disk' => '/dev/sdb'), $first, $incomplete),
+check_selection(edm_whole_disk_preview_selection(array('disk' => '/dev/sdb'), $incomplete),
     false, 'Incomplete discovery rejected');
