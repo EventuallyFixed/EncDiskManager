@@ -446,7 +446,7 @@ try {
                         <td><?php echo h('/dev/' . $wholeDisk['name']); ?></td>
                         <td><?php echo h(number_format($wholeDisk['size_bytes'] / 1073741824, 2) . ' GiB'); ?></td>
                         <td><?php echo h(implode(', ', $wholeDisk['partitions'])); ?></td>
-                        <td><?php echo h($wholeDisk['mounted'] ? 'In use' : ($wholeDisk['has_holders'] ? 'Has active mappings' : ($wholeDisk['read_only'] ? 'Read-only' : 'Not verified for encryption'))); ?></td>
+                        <td><?php echo h($wholeDisk['mounted'] ? 'In use' : (($wholeDisk['has_holders'] || $wholeDisk['has_slaves']) ? 'Has device dependencies' : ($wholeDisk['read_only'] ? 'Read-only' : 'Not verified for encryption'))); ?></td>
                         <td><button type="button" disabled title="Whole-disk encryption is not yet available">Encrypt + ext4</button></td>
                     </tr>
                 <?php endforeach; ?>
