@@ -65,6 +65,15 @@ try {
         && $large['disks'][0]['size_sectors'] === '7814037168'
         && $large['disks'][0]['encryption_eligible'] === false,
         'Multi-terabyte USB disk is visible on 32-bit PHP without enabling encryption');
+    file_put_contents($usb . '/size', '0002048');
+    $leadingZeros = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
+    check_discovery($leadingZeros['complete'] === true
+        && $leadingZeros['disks'][0]['size_sectors'] === '2048',
+        'Sector count is normalized to canonical decimal digits');
+    file_put_contents($usb . '/size', '0');
+    $zeroSize = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
+    check_discovery($zeroSize['complete'] === false,
+        'Zero-sized USB disk makes inventory incomplete');
     file_put_contents($usb . '/size', '2048');
     file_put_contents($base . '/mounts', '');
     file_put_contents($base . '/mountinfo', "41 30 8:17 / /mnt/usb rw - ext4 /dev/disk/by-uuid/example rw\\n");
