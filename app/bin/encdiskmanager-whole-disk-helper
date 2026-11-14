@@ -72,6 +72,10 @@ case "${1:-}" in
         if ! awk -v mode=swap -v disk="$2" -f "$busy_check" /proc/swaps; then
             fail 'Disk or partition is in use as swap.'
         fi
+        dependencies="$(dirname "$0")/whole-disk-dependencies.sh"
+        [ -r "$dependencies" ] || fail 'Dependency check is unavailable.'
+        sh "$dependencies" "$sysfs" ||
+            fail 'Disk has block-device dependencies or dependency status is unavailable.'
         fail 'Read-only USB check completed. Encryption is disabled; no disk was modified.'
         ;;
     *)
