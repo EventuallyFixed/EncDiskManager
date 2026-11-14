@@ -13,10 +13,15 @@ mode == "mount" {
     if (NF < 3) invalid = 1
     if (wanted[$3]) busy = 1
 }
-mode == "swap" && NR > 1 {
+mode == "swap" {
+    if (NR == 1) {
+        if ($1 != "Filename" || $2 != "Type") invalid = 1
+        next
+    }
+    if (NF < 2) invalid = 1
     if ($1 == disk || (index($1, disk) == 1 &&
         substr($1, length(disk) + 1) ~ /^[0-9]+$/)) busy = 1
 }
 END {
-    if (busy || invalid) exit 1
+    if (NR == 0 || busy || invalid) exit 1
 }
