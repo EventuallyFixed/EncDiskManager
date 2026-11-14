@@ -456,6 +456,15 @@ try {
             </table></div>
         <?php endif; ?>
     </section>
+    <dialog id="whole-disk-erase-preview" aria-labelledby="whole-disk-erase-title">
+        <h2 id="whole-disk-erase-title">Whole-disk erase confirmation preview</h2>
+        <p><strong>Warning:</strong> Encrypting a whole USB disk will erase and repartition
+            the entire selected disk, permanently destroying all existing data.</p>
+        <p>Are you sure? Your data will be permanently lost!</p>
+        <p class="muted">This is a non-operational preview. No disk is selected,
+            and no encryption request can be submitted.</p>
+        <form method="dialog"><button type="submit">Close preview</button></form>
+    </dialog>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
         <h2 id="disk-config-title">Disk configuration</h2>
         <p class="muted">Configuration preview. Editing, key management and registration deletion are not yet enabled.</p>
