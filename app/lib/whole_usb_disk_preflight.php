@@ -29,8 +29,7 @@ function edm_whole_usb_disk_preflight($inventory, $name)
             || !is_array($disk['partitions'])
             || !is_array($disk['partition_dev_ids'])
             || !is_string($disk['size_sectors'])
-            || !ctype_digit($disk['size_sectors'])
-            || $disk['size_sectors'] === '0') {
+            || !preg_match('/^[1-9][0-9]*$/D', $disk['size_sectors'])) {
             return false;
         }
         foreach ($disk['partitions'] as $partition) {
