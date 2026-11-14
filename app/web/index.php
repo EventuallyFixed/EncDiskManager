@@ -577,6 +577,7 @@ try {
         form.set('csrf_token', csrfInput.value);
         form.set('warning_accepted', acknowledgement.checked ? 'yes' : 'no');
         form.set('confirmation_phrase', phrase.value);
+        form.set('disk', selected.textContent);
         fetch('whole-disk-confirmation-preview.php', {
             method: 'POST',
             credentials: 'same-origin',
