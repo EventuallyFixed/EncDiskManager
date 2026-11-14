@@ -557,7 +557,9 @@ try {
     var status = document.getElementById('whole-disk-preview-status');
     if (!dialog || !selected || !acknowledgement || !phrase || !confirm || !status
         || typeof dialog.showModal !== 'function') return;
+    var selectionVersion = 0;
     function refresh() {
+        selectionVersion++;
         confirm.disabled = !acknowledgement.checked || phrase.value !== 'ERASE ALL DATA';
         status.textContent = '';
     }
@@ -578,6 +580,7 @@ try {
         form.set('warning_accepted', acknowledgement.checked ? 'yes' : 'no');
         form.set('confirmation_phrase', phrase.value);
         form.set('disk', selected.textContent);
+        var requestVersion = selectionVersion;
         fetch('whole-disk-confirmation-preview.php', {
             method: 'POST',
             credentials: 'same-origin',
@@ -587,13 +590,18 @@ try {
             if (!response.ok) throw new Error('Confirmation rejected');
             return response.json();
         }).then(function (result) {
+            if (requestVersion !== selectionVersion) return;
             if (!result || result.confirmed !== true || result.execution_enabled !== false) {
                 throw new Error('Confirmation rejected');
             }
             status.textContent = 'Server validated the confirmation. Encryption remains disabled; no disk was modified.';
         }).catch(function () {
-            status.textContent = 'Confirmation could not be validated. No disk was modified.';
-        }).then(refreshButton);
+            if (requestVersion === selectionVersion) {
+                status.textContent = 'Confirmation could not be validated. No disk was modified.';
+            }
+        }).then(function () {
+            if (requestVersion === selectionVersion) refreshButton();
+        });
     });
     function refreshButton() {
         confirm.disabled = !acknowledgement.checked || phrase.value !== 'ERASE ALL DATA';
