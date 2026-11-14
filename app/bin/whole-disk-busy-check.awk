@@ -10,7 +10,7 @@ BEGIN {
     }
 }
 mode == "mount" {
-    if (NF < 3) invalid = 1
+    if (NF < 7 || $3 !~ /^[0-9]+:[0-9]+$/ || $4 !~ /^\//) invalid = 1
     if (wanted[$3]) busy = 1
 }
 mode == "swap" {
