@@ -460,9 +460,13 @@ try {
         <h2 id="whole-disk-erase-title">Whole-disk erase confirmation preview</h2>
         <p><strong>Warning:</strong> Encrypting a whole USB disk will erase and repartition
             the entire selected disk, permanently destroying all existing data.</p>
+        <label><input type="checkbox" disabled> I understand that the entire disk will be erased.</label>
         <p>Are you sure? Your data will be permanently lost!</p>
+        <label for="whole-disk-erase-phrase">Final confirmation phrase</label>
+        <input id="whole-disk-erase-phrase" type="text" placeholder="ERASE ALL DATA" disabled>
         <p class="muted">This is a non-operational preview. No disk is selected,
             and no encryption request can be submitted.</p>
+        <button type="button" disabled title="Encryption is not available">Confirm erase (disabled)</button>
         <form method="dialog"><button type="submit">Close preview</button></form>
     </dialog>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
