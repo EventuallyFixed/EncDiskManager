@@ -24,6 +24,13 @@ verify_stable_confirmation(
         && edm_whole_usb_disk_stable_candidate($first, $first, 'sdd'),
     'Unchanged idle USB disk accepted for preview'
 );
+$expectedArgs = array(
+    'check', '/dev/sdd', '8:48', $disk['sysfs_path'], '30031250', 'sdd1=8:49'
+);
+verify_stable_confirmation(
+    edm_whole_usb_disk_stable_check_arguments($first, $first, 'sdd') === $expectedArgs,
+    'Stable disk produces read-only helper arguments'
+);
 foreach (array('dev_id', 'sysfs_path', 'size_sectors', 'serial',
     'partitions', 'partition_dev_ids', 'mounted', 'has_holders',
     'has_slaves', 'read_only') as $field) {
@@ -36,6 +43,10 @@ foreach (array('dev_id', 'sysfs_path', 'size_sectors', 'serial',
     verify_stable_confirmation(
         !edm_whole_usb_disk_stable_candidate($first, $second, 'sdd'),
         "Changed $field rejected"
+    );
+    verify_stable_confirmation(
+        edm_whole_usb_disk_stable_check_arguments($first, $second, 'sdd') === false,
+        "Changed $field cannot produce helper arguments"
     );
 }
 $second = $first;
