@@ -128,3 +128,5 @@ jobs:
         run: npm install --no-save --no-package-lock jsdom@26
       - name: Test incremental inventory updates
         run: node app/development/tests/inventory_browser_test.cjs
+      - name: Test whole-disk confirmation preview
+        run: node app/development/tests/whole_disk_confirmation_browser_test.cjs
