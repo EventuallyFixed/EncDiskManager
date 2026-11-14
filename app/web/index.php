@@ -567,7 +567,13 @@ try {
         confirm.disabled = true;
         status.textContent = 'Checking confirmation with the server…';
         var form = new URLSearchParams();
-        form.set('csrf_token', <?php echo json_encode($_SESSION['csrf_token']); ?>);
+        var csrfInput = document.querySelector('input[name="csrf_token"]');
+        if (!csrfInput) {
+            status.textContent = 'Confirmation unavailable. No disk was modified.';
+            refreshButton();
+            return;
+        }
+        form.set('csrf_token', csrfInput.value);
         form.set('warning_accepted', acknowledgement.checked ? 'yes' : 'no');
         form.set('confirmation_phrase', phrase.value);
         fetch('whole-disk-confirmation-preview.php', {
