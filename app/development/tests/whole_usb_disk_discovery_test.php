@@ -71,6 +71,10 @@ try {
     $aliasMounted = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
     check_discovery($aliasMounted['disks'][0]['mounted'] === true,
         'Mount via UUID alias is detected using partition kernel identity');
+    file_put_contents($base . '/mountinfo', "42 30 8:16 / /mnt/disk rw - ext4 /dev/disk/by-id/example rw\\n");
+    $wholeMounted = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
+    check_discovery($wholeMounted['disks'][0]['mounted'] === true,
+        'Whole disk mounted via alias is detected by kernel device ID');
     file_put_contents($base . '/mountinfo', '');
     file_put_contents($base . '/swaps', "Filename Type Size Used Priority\n/dev/sdb1 partition 1024 0 -2\n");
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
