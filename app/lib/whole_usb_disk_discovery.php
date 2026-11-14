@@ -69,10 +69,26 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             return array('complete' => false, 'disks' => array());
         }
 
+        // USB serial is optional on real devices. Without a reliable
+        // physical identifier, the disk remains display-only.
+        $serial = '';
+        $deviceDir = dirname(dirname($resolved));
+        for ($depth = 0; $depth < 6; $depth++) {
+            $value = @file_get_contents($deviceDir . '/serial');
+            if ($value !== false && trim($value) !== '') {
+                $serial = trim($value);
+                break;
+            }
+            $parent = dirname($deviceDir);
+            if ($parent === $deviceDir) break;
+            $deviceDir = $parent;
+        }
+
         $disks[] = array(
             'name' => $name,
             'sysfs_path' => $resolved,
             'dev_id' => trim($devId),
+            'serial' => $serial,
             'size_bytes' => $sectorCount * 512,
             'read_only' => trim($readOnly) === '1',
             'partitions' => $children,
