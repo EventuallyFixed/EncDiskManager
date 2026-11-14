@@ -10,11 +10,11 @@ function verify($value, $expected, $message) {
 $disk = array(
     'name' => 'sdb', 'dev_id' => '8:16',
     'sysfs_path' => '/sys/devices/usb1/1-1/block/sdb',
-    'size_bytes' => '1000000', 'serial' => 'USB-123',
+    'size_sectors' => '1000000', 'serial' => 'USB-123',
     'partitions' => array('sdb1')
 );
 verify(edm_whole_disk_identity_matches($disk, $disk), true, 'Matching identity');
-foreach (array('name', 'dev_id', 'sysfs_path', 'size_bytes', 'serial', 'partitions') as $field) {
+foreach (array('name', 'dev_id', 'sysfs_path', 'size_sectors', 'serial', 'partitions') as $field) {
     $changed = $disk;
     $changed[$field] = $field === 'partitions' ? array('sdb2') : 'changed';
     verify(edm_whole_disk_identity_matches($disk, $changed), false, "Changed $field rejected");
@@ -26,6 +26,6 @@ foreach (array('../sdb', 'sdb1', 'nvme0n1', '/dev/sdb') as $bad) {
     $changed = $disk; $changed['name'] = $bad;
     verify(edm_whole_disk_identity_matches($changed, $changed), false, 'Invalid device name rejected');
 }
-$changed = $disk; $changed['size_bytes'] = '0';
+$changed = $disk; $changed['size_sectors'] = '0';
 verify(edm_whole_disk_identity_matches($changed, $changed), false, 'Zero capacity rejected');
 verify(edm_whole_disk_identity_matches(null, $disk), false, 'Invalid identity rejected');
