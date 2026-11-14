@@ -3,17 +3,17 @@ require_once __DIR__ . '/../../lib/whole_usb_disk_discovery.php';
 
 function check_discovery($condition, $label) {
     if (!$condition) {
-        fwrite(STDERR, "FAIL: $label\\n");
+        fwrite(STDERR, "FAIL: $label\n");
         exit(1);
     }
-    echo "PASS: $label\\n";
+    echo "PASS: $label\n";
 }
 
 $base = sys_get_temp_dir() . '/edm-whole-usb-' . bin2hex(random_bytes(8));
 mkdir($base, 0700);
 mkdir($base . '/block', 0700);
 file_put_contents($base . '/mounts', '');
-file_put_contents($base . '/swaps', "Filename Type Size Used Priority\\n");
+file_put_contents($base . '/swaps', "Filename Type Size Used Priority\n");
 try {
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps');
     check_discovery($result === array('complete' => true, 'disks' => array()),
@@ -39,7 +39,7 @@ try {
     file_put_contents($usb . '/sdb1/partition', '1');
     mkdir($usb . '/sdb1/holders', 0700);
     symlink($usb, $base . '/block/sdb');
-    file_put_contents($base . '/mounts', "/dev/sdb1 /mnt/test ext4 rw 0 0\\n");
+    file_put_contents($base . '/mounts', "/dev/sdb1 /mnt/test ext4 rw 0 0\n");
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps');
     check_discovery(count($result['disks']) === 1
         && $result['disks'][0]['name'] === 'sdb'
@@ -52,12 +52,12 @@ try {
         && $result['disks'][0]['encryption_eligible'] === false,
         'USB parent discovered but mounted partition cannot be encrypted');
     file_put_contents($base . '/mounts', '');
-    file_put_contents($base . '/swaps', "Filename Type Size Used Priority\\n/dev/sdb1 partition 1024 0 -2\\n");
+    file_put_contents($base . '/swaps', "Filename Type Size Used Priority\n/dev/sdb1 partition 1024 0 -2\n");
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps');
     check_discovery($result['disks'][0]['mounted'] === true
         && $result['disks'][0]['encryption_eligible'] === false,
         'Active swap partition is treated as in-use');
-    file_put_contents($base . '/swaps', "Filename Type Size Used Priority\\n");
+    file_put_contents($base . '/swaps', "Filename Type Size Used Priority\n");
     file_put_contents($usb . '/sdb1/holders/dm-0', '');
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps');
     check_discovery($result['disks'][0]['has_holders'] === true
