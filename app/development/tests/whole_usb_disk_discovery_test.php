@@ -23,6 +23,41 @@ try {
     $missing = edm_discover_whole_usb_disks($base . '/block', $base . '/missing');
     check_discovery($missing['complete'] === false,
         'Unavailable mount inventory fails closed');
+    // A synthetic sysfs USB parent with one partition and a mount.
+    $usb = $base . '/usb1/1-1/block/sdb';
+    mkdir($base . '/usb1', 0700);
+    mkdir($base . '/usb1/1-1', 0700);
+    mkdir($base . '/usb1/1-1/block', 0700);
+    mkdir($usb, 0700);
+    mkdir($usb . '/holders', 0700);
+    mkdir($usb . '/sdb1', 0700);
+    file_put_contents($usb . '/sdb1/partition', '1');
+    mkdir($usb . '/sdb1/holders', 0700);
+    symlink($usb, $base . '/block/sdb');
+    file_put_contents($base . '/mounts', "/dev/sdb1 /mnt/test ext4 rw 0 0\\n");
+    $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts');
+    check_discovery(count($result['disks']) === 1
+        && $result['disks'][0]['name'] === 'sdb'
+        && $result['disks'][0]['partitions'] === array('sdb1')
+        && $result['disks'][0]['mounted'] === true
+        && $result['disks'][0]['encryption_eligible'] === false,
+        'USB parent discovered but mounted partition cannot be encrypted');
+    file_put_contents($base . '/mounts', '');
+    file_put_contents($usb . '/sdb1/holders/dm-0', '');
+    $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts');
+    check_discovery($result['disks'][0]['has_holders'] === true
+        && $result['disks'][0]['encryption_eligible'] === false,
+        'Partition holder is detected without enabling encryption');
+    unlink($usb . '/sdb1/holders/dm-0');
+    unlink($base . '/block/sdb');
+    unlink($usb . '/sdb1/partition');
+    rmdir($usb . '/sdb1/holders');
+    rmdir($usb . '/sdb1');
+    rmdir($usb . '/holders');
+    rmdir($usb);
+    rmdir($base . '/usb1/1-1/block');
+    rmdir($base . '/usb1/1-1');
+    rmdir($base . '/usb1');
     mkdir($base . '/block/sda', 0700);
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts');
     check_discovery($result['disks'] === array(),
