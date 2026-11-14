@@ -68,8 +68,8 @@ printf 'not-a-swap-header\n' > "$tmpdir/bad-swaps"
 if awk -v mode=swap -v disk=/dev/sdd -f "$busy_check" "$tmpdir/bad-swaps"; then
     echo 'FAIL: invalid swaps header accepted' >&2; exit 1
 fi
-printf 'Filename Type Size Used Priority\n/dev/sdd10 partition 1024 0 -2\n' > "$tmpdir/swaps"
-if ! awk -v mode=swap -v disk=/dev/sdd1 -f "$busy_check" "$tmpdir/swaps"; then
+printf 'Filename Type Size Used Priority\n/dev/sdde1 partition 1024 0 -2\n' > "$tmpdir/swaps"
+if ! awk -v mode=swap -v disk=/dev/sdd -f "$busy_check" "$tmpdir/swaps"; then
     echo 'FAIL: unrelated disk prefix treated as swap' >&2; exit 1
 fi
 echo 'PASS: disabled helper validates input, busy disks, and rejects all operations'
