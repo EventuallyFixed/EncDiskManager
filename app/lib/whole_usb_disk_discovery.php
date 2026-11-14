@@ -5,7 +5,8 @@
  * complete topology and dependency check is implemented.
  */
 function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
-    $mountsFile = '/proc/mounts', $swapsFile = '/proc/swaps')
+    $mountsFile = '/proc/mounts', $swapsFile = '/proc/swaps',
+    $mountInfoFile = '/proc/self/mountinfo')
 {
     $entries = @scandir($sysBlock);
     $mountLines = @file($mountsFile, FILE_IGNORE_NEW_LINES);
@@ -13,6 +14,20 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
         return array('complete' => false, 'disks' => array());
     }
 
+    // Mountinfo reports kernel major:minor IDs even when mounted through
+    // a UUID alias or another path instead of /dev/sdX.
+    $mountInfoLines = @file($mountInfoFile, FILE_IGNORE_NEW_LINES);
+    if (!is_array($mountInfoLines)) {
+        return array('complete' => false, 'disks' => array());
+    }
+    $mountedIds = array();
+    foreach ($mountInfoLines as $line) {
+        $fields = preg_split('/\\s+/', trim($line));
+        if (!isset($fields[2]) || !preg_match('/^[0-9]+:[0-9]+$/D', $fields[2])) {
+            return array('complete' => false, 'disks' => array());
+        }
+        $mountedIds[$fields[2]] = true;
+    }
     $mounted = array();
     foreach ($mountLines as $line) {
         $fields = preg_split('/\\s+/', trim($line));
@@ -106,6 +121,11 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             $parent = dirname($deviceDir);
             if ($parent === $deviceDir) break;
             $deviceDir = $parent;
+        }
+
+        if (isset($mountedIds[trim($devId)])) $isMounted = true;
+        foreach ($partitionIds as $partitionDevId) {
+            if (isset($mountedIds[$partitionDevId])) $isMounted = true;
         }
 
         $disks[] = array(
