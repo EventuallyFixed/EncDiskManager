@@ -12,9 +12,11 @@ case "${1:-}" in
     check)
         [ "$#" -eq 2 ] || fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX'
         case "$2" in
-            /dev/sd[a-z]) ;;
-            /dev/sd[a-z][a-z]*) ;;
+            /dev/sd*) disk_letters=${2#/dev/sd} ;;
             *) fail 'Expected a whole /dev/sdX USB disk name.' ;;
+        esac
+        case "$disk_letters" in
+            ''|*[!a-z]*) fail 'Expected a whole /dev/sdX USB disk name.' ;;
         esac
         fail 'Whole-disk encryption is not enabled. No disk was modified.'
         ;;
