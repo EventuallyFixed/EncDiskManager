@@ -9,7 +9,7 @@ fail() {
 
 case "${1:-}" in
     check)
-        [ "$#" -eq 2 ] || fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX'
+        [ "$#" -eq 5 ] || fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX MAJOR:MINOR SYSFS_PATH SECTORS'
         case "$2" in
             /dev/sd*) disk_letters=${2#/dev/sd} ;;
             *) fail 'Expected a whole /dev/sdX USB disk name.' ;;
@@ -51,6 +51,11 @@ case "${1:-}" in
         esac
         [ "$sectors" != 0 ] || fail 'Disk has zero capacity.'
         [ "$read_only" = 0 ] || fail 'Disk is read-only or its state is unknown.'
+        identity_check="$(dirname "$0")/whole-disk-identity-check.sh"
+        [ -r "$identity_check" ] || fail 'Identity comparison is unavailable.'
+        sh "$identity_check" "sd$disk_letters" "$3" "$4" "$5" \
+            "$device_id" "$resolved" "$sectors" ||
+            fail 'Live disk identity differs from the confirmed identity.'
         # Check kernel mount IDs (also catches mounts through UUID aliases).
         [ -r /proc/self/mountinfo ] || fail 'Mount information is unavailable.'
         device_ids="$device_id"
@@ -79,6 +84,6 @@ case "${1:-}" in
         fail 'Read-only USB check completed. Encryption is disabled; no disk was modified.'
         ;;
     *)
-        fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX (disabled)'
+        fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX MAJOR:MINOR SYSFS_PATH SECTORS (disabled)'
         ;;
 esac
