@@ -37,6 +37,7 @@ try {
     file_put_contents($usb . '/ro', '0');
     mkdir($usb . '/sdb1', 0700);
     file_put_contents($usb . '/sdb1/partition', '1');
+    file_put_contents($usb . '/sdb1/dev', '8:17');
     mkdir($usb . '/sdb1/holders', 0700);
     symlink($usb, $base . '/block/sdb');
     file_put_contents($base . '/mounts', "/dev/sdb1 /mnt/test ext4 rw 0 0\n");
@@ -46,6 +47,7 @@ try {
         && $result['disks'][0]['partitions'] === array('sdb1')
         && $result['disks'][0]['serial'] === 'TEST-USB-001'
         && $result['disks'][0]['dev_id'] === '8:16'
+        && $result['disks'][0]['partition_dev_ids'] === array('sdb1' => '8:17')
         && $result['disks'][0]['size_bytes'] == 1048576
         && $result['disks'][0]['read_only'] === false
         && $result['disks'][0]['mounted'] === true
@@ -87,8 +89,14 @@ try {
     check_discovery($result['complete'] === false,
         'Missing kernel device identity fails closed');
     file_put_contents($usb . '/dev', '8:16');
+    unlink($usb . '/sdb1/dev');
+    $missingPartition = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps');
+    check_discovery($missingPartition['complete'] === false,
+        'Missing partition kernel identity fails closed');
+    file_put_contents($usb . '/sdb1/dev', '8:17');
     unlink($usb . '/sdb1/holders/dm-0');
     unlink($base . '/block/sdb');
+    unlink($usb . '/sdb1/dev');
     unlink($usb . '/sdb1/partition');
     rmdir($usb . '/sdb1/holders');
     rmdir($usb . '/sdb1');
