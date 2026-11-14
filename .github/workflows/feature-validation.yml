@@ -34,6 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Disabled whole-disk helper interface regression
+        run: sh app/development/tests/whole_disk_helper_interface_test.sh
       - name: Compile-only native recovery helper check
         run: sh app/development/tests/native_recovery_marker_compile_test.sh
       - name: Isolated native recovery helper runtime test
