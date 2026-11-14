@@ -95,4 +95,14 @@ printf 'Filename Type Size Used Priority\n/dev/sdde1 partition 1024 0 -2\n' > "$
 if ! awk -v mode=swap -v disk=/dev/sdd -f "$busy_check" "$tmpdir/swaps"; then
     echo 'FAIL: similarly prefixed disk treated as selected swap' >&2; exit 1
 fi
+# A clean, well-formed snapshot should be accepted by the busy checker
+# (the enclosing helper still refuses encryption).
+printf '34 22 8:65 / /mnt/other rw - ext4 /dev/sde1 rw\n' > "$tmpdir/mountinfo"
+printf 'Filename Type Size Used Priority\n' > "$tmpdir/swaps"
+if ! awk -v mode=mount -v ids='8:48 8:49' -f "$busy_check" "$tmpdir/mountinfo"; then
+    echo 'FAIL: clean mount snapshot was rejected' >&2; exit 1
+fi
+if ! awk -v mode=swap -v disk=/dev/sdd -f "$busy_check" "$tmpdir/swaps"; then
+    echo 'FAIL: clean swap snapshot was rejected' >&2; exit 1
+fi
 echo 'PASS: disabled helper validates input, busy disks, and rejects all operations'
