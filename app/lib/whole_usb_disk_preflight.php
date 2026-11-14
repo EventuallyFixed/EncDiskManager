@@ -22,13 +22,15 @@ function edm_whole_usb_disk_preflight($inventory, $name)
             }
         }
         if (!isset($disk['dev_id'], $disk['sysfs_path'], $disk['partitions'],
-            $disk['partition_dev_ids'], $disk['size_bytes'])
+            $disk['partition_dev_ids'], $disk['size_sectors'])
             || !is_string($disk['dev_id'])
             || !preg_match('/^[0-9]+:[0-9]+$/D', $disk['dev_id'])
             || !is_string($disk['sysfs_path']) || $disk['sysfs_path'] === ''
             || !is_array($disk['partitions'])
             || !is_array($disk['partition_dev_ids'])
-            || !is_numeric($disk['size_bytes']) || $disk['size_bytes'] <= 0) {
+            || !is_string($disk['size_sectors'])
+            || !ctype_digit($disk['size_sectors'])
+            || $disk['size_sectors'] === '0') {
             return false;
         }
         foreach ($disk['partitions'] as $partition) {
