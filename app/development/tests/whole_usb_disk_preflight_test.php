@@ -37,3 +37,10 @@ $blocked = $inventory;
 $blocked['disks'][] = $disk;
 check_preflight(!edm_whole_usb_disk_preflight($blocked, 'sdb'),
     'Duplicate disk name rejected');
+
+foreach (array('0', '00', '01', '', '-1', '1.5') as $badSize) {
+    $blocked = $inventory;
+    $blocked['disks'][0]['size_sectors'] = $badSize;
+    check_preflight(!edm_whole_usb_disk_preflight($blocked, 'sdb'),
+        'Invalid sector count rejected: ' . var_export($badSize, true));
+}
