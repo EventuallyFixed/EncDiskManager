@@ -90,12 +90,7 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             }
             if (count($slaves) > 2) $hasSlaves = true;
         }
-        $isMounted = isset($mounted['/dev/' . $name]);
-        foreach ($children as $child) {
-            if (isset($mounted['/dev/' . $child])) $isMounted = true;
-        }
-
-        $devId = @file_get_contents($path . '/dev');
+         $devId = @file_get_contents($path . '/dev');
         $sectors = @file_get_contents($path . '/size');
         $readOnly = @file_get_contents($path . '/ro');
         if ($devId === false || $sectors === false || $readOnly === false
@@ -127,9 +122,14 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             $deviceDir = $parent;
         }
 
-        if (isset($mountedIds[trim($devId)])) $isMounted = true;
-        foreach ($partitionIds as $partitionDevId) {
-            if (isset($mountedIds[$partitionDevId])) $isMounted = true;
+        // Match both device paths and kernel IDs, including UUID-mounted partitions.
+        $isMounted = false;
+        $deviceIds = array_merge(array($name => trim($devId)), $partitionIds);
+        foreach ($deviceIds as $deviceName => $deviceId) {
+            if (isset($mounted['/dev/' . $deviceName]) || isset($mountedIds[$deviceId])) {
+                $isMounted = true;
+                break;
+            }
         }
 
         $disks[] = array(
