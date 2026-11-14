@@ -144,6 +144,8 @@ function h($value) {
 }
 require_once __DIR__ . '/../lib/usb_discovery.php';
 $discovery = edm_discover_usb_inventory();
+require_once __DIR__ . '/../lib/whole_usb_disk_discovery.php';
+$wholeDiskInventory = edm_discover_whole_usb_disks();
 $devices = $discovery['devices'];
 $mapperDevices = $discovery['mapperDevices'];
 $sysEntries = $discovery['sysEntries'];
@@ -426,6 +428,30 @@ try {
             </tbody>
         </table>
         </div>
+        <?php endif; ?>
+    </section>
+    <section aria-labelledby="whole-usb-disks-title">
+        <h2 id="whole-usb-disks-title">Whole USB disks</h2>
+        <p class="muted">Read-only parent-disk inventory. Encryption and repartitioning are not yet available.</p>
+        <?php if (!$wholeDiskInventory['complete']): ?>
+            <p class="muted">Whole-disk discovery is temporarily unavailable.</p>
+        <?php elseif (!$wholeDiskInventory['disks']): ?>
+            <p class="muted">No whole USB disks detected.</p>
+        <?php else: ?>
+            <div class="table-wrap"><table>
+                <thead><tr><th>Disk</th><th>Size</th><th>Partitions</th><th>State</th><th>Action</th></tr></thead>
+                <tbody>
+                <?php foreach ($wholeDiskInventory['disks'] as $wholeDisk): ?>
+                    <tr>
+                        <td><?php echo h('/dev/' . $wholeDisk['name']); ?></td>
+                        <td><?php echo h(number_format($wholeDisk['size_bytes'] / 1073741824, 2) . ' GiB'); ?></td>
+                        <td><?php echo h(implode(', ', $wholeDisk['partitions'])); ?></td>
+                        <td><?php echo h($wholeDisk['mounted'] ? 'In use' : ($wholeDisk['has_holders'] ? 'Has active mappings' : ($wholeDisk['read_only'] ? 'Read-only' : 'Not verified for encryption'))); ?></td>
+                        <td><button type="button" disabled title="Whole-disk encryption is not yet available">Encrypt + ext4</button></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table></div>
         <?php endif; ?>
     </section>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
