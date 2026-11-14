@@ -94,13 +94,12 @@ Stable v0.5.5 and WD-managed directory permissions are unchanged.
 CI #316 passed the isolated cycle, duplicate-edge and multiple-parent
 tests. These tests do **not** establish live dependency completeness.
 
-The current `whole_usb_disk_fixture_discovery.php` adapter produces
-synthetic whole-disk records with conservative unsafe flags; it does
-not enumerate partition, holder, swap, mount or system dependency
-graphs. The separate `whole_disk_topology.php` validator accepts a
-caller-supplied `complete: true` graph and checks structural
-consistency and unsafe flags. A graph omitting a real holder or mount
-could appear safe if an adapter asserted completeness incorrectly.
+The former synthetic whole-disk fixture-discovery adapter has been
+removed. The separate `whole_disk_topology.php` validator still accepts
+a caller-supplied `complete: true` graph and checks structural
+consistency and unsafe flags. It does not collect kernel evidence;
+a graph omitting a real holder or mount could appear safe if its caller
+incorrectly asserted completeness.
 
 **Required interface contract before wiring the two:**
 
