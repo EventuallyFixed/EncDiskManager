@@ -9,7 +9,7 @@ fail() {
 
 case "${1:-}" in
     check)
-        [ "$#" -eq 5 ] || fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX MAJOR:MINOR SYSFS_PATH SECTORS'
+        [ "$#" -eq 6 ] || fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX MAJOR:MINOR SYSFS_PATH SECTORS PARTITIONS'
         case "$2" in
             /dev/sd*) disk_letters=${2#/dev/sd} ;;
             *) fail 'Expected a whole /dev/sdX USB disk name.' ;;
@@ -59,13 +59,25 @@ case "${1:-}" in
         # Check kernel mount IDs (also catches mounts through UUID aliases).
         [ -r /proc/self/mountinfo ] || fail 'Mount information is unavailable.'
         device_ids="$device_id"
+        live_partitions=""
         for partition in "$sysfs"/sd"$disk_letters"[0-9]*; do
             [ -e "$partition/partition" ] || continue
             [ -r "$partition/dev" ] || fail 'Partition identity is unavailable.'
             IFS= read -r partition_id < "$partition/dev" ||
                 fail 'Cannot read partition identity.'
+            partition_name=${partition##*/}
+            case "$partition_id" in
+                *:*) part_major=${partition_id%%:*}; part_minor=${partition_id#*:} ;;
+                *) fail 'Invalid partition identity.' ;;
+            esac
+            case "$part_major:$part_minor" in
+                :*|*:|*[!0-9:]*|*:*:*) fail 'Invalid partition identity.' ;;
+            esac
+            live_partitions="${live_partitions}${live_partitions:+,}${partition_name}=${partition_id}"
             device_ids="$device_ids $partition_id"
         done
+        [ "$6" = "$live_partitions" ] ||
+            fail 'Live partition identities differ from the confirmed partition list.'
         busy_check="$(dirname "$0")/whole-disk-busy-check.awk"
         [ -r "$busy_check" ] || fail 'Busy-device check is unavailable.'
         if ! awk -v mode=mount -v ids="$device_ids" -f "$busy_check" /proc/self/mountinfo; then
@@ -84,6 +96,6 @@ case "${1:-}" in
         fail 'Read-only USB check completed. Encryption is disabled; no disk was modified.'
         ;;
     *)
-        fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX MAJOR:MINOR SYSFS_PATH SECTORS (disabled)'
+        fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX MAJOR:MINOR SYSFS_PATH SECTORS PARTITIONS (disabled)'
         ;;
 esac
