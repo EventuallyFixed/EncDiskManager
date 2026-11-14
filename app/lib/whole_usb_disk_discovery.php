@@ -144,6 +144,8 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             'dev_id' => trim($devId),
             'serial' => $serial,
             'size_bytes' => $sectorCount * 512,
+            // Exact decimal sector count for identity checks on 32-bit PHP.
+            'size_sectors' => ltrim(trim($sectors), '0') ?: '0',
             'read_only' => trim($readOnly) === '1',
             'partitions' => $children,
             'partition_dev_ids' => $partitionIds,
