@@ -15,7 +15,7 @@ function edm_whole_disk_identity_matches($expected, $current)
     }
     if (!preg_match('/^sd[a-z]+$/D', $expected['name'])
         || !preg_match('/^[0-9]+:[0-9]+$/D', $expected['dev_id'])
-        || !ctype_digit($expected['size_sectors']) || $expected['size_bytes'] === '0') {
+        || !ctype_digit($expected['size_sectors']) || $expected['size_sectors'] === '0') {
         return false;
     }
     foreach (array('serial', 'partitions') as $field) {
