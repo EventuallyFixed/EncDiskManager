@@ -40,7 +40,8 @@ function edm_whole_disk_partition_snapshot($identity)
     $names = $identity['partitions'];
     $sorted = $names;
     sort($sorted, SORT_STRING);
-    if ($names !== $sorted || count($names) !== count($identity['partition_dev_ids'])) {
+    if ($names !== $sorted || count($names) !== count(array_unique($names))
+        || count($names) !== count($identity['partition_dev_ids'])) {
         return false;
     }
     $parts = array();
