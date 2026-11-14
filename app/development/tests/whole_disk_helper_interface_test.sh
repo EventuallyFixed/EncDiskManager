@@ -5,7 +5,7 @@ helper="$(dirname "$0")/../../bin/encdiskmanager-whole-disk-helper"
 test -f "$helper"
 sh -n "$helper"
 for name in /dev/sdb /dev/sdd /dev/sdaa /dev/sdb1 /dev/mapper/test /dev/sdB /dev/sda/../sdb; do
-    if sh "$helper" check "$name" >/dev/null 2>&1; then
+    if sh "$helper" check "$name" 8:48 /sys/devices/usb3/sdd 30031250 >/dev/null 2>&1; then
         echo "FAIL: helper accepted $name" >&2
         exit 1
     fi
@@ -20,14 +20,19 @@ if sh "$helper" check >/dev/null 2>&1; then
     echo 'FAIL: helper accepted missing disk' >&2
     exit 1
 fi
+# A disk path without its confirmed identity must be refused.
+if sh "$helper" check /dev/sdd >/dev/null 2>&1; then
+    echo 'FAIL: helper accepted disk without confirmed identity' >&2
+    exit 1
+fi
 # Assert the helper actually parses device names and reaches its read-only
 # block-device check; a blanket failure would not test the interface.
-invalid="$(sh "$helper" check /dev/sdb1 2>&1 || true)"
+invalid="$(sh "$helper" check /dev/sdb1 8:48 /sys/devices/usb3/sdb 30031250 2>&1 || true)"
 case "$invalid" in
     *'Expected a whole /dev/sdX USB disk name.'*) ;;
     *) echo 'FAIL: partition name was not rejected at the input boundary' >&2; exit 1 ;;
 esac
-nonblock="$(sh "$helper" check /dev/sdzzzz 2>&1 || true)"
+nonblock="$(sh "$helper" check /dev/sdzzzz 8:48 /sys/devices/usb3/sdzzzz 30031250 2>&1 || true)"
 case "$nonblock" in
     *'Selected path is not a block device.'*) ;;
     *) echo 'FAIL: valid-shaped missing disk did not reach the block-device check' >&2; exit 1 ;;
