@@ -47,3 +47,48 @@ function edm_whole_usb_disk_still_matches($bound, $freshSnapshot)
     $fresh = edm_whole_usb_disk_candidate($freshSnapshot, $bound['name']);
     return $fresh !== null && $fresh === $bound;
 }
+
+/**
+ * Opaque inventory identifier for a validated whole USB disk.
+ * This is not authorization: callers must rediscover and recheck the disk
+ * immediately before any destructive operation.
+ */
+function edm_whole_usb_disk_identifier($disk)
+{
+    if (!is_array($disk)) return null;
+    foreach (array('name', 'dev_id', 'sysfs_path', 'serial') as $field) {
+        if (!isset($disk[$field]) || !is_string($disk[$field])
+            || $disk[$field] === '') return null;
+    }
+    if (!isset($disk['size_bytes']) || !is_int($disk['size_bytes'])
+        || $disk['size_bytes'] <= 0) return null;
+    return hash('sha256', json_encode(array(
+        $disk['name'], $disk['dev_id'], $disk['sysfs_path'],
+        $disk['serial'], $disk['size_bytes']
+    )));
+}
+
+/**
+ * Resolve a client-supplied opaque identifier only against a fresh,
+ * complete server-side snapshot. Never accept a device path from the client.
+ */
+function edm_whole_usb_disk_by_identifier($snapshot, $identifier)
+{
+    if (!is_string($identifier)
+        || !preg_match('/^[a-f0-9]{64}$/D', $identifier)
+        || !is_array($snapshot) || !isset($snapshot['complete'], $snapshot['disks'])
+        || $snapshot['complete'] !== true || !is_array($snapshot['disks'])) return null;
+    $found = null;
+    foreach ($snapshot['disks'] as $disk) {
+        if (!is_array($disk) || !isset($disk['name'])
+            || !is_string($disk['name'])) return null;
+        $candidate = edm_whole_usb_disk_candidate($snapshot, $disk['name']);
+        if ($candidate === null) continue;
+        $id = edm_whole_usb_disk_identifier($candidate);
+        if ($id !== null && hash_equals($id, $identifier)) {
+            if ($found !== null) return null;
+            $found = $candidate;
+        }
+    }
+    return $found;
+}
