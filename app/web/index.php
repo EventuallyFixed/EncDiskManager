@@ -417,7 +417,7 @@ try {
                                 data-status="<?php echo h($row['status']); ?>"
                                 title="View registered disk configuration">Configure</button>
                         <?php endif; ?>
-                        <?php foreach (array('Unlock', 'Mount', 'Unmount', 'Lock', 'Encrypt') as $action): ?>
+                        <?php foreach (array('Unlock', 'Mount', 'Unmount', 'Lock', 'Encrypt + ext4') as $action): ?>
                             <button type="button" disabled title="<?php echo h($action . ': not yet available in this development build'); ?>"><?php echo h($action); ?></button>
                         <?php endforeach; ?>
                     </td>
@@ -681,7 +681,7 @@ try {
                         row.setAttribute('data-key', item.key);
                         for (var i = 0; i < 7; i++) row.appendChild(document.createElement('td'));
                         row.cells[6].className = 'disk-actions';
-                        ['Unlock', 'Mount', 'Unmount', 'Lock', 'Encrypt'].forEach(function (action) {
+                        ['Unlock', 'Mount', 'Unmount', 'Lock', 'Encrypt + ext4'].forEach(function (action) {
                             var button = document.createElement('button');
                             button.type = 'button';
                             button.disabled = true;
