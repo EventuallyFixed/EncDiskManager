@@ -19,7 +19,17 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
         if (isset($fields[0])) $mounted[$fields[0]] = true;
     }
 
-    // Active swap is not listed in /proc/mounts. Treat it as in-use.\n    $swapLines = @file($swapsFile, FILE_IGNORE_NEW_LINES);\n    if (!is_array($swapLines)) {\n        return array('complete' => false, 'disks' => array());\n    }\n    foreach (array_slice($swapLines, 1) as $line) {\n        $fields = preg_split('/\\s+/', trim($line));\n        if (isset($fields[0])) $mounted[$fields[0]] = true;\n    }\n\n    $disks = array();
+    // Active swap is not listed in /proc/mounts. Treat it as in-use.
+    $swapLines = @file($swapsFile, FILE_IGNORE_NEW_LINES);
+    if (!is_array($swapLines)) {
+        return array('complete' => false, 'disks' => array());
+    }
+    foreach (array_slice($swapLines, 1) as $line) {
+        $fields = preg_split('/\\s+/', trim($line));
+        if (isset($fields[0])) $mounted[$fields[0]] = true;
+    }
+
+    $disks = array();
     foreach ($entries as $name) {
         if (!preg_match('/^[a-zA-Z0-9._+-]+$/D', $name)) continue;
         $path = $sysBlock . '/' . $name;
