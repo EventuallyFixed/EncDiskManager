@@ -37,7 +37,13 @@ case "${1:-}" in
         IFS= read -r read_only < "$sysfs/ro" ||
             fail 'Cannot read disk read-only state.'
         case "$device_id" in
-            *:*) ;;
+            *:*)
+                major=${device_id%%:*}
+                minor=${device_id#*:}
+                case "$major:$minor" in
+                    :*|*:|*[!0-9:]*|*:*:*) fail 'Invalid kernel device identity.' ;;
+                esac
+                ;;
             *) fail 'Invalid kernel device identity.' ;;
         esac
         case "$sectors" in
