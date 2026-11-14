@@ -10,7 +10,7 @@ function check_selection($actual, $expected, $label) {
 $disk = array(
     'name' => 'sdb', 'dev_id' => '8:16',
     'sysfs_path' => '/sys/devices/usb1/1-1/block/sdb',
-    'size_bytes' => 1000000, 'serial' => 'USB-123',
+    'size_sectors' => '1000000', 'serial' => 'USB-123',
     'partitions' => array('sdb1'), 'partition_dev_ids' => array('sdb1' => '8:17'),
     'mounted' => false, 'has_holders' => false, 'has_slaves' => false,
     'read_only' => false
