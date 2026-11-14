@@ -74,8 +74,11 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             || !preg_match('/^[01]$/D', trim($readOnly))) {
             return array('complete' => false, 'disks' => array());
         }
-        $sectorCount = (int) trim($sectors);
-        if ($sectorCount <= 0 || $sectorCount > intdiv(PHP_INT_MAX, 512)) {
+        // ARMHF PHP may use 32-bit integers. Use floating-point only for
+        // read-only capacity display; never use it to identify an erase target.
+        $sectorCount = (float) trim($sectors);
+        if (!is_finite($sectorCount) || $sectorCount <= 0
+            || $sectorCount > PHP_FLOAT_MAX / 512) {
             return array('complete' => false, 'disks' => array());
         }
 
