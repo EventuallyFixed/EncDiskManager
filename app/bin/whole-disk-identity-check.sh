@@ -19,8 +19,15 @@ case "$expected_id" in
     *) exit 1 ;;
 esac
 case "$major:$minor" in :*|*:|*[!0-9:]*|*:*:*) exit 1 ;; esac
-case "$expected_sectors" in ''|0|*[!0-9]*) exit 1 ;; esac
-[ -n "$expected_path" ] || exit 1
+# Match the PHP identity format: canonical positive decimal sector count.
+case "$expected_sectors" in
+    [1-9]*) case "$expected_sectors" in *[!0-9]*) exit 1 ;; esac ;;
+    *) exit 1 ;;
+esac
+case "$expected_path" in
+    /sys/devices/*) ;;
+    *) exit 1 ;;
+esac
 [ "$expected_id" = "$current_id" ] || exit 1
 [ "$expected_path" = "$current_path" ] || exit 1
 [ "$expected_sectors" = "$current_sectors" ] || exit 1
