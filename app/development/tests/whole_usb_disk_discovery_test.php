@@ -56,6 +56,22 @@ try {
     check_discovery($result['disks'][0]['has_holders'] === true
         && $result['disks'][0]['encryption_eligible'] === false,
         'Partition holder is detected without enabling encryption');
+    file_put_contents($usb . '/ro', '1');
+    $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts');
+    check_discovery($result['complete'] === true
+        && $result['disks'][0]['read_only'] === true
+        && $result['disks'][0]['encryption_eligible'] === false,
+        'Read-only USB disk remains display-only');
+    file_put_contents($usb . '/ro', 'invalid');
+    $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts');
+    check_discovery($result['complete'] === false,
+        'Invalid kernel read-only state fails closed');
+    file_put_contents($usb . '/ro', '0');
+    unlink($usb . '/dev');
+    $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts');
+    check_discovery($result['complete'] === false,
+        'Missing kernel device identity fails closed');
+    file_put_contents($usb . '/dev', '8:16');
     unlink($usb . '/sdb1/holders/dm-0');
     unlink($base . '/block/sdb');
     unlink($usb . '/sdb1/partition');
