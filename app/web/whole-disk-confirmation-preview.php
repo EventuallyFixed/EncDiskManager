@@ -7,6 +7,7 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/whole_disk_confirmation_preview_decision.php';
 require_once __DIR__ . '/../lib/whole_usb_disk_discovery.php';
 require_once __DIR__ . '/../lib/whole_disk_preview_selection.php';
+require_once __DIR__ . '/../lib/whole_usb_disk_stable_candidate.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -21,7 +22,11 @@ try {
         isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : null, $_POST);
     if ($decision['status'] === 200) {
         $inventory = edm_discover_whole_usb_disks();
-        if (!edm_whole_disk_preview_selection($_POST, $inventory)) {
+        $secondInventory = edm_discover_whole_usb_disks();
+        $diskName = isset($_POST['disk']) && is_string($_POST['disk'])
+            ? substr($_POST['disk'], 5) : '';
+        if (!edm_whole_disk_preview_selection($_POST, $inventory)
+            || !edm_whole_usb_disk_stable_candidate($inventory, $secondInventory, $diskName)) {
             $decision = array('status' => 400, 'body' => array(
                 'confirmed' => false, 'execution_enabled' => false));
         }
