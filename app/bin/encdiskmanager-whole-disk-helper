@@ -1,6 +1,5 @@
 #!/bin/sh
-# Reserved interface for whole-USB-disk encryption.
-# Deliberately non-destructive: no operation is enabled yet.
+# Read-only whole-USB-disk helper. Encryption is deliberately disabled.
 set -eu
 
 fail() {
@@ -18,15 +17,17 @@ case "${1:-}" in
         case "$disk_letters" in
             ''|*[!a-z]*) fail 'Expected a whole /dev/sdX USB disk name.' ;;
         esac
-        # Read-only checks only. This is not authorization to erase.
+
         [ -b "$2" ] || fail 'Selected path is not a block device.'
         sysfs="/sys/class/block/sd$disk_letters"
         [ -e "$sysfs" ] || fail 'Kernel block device is unavailable.'
         [ ! -e "$sysfs/partition" ] || fail 'Selected device is a partition.'
         resolved="$(/usr/bin/readlink -f "$sysfs")" ||
             fail 'Cannot resolve kernel device path.'
-        printf '%s\n' "$resolved" | grep -Eq '/usb[0-9]+(/|$)' ||
-            fail 'Selected device is not USB-backed.'
+        case "$resolved" in
+            */usb[0-9]*/*) ;;
+            *) fail 'Selected device is not USB-backed.' ;;
+        esac
         [ -r "$sysfs/dev" ] && [ -r "$sysfs/size" ] && [ -r "$sysfs/ro" ] ||
             fail 'Kernel device details are unavailable.'
         IFS= read -r device_id < "$sysfs/dev" ||
@@ -35,22 +36,13 @@ case "${1:-}" in
             fail 'Cannot read disk size.'
         IFS= read -r read_only < "$sysfs/ro" ||
             fail 'Cannot read disk read-only state.'
-        printf '%s\n' "$device_id" | grep -Eq '^[0-9]+:[0-9]+
-        ;;
-    *)
-        fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX (disabled)'
-        ;;
-esac
- ||
-            fail 'Invalid kernel device identity.'
-        printf '%s\n' "$sectors" | grep -Eq '^[0-9]+
-        ;;
-    *)
-        fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX (disabled)'
-        ;;
-esac
- ||
-            fail 'Invalid disk size.'
+        case "$device_id" in
+            *:*) ;;
+            *) fail 'Invalid kernel device identity.' ;;
+        esac
+        case "$sectors" in
+            ''|*[!0-9]*) fail 'Invalid disk size.' ;;
+        esac
         [ "$sectors" != 0 ] || fail 'Disk has zero capacity.'
         [ "$read_only" = 0 ] || fail 'Disk is read-only or its state is unknown.'
         fail 'Read-only USB check completed. Encryption is disabled; no disk was modified.'
