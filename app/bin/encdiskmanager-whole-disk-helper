@@ -57,9 +57,9 @@ case "${1:-}" in
         done
         if ! awk -v ids="$device_ids" '
             BEGIN { n=split(ids, a, " "); for (i=1; i<=n; i++) wanted[a[i]]=1 }
-            NF < 3 { exit 2 }
+            NF < 3 { invalid=1 }
             wanted[$3] { found=1 }
-            END { if (found) exit 1 }
+            END { if (found || invalid) exit 1 }
         ' /proc/self/mountinfo; then
             fail 'Disk or partition is mounted, or mount information is invalid.'
         fi
