@@ -18,7 +18,7 @@ function edm_whole_disk_identity_matches($expected, $current)
         || !ctype_digit($expected['size_sectors']) || $expected['size_sectors'] === '0') {
         return false;
     }
-    foreach (array('serial', 'partitions') as $field) {
+    foreach (array('serial', 'partitions', 'partition_dev_ids') as $field) {
         if (!array_key_exists($field, $expected) || !array_key_exists($field, $current)
             || $expected[$field] !== $current[$field]) return false;
     }
