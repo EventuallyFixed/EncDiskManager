@@ -38,4 +38,22 @@ if grep -En '(^|[[:space:]/])(cryptsetup|sfdisk|fdisk|parted|wipefs|mkfs([.]ext4
     echo 'FAIL: destructive command found in disabled helper' >&2
     exit 1
 fi
-echo 'PASS: disabled helper validates input and rejects all operations'
+# Exercise the exact read-only awk logic used by the helper with fake /proc data.
+busy_check="$(dirname "$helper")/whole-disk-busy-check.awk"
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT HUP INT TERM
+printf '31 22 8:49 / /mnt/usb rw - vfat /dev/sdd1 rw\n' > "$tmpdir/mountinfo"
+if awk -v mode=mount -v ids='8:48 8:49' -f "$busy_check" "$tmpdir/mountinfo"; then
+    echo 'FAIL: mounted partition not detected' >&2; exit 1
+fi
+if ! awk -v mode=mount -v ids='8:64 8:65' -f "$busy_check" "$tmpdir/mountinfo"; then
+    echo 'FAIL: unrelated mount was rejected' >&2; exit 1
+fi
+printf 'Filename Type Size Used Priority\n/dev/sdd1 partition 1024 0 -2\n' > "$tmpdir/swaps"
+if awk -v mode=swap -v disk=/dev/sdd -f "$busy_check" "$tmpdir/swaps"; then
+    echo 'FAIL: active partition swap not detected' >&2; exit 1
+fi
+if ! awk -v mode=swap -v disk=/dev/sde -f "$busy_check" "$tmpdir/swaps"; then
+    echo 'FAIL: unrelated swap was rejected' >&2; exit 1
+fi
+echo 'PASS: disabled helper validates input, busy disks, and rejects all operations'
