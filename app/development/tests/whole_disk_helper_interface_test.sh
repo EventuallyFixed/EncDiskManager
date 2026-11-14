@@ -20,4 +20,16 @@ if sh "$helper" check >/dev/null 2>&1; then
     echo 'FAIL: helper accepted missing disk' >&2
     exit 1
 fi
-echo 'PASS: whole-disk helper remains disabled and rejects all requests'
+# Assert the helper actually parses device names and reaches its read-only
+# block-device check; a blanket failure would not test the interface.
+invalid="$(sh "$helper" check /dev/sdb1 2>&1 || true)"
+case "$invalid" in
+    *'Expected a whole /dev/sdX USB disk name.'*) ;;
+    *) echo 'FAIL: partition name was not rejected at the input boundary' >&2; exit 1 ;;
+esac
+nonblock="$(sh "$helper" check /dev/sdzzzz 2>&1 || true)"
+case "$nonblock" in
+    *'Selected path is not a block device.'*) ;;
+    *) echo 'FAIL: valid-shaped missing disk did not reach the block-device check' >&2; exit 1 ;;
+esac
+echo 'PASS: disabled helper validates input and rejects all operations'
