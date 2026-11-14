@@ -105,4 +105,27 @@ fi
 if ! awk -v mode=swap -v disk=/dev/sdd -f "$busy_check" "$tmpdir/swaps"; then
     echo 'FAIL: clean swap snapshot was rejected' >&2; exit 1
 fi
-echo 'PASS: disabled helper validates input, busy disks, and rejects all operations'
+# Fake sysfs directories: no real block devices are accessed.
+dependencies="$(dirname "$helper")/whole-disk-dependencies.sh"
+sh -n "$dependencies"
+mkdir -p "$tmpdir/disk/holders" "$tmpdir/disk/slaves" \
+    "$tmpdir/disk/sdd1/holders" "$tmpdir/disk/sdd1/slaves"
+: > "$tmpdir/disk/sdd1/partition"
+if ! sh "$dependencies" "$tmpdir/disk"; then
+    echo 'FAIL: idle fake disk rejected' >&2; exit 1
+fi
+: > "$tmpdir/disk/sdd1/holders/dm-0"
+if sh "$dependencies" "$tmpdir/disk"; then
+    echo 'FAIL: partition holder ignored' >&2; exit 1
+fi
+rm "$tmpdir/disk/sdd1/holders/dm-0"
+: > "$tmpdir/disk/slaves/dm-0"
+if sh "$dependencies" "$tmpdir/disk"; then
+    echo 'FAIL: whole-disk slave ignored' >&2; exit 1
+fi
+rm "$tmpdir/disk/slaves/dm-0"
+rmdir "$tmpdir/disk/sdd1/slaves"
+if sh "$dependencies" "$tmpdir/disk"; then
+    echo 'FAIL: missing dependency directory accepted' >&2; exit 1
+fi
+echo 'PASS: disabled helper validates input, busy disks, dependencies and rejects all operations'
