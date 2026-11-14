@@ -30,4 +30,18 @@ $changed = $disk; $changed['size_sectors'] = '0';
 verify(edm_whole_disk_identity_matches($changed, $changed), false, 'Zero capacity rejected');
 $changed = $disk; $changed['size_sectors'] = '30031250';
 verify(edm_whole_disk_identity_matches($disk, $changed), false, 'Different exact sector count rejected');
+foreach (array('', 'abc', '1.5', '-1', '00') as $badSize) {
+    $changed = $disk;
+    $changed['size_sectors'] = $badSize;
+    verify(edm_whole_disk_identity_matches($changed, $changed), $badSize === '00',
+        'Sector count input: ' . var_export($badSize, true));
+}
+$large = $disk;
+$large['size_sectors'] = '9007199254740993';
+verify(edm_whole_disk_identity_matches($large, $large), true,
+    'Exact sector count above floating-point integer precision is preserved');
+$changed = $large;
+$changed['size_sectors'] = '9007199254740992';
+verify(edm_whole_disk_identity_matches($large, $changed), false,
+    'One-sector difference above floating-point precision is rejected');
 verify(edm_whole_disk_identity_matches(null, $disk), false, 'Invalid identity rejected');
