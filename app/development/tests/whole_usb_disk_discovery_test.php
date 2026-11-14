@@ -95,6 +95,11 @@ try {
         && $result['disks'][0]['read_only'] === true
         && $result['disks'][0]['encryption_eligible'] === false,
         'Read-only USB disk remains display-only');
+    rmdir($usb . '/sdb1/slaves');
+    $missingSlaves = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
+    check_discovery($missingSlaves['complete'] === false,
+        'Missing partition dependency directory makes inventory incomplete');
+    mkdir($usb . '/sdb1/slaves', 0700);
     file_put_contents($usb . '/ro', 'invalid');
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
     check_discovery($result['complete'] === false,
