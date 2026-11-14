@@ -61,24 +61,15 @@ case "${1:-}" in
                 fail 'Cannot read partition identity.'
             device_ids="$device_ids $partition_id"
         done
-        if ! awk -v ids="$device_ids" '
-            BEGIN { n=split(ids, a, " "); for (i=1; i<=n; i++) wanted[a[i]]=1 }
-            NF < 3 { invalid=1 }
-            wanted[$3] { found=1 }
-            END { if (found || invalid) exit 1 }
-        ' /proc/self/mountinfo; then
+        busy_check="$(dirname "$0")/whole-disk-busy-check.awk"
+        [ -r "$busy_check" ] || fail 'Busy-device check is unavailable.'
+        if ! awk -v mode=mount -v ids="$device_ids" -f "$busy_check" /proc/self/mountinfo; then
             fail 'Disk or partition is mounted, or mount information is invalid.'
         fi
 
         # Swap does not appear in mountinfo.
         [ -r /proc/swaps ] || fail 'Swap information is unavailable.'
-        if ! awk -v disk="$2" '
-            NR == 1 { next }
-            $1 == disk || index($1, disk) == 1 && substr($1, length(disk)+1) ~ /^[0-9]+$/ {
-                found=1
-            }
-            END { if (found) exit 1 }
-        ' /proc/swaps; then
+        if ! awk -v mode=swap -v disk="$2" -f "$busy_check" /proc/swaps; then
             fail 'Disk or partition is in use as swap.'
         fi
         fail 'Read-only USB check completed. Encryption is disabled; no disk was modified.'
