@@ -32,4 +32,10 @@ case "$nonblock" in
     *'Selected path is not a block device.'*) ;;
     *) echo 'FAIL: valid-shaped missing disk did not reach the block-device check' >&2; exit 1 ;;
 esac
+# Keep this helper independent from PHP discovery, but prevent it from
+# accidentally acquiring destructive commands before review and enablement.
+if grep -En '(^|[[:space:]/])(cryptsetup|sfdisk|fdisk|parted|wipefs|mkfs([.]ext4)?|dd)([[:space:]]|$)' "$helper"; then
+    echo 'FAIL: destructive command found in disabled helper' >&2
+    exit 1
+fi
 echo 'PASS: disabled helper validates input and rejects all operations'
