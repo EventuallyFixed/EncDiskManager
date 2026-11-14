@@ -128,4 +128,19 @@ rmdir "$tmpdir/disk/sdd1/slaves"
 if sh "$dependencies" "$tmpdir/disk"; then
     echo 'FAIL: missing dependency directory accepted' >&2; exit 1
 fi
+# Cover both dependency types at both levels, including sysfs-style links.
+mkdir "$tmpdir/disk/sdd1/slaves"
+: > "$tmpdir/disk/holders/dm-1"
+if sh "$dependencies" "$tmpdir/disk"; then
+    echo 'FAIL: whole-disk holder ignored' >&2; exit 1
+fi
+rm "$tmpdir/disk/holders/dm-1"
+ln -s "$tmpdir/disk" "$tmpdir/disk/sdd1/slaves/dm-1"
+if sh "$dependencies" "$tmpdir/disk"; then
+    echo 'FAIL: partition slave symlink ignored' >&2; exit 1
+fi
+rm "$tmpdir/disk/sdd1/slaves/dm-1"
+if ! sh "$dependencies" "$tmpdir/disk"; then
+    echo 'FAIL: restored idle disk rejected' >&2; exit 1
+fi
 echo 'PASS: disabled helper validates input, busy disks, dependencies and rejects all operations'
