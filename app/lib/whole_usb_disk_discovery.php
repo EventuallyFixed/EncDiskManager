@@ -74,31 +74,22 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             }
             $partitionIds[$child] = trim($partitionDev);
         }
-        $holders = @scandir($path . '/holders');
-        if (!is_array($holders)) {
-            return array('complete' => false, 'disks' => array());
-        }
-        $hasHolders = count(array_diff($holders, array('.', '..'))) > 0;
+        // Check the whole disk and each partition for block-device users.
+        $hasHolders = false;
         $hasSlaves = false;
-        $diskSlaves = @scandir($path . '/slaves');
-        if (is_array($diskSlaves)) {
-            $hasSlaves = count(array_diff($diskSlaves, array('.', '..'))) > 0;
+        foreach (array_merge(array($name), $children) as $device) {
+            $devicePath = $device === $name ? $path : $path . '/' . $device;
+            $holders = @scandir($devicePath . '/holders');
+            if (!is_array($holders)) {
+                return array('complete' => false, 'disks' => array());
+            }
+            if (count($holders) > 2) $hasHolders = true;
+            $slaves = @scandir($devicePath . '/slaves');
+            if (is_array($slaves) && count($slaves) > 2) $hasSlaves = true;
         }
         $isMounted = isset($mounted['/dev/' . $name]);
         foreach ($children as $child) {
             if (isset($mounted['/dev/' . $child])) $isMounted = true;
-            $childHolders = @scandir($path . '/' . $child . '/holders');
-            if (!is_array($childHolders)) {
-                return array('complete' => false, 'disks' => array());
-            }
-            if (count(array_diff($childHolders, array('.', '..'))) > 0) {
-                $hasHolders = true;
-            }
-            $childSlaves = @scandir($path . '/' . $child . '/slaves');
-            if (is_array($childSlaves)
-                && count(array_diff($childSlaves, array('.', '..'))) > 0) {
-                $hasSlaves = true;
-            }
         }
 
         $devId = @file_get_contents($path . '/dev');
