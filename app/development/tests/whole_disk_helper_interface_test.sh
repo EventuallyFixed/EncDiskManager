@@ -143,4 +143,20 @@ rm "$tmpdir/disk/sdd1/slaves/dm-1"
 if ! sh "$dependencies" "$tmpdir/disk"; then
     echo 'FAIL: restored idle disk rejected' >&2; exit 1
 fi
-echo 'PASS: disabled helper validates input, busy disks, dependencies and rejects all operations'
+identity="$(dirname "$helper")/whole-disk-identity-check.sh"
+sh -n "$identity"
+if ! sh "$identity" sdd 8:48 /sys/devices/usb3/sdd 30031250 8:48 /sys/devices/usb3/sdd 30031250; then
+    echo 'FAIL: matching identity rejected' >&2; exit 1
+fi
+for changed in '8:64 /sys/devices/usb3/sdd 30031250' \
+    '8:48 /sys/devices/usb4/sdd 30031250' \
+    '8:48 /sys/devices/usb3/sdd 30031251'; do
+    # Deliberately split the three fixture fields.
+    if sh "$identity" sdd 8:48 /sys/devices/usb3/sdd 30031250 $changed; then
+        echo 'FAIL: changed disk identity accepted' >&2; exit 1
+    fi
+done
+if sh "$identity" sdd1 8:48 /sys/devices/usb3/sdd 30031250 8:48 /sys/devices/usb3/sdd 30031250; then
+    echo 'FAIL: partition identity accepted' >&2; exit 1
+fi
+echo 'PASS: disabled helper validates input, busy disks, dependencies and identity fixtures'
