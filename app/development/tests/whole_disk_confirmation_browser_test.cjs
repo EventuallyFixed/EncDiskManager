@@ -50,6 +50,7 @@ async function run() {
   const posted = new URLSearchParams(pending[0].options.body);
   assert.equal(posted.get('warning_accepted'), 'yes');
   assert.equal(posted.get('confirmation_phrase'), 'ERASE ALL DATA');
+  assert.equal(posted.get('disk'), '/dev/sdb');
   assert.equal(posted.get('csrf_token'), 'a'.repeat(64));
   pending.shift().resolve({ok: true, json: async () => ({confirmed: true, execution_enabled: false})});
   await flush();
