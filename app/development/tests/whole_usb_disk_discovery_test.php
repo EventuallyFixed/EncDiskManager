@@ -30,6 +30,9 @@ try {
     mkdir($base . '/usb1/1-1/block', 0700);
     mkdir($usb, 0700);
     mkdir($usb . '/holders', 0700);
+    file_put_contents($usb . '/dev', '8:16');
+    file_put_contents($usb . '/size', '2048');
+    file_put_contents($usb . '/ro', '0');
     mkdir($usb . '/sdb1', 0700);
     file_put_contents($usb . '/sdb1/partition', '1');
     mkdir($usb . '/sdb1/holders', 0700);
@@ -39,6 +42,9 @@ try {
     check_discovery(count($result['disks']) === 1
         && $result['disks'][0]['name'] === 'sdb'
         && $result['disks'][0]['partitions'] === array('sdb1')
+        && $result['disks'][0]['dev_id'] === '8:16'
+        && $result['disks'][0]['size_bytes'] === 1048576
+        && $result['disks'][0]['read_only'] === false
         && $result['disks'][0]['mounted'] === true
         && $result['disks'][0]['encryption_eligible'] === false,
         'USB parent discovered but mounted partition cannot be encrypted');
@@ -54,6 +60,9 @@ try {
     rmdir($usb . '/sdb1/holders');
     rmdir($usb . '/sdb1');
     rmdir($usb . '/holders');
+    unlink($usb . '/dev');
+    unlink($usb . '/size');
+    unlink($usb . '/ro');
     rmdir($usb);
     rmdir($base . '/usb1/1-1/block');
     rmdir($base . '/usb1/1-1');
