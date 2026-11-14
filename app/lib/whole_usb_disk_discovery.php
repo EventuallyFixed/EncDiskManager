@@ -79,6 +79,11 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             return array('complete' => false, 'disks' => array());
         }
         $hasHolders = count(array_diff($holders, array('.', '..'))) > 0;
+        $hasSlaves = false;
+        $diskSlaves = @scandir($path . '/slaves');
+        if (is_array($diskSlaves)) {
+            $hasSlaves = count(array_diff($diskSlaves, array('.', '..'))) > 0;
+        }
         $isMounted = isset($mounted['/dev/' . $name]);
         foreach ($children as $child) {
             if (isset($mounted['/dev/' . $child])) $isMounted = true;
@@ -88,6 +93,11 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             }
             if (count(array_diff($childHolders, array('.', '..'))) > 0) {
                 $hasHolders = true;
+            }
+            $childSlaves = @scandir($path . '/' . $child . '/slaves');
+            if (is_array($childSlaves)
+                && count(array_diff($childSlaves, array('.', '..'))) > 0) {
+                $hasSlaves = true;
             }
         }
 
@@ -139,6 +149,7 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             'partition_dev_ids' => $partitionIds,
             'mounted' => $isMounted,
             'has_holders' => $hasHolders,
+            'has_slaves' => $hasSlaves,
             // Never infer destructive-operation eligibility from this
             // partial read-only inventory.
             'encryption_eligible' => false
