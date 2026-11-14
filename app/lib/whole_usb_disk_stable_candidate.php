@@ -18,7 +18,7 @@ function edm_whole_usb_disk_stable_candidate($first, $second, $name)
             return array(
                 'dev_id' => $disk['dev_id'],
                 'sysfs_path' => $disk['sysfs_path'],
-                'size_bytes' => (string) $disk['size_bytes'],
+                'size_sectors' => $disk['size_sectors'],
                 'partitions' => $disk['partitions'],
                 'partition_dev_ids' => $parts,
                 'serial' => isset($disk['serial']) ? $disk['serial'] : null
