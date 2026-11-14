@@ -83,7 +83,7 @@ case "${1:-}" in
         [ -r "$dependencies" ] || fail 'Dependency check is unavailable.'
         sh "$dependencies" "$sysfs" ||
             fail 'Disk has block-device dependencies or dependency status is unavailable.'
-        fail 'Read-only USB check completed. Encryption is disabled; no disk was modified.'
+        echo 'Read-only USB check passed. Encryption is disabled; no disk was modified.'
         ;;
     *)
         fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX MAJOR:MINOR SYSFS_PATH SECTORS PARTITIONS (disabled)'
