@@ -123,7 +123,7 @@ try {
     @rmdir($base . '/block/sda');
     @unlink($base . '/mounts');
     @unlink($base . '/mountinfo');
-    @unlink($base . '/swaps', $base . '/mountinfo');
+    @unlink($base . '/swaps');
     @rmdir($base . '/block');
     @rmdir($base);
 }
