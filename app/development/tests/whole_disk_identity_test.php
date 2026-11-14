@@ -45,3 +45,28 @@ $changed['size_sectors'] = '9007199254740992';
 verify(edm_whole_disk_identity_matches($large, $changed), false,
     'One-sector difference above floating-point precision is rejected');
 verify(edm_whole_disk_identity_matches(null, $disk), false, 'Invalid identity rejected');
+
+verify(edm_whole_disk_partition_snapshot($disk), 'sdb1=8:17', 'Canonical partition snapshot');
+$empty = $disk;
+$empty['partitions'] = array();
+$empty['partition_dev_ids'] = array();
+verify(edm_whole_disk_partition_snapshot($empty), '', 'Empty partition snapshot');
+$multiple = $disk;
+$multiple['partitions'] = array('sdb1', 'sdb2');
+$multiple['partition_dev_ids'] = array('sdb1' => '8:17', 'sdb2' => '8:18');
+verify(edm_whole_disk_partition_snapshot($multiple), 'sdb1=8:17,sdb2=8:18',
+    'Multiple partitions match helper format');
+foreach (array(
+    array('sdb2', 'sdb1'),
+    array('sdb1', 'sdb1'),
+    array('sdb1', 'sdb3')
+) as $invalidNames) {
+    $invalid = $multiple;
+    $invalid['partitions'] = $invalidNames;
+    verify(edm_whole_disk_partition_snapshot($invalid), false,
+        'Invalid partition name list rejected');
+}
+$invalid = $disk;
+$invalid['partition_dev_ids']['sdb1'] = 'invalid';
+verify(edm_whole_disk_partition_snapshot($invalid), false,
+    'Invalid partition kernel ID rejected');
