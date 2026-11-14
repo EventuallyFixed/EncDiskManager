@@ -24,3 +24,35 @@ function edm_whole_disk_identity_matches($expected, $current)
     }
     return true;
 }
+
+/**
+ * Serialize a confirmed partition snapshot for the read-only shell helper.
+ * Empty string means no partitions; false means incomplete/invalid identity.
+ */
+function edm_whole_disk_partition_snapshot($identity)
+{
+    if (!is_array($identity) || !isset($identity['name'], $identity['partitions'],
+        $identity['partition_dev_ids']) || !is_string($identity['name'])
+        || !preg_match('/^sd[a-z]+$/D', $identity['name'])
+        || !is_array($identity['partitions'])
+        || !is_array($identity['partition_dev_ids'])) return false;
+
+    $names = $identity['partitions'];
+    $sorted = $names;
+    sort($sorted, SORT_STRING);
+    if ($names !== $sorted || count($names) !== count($identity['partition_dev_ids'])) {
+        return false;
+    }
+    $parts = array();
+    foreach ($names as $name) {
+        if (!is_string($name)
+            || !preg_match('/^' . preg_quote($identity['name'], '/') . '[0-9]+$/D', $name)
+            || !isset($identity['partition_dev_ids'][$name])
+            || !is_string($identity['partition_dev_ids'][$name])
+            || !preg_match('/^[0-9]+:[0-9]+$/D', $identity['partition_dev_ids'][$name])) {
+            return false;
+        }
+        $parts[] = $name . '=' . $identity['partition_dev_ids'][$name];
+    }
+    return implode(',', $parts);
+}
