@@ -11,12 +11,12 @@ $disk = array(
     'name' => 'sdb', 'dev_id' => '8:16',
     'sysfs_path' => '/sys/devices/usb1/1-1/block/sdb',
     'size_sectors' => '1000000', 'serial' => 'USB-123',
-    'partitions' => array('sdb1')
+    'partitions' => array('sdb1'), 'partition_dev_ids' => array('sdb1' => '8:17')
 );
 verify(edm_whole_disk_identity_matches($disk, $disk), true, 'Matching identity');
-foreach (array('name', 'dev_id', 'sysfs_path', 'size_sectors', 'serial', 'partitions') as $field) {
+foreach (array('name', 'dev_id', 'sysfs_path', 'size_sectors', 'serial', 'partitions', 'partition_dev_ids') as $field) {
     $changed = $disk;
-    $changed[$field] = $field === 'partitions' ? array('sdb2') : 'changed';
+    $changed[$field] = $field === 'partitions' ? array('sdb2') : ($field === 'partition_dev_ids' ? array('sdb1' => '8:18') : 'changed');
     verify(edm_whole_disk_identity_matches($disk, $changed), false, "Changed $field rejected");
     $missing = $disk;
     unset($missing[$field]);
