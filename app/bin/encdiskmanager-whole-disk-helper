@@ -1,0 +1,24 @@
+#!/bin/sh
+# Reserved interface for whole-USB-disk encryption.
+# Deliberately non-destructive: no operation is enabled yet.
+set -eu
+
+fail() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+
+case "${1:-}" in
+    check)
+        [ "$#" -eq 2 ] || fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX'
+        case "$2" in
+            /dev/sd[a-z]) ;;
+            /dev/sd[a-z][a-z]*) ;;
+            *) fail 'Expected a whole /dev/sdX USB disk name.' ;;
+        esac
+        fail 'Whole-disk encryption is not enabled. No disk was modified.'
+        ;;
+    *)
+        fail 'Usage: encdiskmanager-whole-disk-helper check /dev/sdX (disabled)'
+        ;;
+esac
