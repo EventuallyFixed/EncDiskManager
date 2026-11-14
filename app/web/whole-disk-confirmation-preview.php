@@ -20,9 +20,8 @@ try {
         edm_auth_is_https(), edm_auth_is_authenticated(),
         isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : null, $_POST);
     if ($decision['status'] === 200) {
-        $first = edm_discover_whole_usb_disks();
-        $second = edm_discover_whole_usb_disks();
-        if (!edm_whole_disk_preview_selection($_POST, $first, $second)) {
+        $inventory = edm_discover_whole_usb_disks();
+        if (!edm_whole_disk_preview_selection($_POST, $inventory)) {
             $decision = array('status' => 400, 'body' => array(
                 'confirmed' => false, 'execution_enabled' => false));
         }
