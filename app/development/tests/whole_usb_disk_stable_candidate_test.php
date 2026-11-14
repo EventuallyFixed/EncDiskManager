@@ -18,7 +18,7 @@ check_stable(edm_whole_usb_disk_stable_candidate($first, $first, 'sdb'),
 foreach (array(
     array('dev_id', '8:32'),
     array('sysfs_path', '/sys/devices/pci0000:00/usb2/2-1/block/sdb'),
-    array('size_bytes', 2000000),
+    array('size_sectors', '2000000'),
     array('serial', 'USB-456'),
     array('partition_dev_ids', array('sdb1' => '8:18')),
     array('mounted', true),
