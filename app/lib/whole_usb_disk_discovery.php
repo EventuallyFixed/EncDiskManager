@@ -48,6 +48,17 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             $children[] = $child;
         }
         sort($children);
+        // Capture kernel identities for every partition, not just the parent.
+        // An incomplete partition identity makes the inventory incomplete.
+        $partitionIds = array();
+        foreach ($children as $child) {
+            $partitionDev = @file_get_contents($path . '/' . $child . '/dev');
+            if ($partitionDev === false
+                || !preg_match('/^[0-9]+:[0-9]+$/D', trim($partitionDev))) {
+                return array('complete' => false, 'disks' => array());
+            }
+            $partitionIds[$child] = trim($partitionDev);
+        }
         $holders = @scandir($path . '/holders');
         if (!is_array($holders)) {
             return array('complete' => false, 'disks' => array());
@@ -105,6 +116,7 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
             'size_bytes' => $sectorCount * 512,
             'read_only' => trim($readOnly) === '1',
             'partitions' => $children,
+            'partition_dev_ids' => $partitionIds,
             'mounted' => $isMounted,
             'has_holders' => $hasHolders,
             // Never infer destructive-operation eligibility from this
