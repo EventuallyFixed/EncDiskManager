@@ -28,6 +28,7 @@ try {
     mkdir($base . '/usb1', 0700);
     mkdir($base . '/usb1/1-1', 0700);
     mkdir($base . '/usb1/1-1/block', 0700);
+    file_put_contents($base . '/usb1/1-1/serial', 'TEST-USB-001');
     mkdir($usb, 0700);
     mkdir($usb . '/holders', 0700);
     file_put_contents($usb . '/dev', '8:16');
@@ -42,6 +43,7 @@ try {
     check_discovery(count($result['disks']) === 1
         && $result['disks'][0]['name'] === 'sdb'
         && $result['disks'][0]['partitions'] === array('sdb1')
+        && $result['disks'][0]['serial'] === 'TEST-USB-001'
         && $result['disks'][0]['dev_id'] === '8:16'
         && $result['disks'][0]['size_bytes'] === 1048576
         && $result['disks'][0]['read_only'] === false
@@ -65,6 +67,7 @@ try {
     unlink($usb . '/ro');
     rmdir($usb);
     rmdir($base . '/usb1/1-1/block');
+    unlink($base . '/usb1/1-1/serial');
     rmdir($base . '/usb1/1-1');
     rmdir($base . '/usb1');
     mkdir($base . '/block/sda', 0700);
