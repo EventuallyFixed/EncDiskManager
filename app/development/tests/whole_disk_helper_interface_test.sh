@@ -159,4 +159,12 @@ done
 if sh "$identity" sdd1 8:48 /sys/devices/usb3/sdd 30031250 8:48 /sys/devices/usb3/sdd 30031250; then
     echo 'FAIL: partition identity accepted' >&2; exit 1
 fi
+for invalid_size in 0 030031250 -1 abc; do
+    if sh "$identity" sdd 8:48 /sys/devices/usb3/sdd "$invalid_size" 8:48 /sys/devices/usb3/sdd "$invalid_size"; then
+        echo 'FAIL: malformed disk capacity accepted' >&2; exit 1
+    fi
+done
+if sh "$identity" sdd 8:48 /tmp/fake 30031250 8:48 /tmp/fake 30031250; then
+    echo 'FAIL: non-sysfs identity path accepted' >&2; exit 1
+fi
 echo 'PASS: disabled helper validates input, busy disks, dependencies and identity fixtures'
