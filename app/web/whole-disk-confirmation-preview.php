@@ -8,6 +8,7 @@ require_once __DIR__ . '/../lib/whole_disk_confirmation_preview_decision.php';
 require_once __DIR__ . '/../lib/whole_usb_disk_discovery.php';
 require_once __DIR__ . '/../lib/whole_disk_preview_selection.php';
 require_once __DIR__ . '/../lib/whole_usb_disk_stable_candidate.php';
+require_once __DIR__ . '/../lib/whole_disk_read_only_check.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -25,8 +26,11 @@ try {
         $secondInventory = edm_discover_whole_usb_disks();
         $diskName = isset($_POST['disk']) && is_string($_POST['disk'])
             ? substr($_POST['disk'], 5) : '';
+        $arguments = edm_whole_usb_disk_stable_check_arguments(
+            $inventory, $secondInventory, $diskName);
         if (!edm_whole_disk_preview_selection($_POST, $inventory)
-            || !edm_whole_usb_disk_stable_candidate($inventory, $secondInventory, $diskName)) {
+            || $arguments === false
+            || !edm_whole_disk_read_only_check($arguments)) {
             $decision = array('status' => 400, 'body' => array(
                 'confirmed' => false, 'execution_enabled' => false));
         }
