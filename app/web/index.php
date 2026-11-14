@@ -564,8 +564,32 @@ try {
     phrase.addEventListener('input', refresh);
     confirm.addEventListener('click', function () {
         if (confirm.disabled) return;
-        status.textContent = 'Confirmation format valid in this preview only. No request was sent and no disk was modified.';
+        confirm.disabled = true;
+        status.textContent = 'Checking confirmation with the server…';
+        var form = new URLSearchParams();
+        form.set('csrf_token', <?php echo json_encode($_SESSION['csrf_token']); ?>);
+        form.set('warning_accepted', acknowledgement.checked ? 'yes' : 'no');
+        form.set('confirmation_phrase', phrase.value);
+        fetch('whole-disk-confirmation-preview.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: form.toString()
+        }).then(function (response) {
+            if (!response.ok) throw new Error('Confirmation rejected');
+            return response.json();
+        }).then(function (result) {
+            if (!result || result.confirmed !== true || result.execution_enabled !== false) {
+                throw new Error('Confirmation rejected');
+            }
+            status.textContent = 'Server validated the confirmation. Encryption remains disabled; no disk was modified.';
+        }).catch(function () {
+            status.textContent = 'Confirmation could not be validated. No disk was modified.';
+        }).then(refreshButton);
     });
+    function refreshButton() {
+        confirm.disabled = !acknowledgement.checked || phrase.value !== 'ERASE ALL DATA';
+    }
     document.querySelectorAll('.whole-disk-preview-button').forEach(function (button) {
         button.addEventListener('click', function () {
             selected.textContent = button.getAttribute('data-disk') || 'Unknown';
