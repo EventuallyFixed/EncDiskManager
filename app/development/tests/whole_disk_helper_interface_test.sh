@@ -85,4 +85,14 @@ printf 'Filename Type Size Used Priority\n/dev/sdd partition 1024 0 -2\n' > "$tm
 if awk -v mode=swap -v disk=/dev/sdd -f "$busy_check" "$tmpdir/swaps"; then
     echo 'FAIL: whole-disk swap not detected' >&2; exit 1
 fi
+# A mount source may be a UUID alias; kernel major:minor must still catch it.
+printf '33 22 8:49 / /mnt/usb rw - ext4 /dev/disk/by-uuid/example rw\n' > "$tmpdir/mountinfo"
+if awk -v mode=mount -v ids='8:48 8:49' -f "$busy_check" "$tmpdir/mountinfo"; then
+    echo 'FAIL: UUID-aliased mount not detected' >&2; exit 1
+fi
+# A similarly prefixed disk is not a partition of the selected disk.
+printf 'Filename Type Size Used Priority\n/dev/sdde1 partition 1024 0 -2\n' > "$tmpdir/swaps"
+if ! awk -v mode=swap -v disk=/dev/sdd -f "$busy_check" "$tmpdir/swaps"; then
+    echo 'FAIL: similarly prefixed disk treated as selected swap' >&2; exit 1
+fi
 echo 'PASS: disabled helper validates input, busy disks, and rejects all operations'
