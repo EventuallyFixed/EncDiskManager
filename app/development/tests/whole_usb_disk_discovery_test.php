@@ -52,6 +52,7 @@ try {
         && $result['disks'][0]['dev_id'] === '8:16'
         && $result['disks'][0]['partition_dev_ids'] === array('sdb1' => '8:17')
         && $result['disks'][0]['size_bytes'] == 1048576
+        && $result['disks'][0]['size_sectors'] === '2048'
         && $result['disks'][0]['read_only'] === false
         && $result['disks'][0]['mounted'] === true
         && $result['disks'][0]['encryption_eligible'] === false,
@@ -61,6 +62,7 @@ try {
     check_discovery($large['complete'] === true
         && count($large['disks']) === 1
         && $large['disks'][0]['size_bytes'] > 3000000000000
+        && $large['disks'][0]['size_sectors'] === '7814037168'
         && $large['disks'][0]['encryption_eligible'] === false,
         'Multi-terabyte USB disk is visible on 32-bit PHP without enabling encryption');
     file_put_contents($usb . '/size', '2048');
