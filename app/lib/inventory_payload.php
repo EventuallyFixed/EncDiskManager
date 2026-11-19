@@ -24,13 +24,9 @@ function edm_inventory_action_preview($row)
     $mappers = isset($device['mapper_names']) && is_array($device['mapper_names'])
         ? $device['mapper_names'] : array();
     if (count($mappers) === 1) {
-        // The helper only manages mappings created by EncDiskManager.
-        // Legacy backupdisk and other external mappings remain read-only.
-        if (!preg_match('/^edm_[a-zA-Z0-9_-]+$/D', $mappers[0])) {
-            $actions['mount'] = false;
-            $actions['unmount'] = false;
-            $actions['lock'] = false;
-        } elseif (count($device['mapper_mounts']) === 1
+        // Existing USB-backed mappings are eligible regardless of creator.
+        // Unmount is restricted to the verified /mnt/<mapper> location.
+        if (count($device['mapper_mounts']) === 1
             && $device['mapper_mounts'][0] !== '/mnt/' . $mappers[0]) {
             $actions['unmount'] = false;
         }
