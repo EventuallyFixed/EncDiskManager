@@ -11,7 +11,7 @@ function edm_usb_operation_request($action, $devicePath, $mapperName, $inventory
         || !is_string($devicePath)
         || !preg_match('~^/dev/sd[a-z]+[0-9]+$~D', $devicePath)
         || !is_string($mapperName)
-        || !preg_match('/^edm_[a-zA-Z0-9_-]+$/D', $mapperName)
+        || !preg_match('/^[a-zA-Z0-9_-]+$/D', $mapperName)
         || !is_array($inventory) || !isset($inventory['devices'])
         || !is_array($inventory['devices'])) {
         return false;
@@ -34,7 +34,8 @@ function edm_usb_operation_request($action, $devicePath, $mapperName, $inventory
         return false;
     }
 
-    if ($action === 'unlock') return count($mappers) === 0 && count($mounts) === 0;
+    if ($action === 'unlock') return strpos($mapperName, 'edm_') === 0
+        && count($mappers) === 0 && count($mounts) === 0;
     if (count($mappers) !== 1 || $mappers[0] !== $mapperName) return false;
     if ($action === 'mount' || $action === 'lock') return count($mounts) === 0;
     return count($mounts) === 1 && $mounts[0] === '/mnt/' . $mapperName;
