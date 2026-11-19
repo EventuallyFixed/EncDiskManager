@@ -35,6 +35,12 @@ try {
         exit;
     }
 
+    // Only unlock may carry a secret; reject unexpected passphrase submissions.
+    if ($action !== 'unlock' && isset($_POST['passphrase'])) {
+        http_response_code(400);
+        echo json_encode(array('ok' => false, 'error' => 'Unexpected passphrase.'));
+        exit;
+    }
     $passphrase = isset($_POST['passphrase']) ? $_POST['passphrase'] : null;
     if ($action === 'unlock' && (!is_string($passphrase)
         || $passphrase === '' || strlen($passphrase) > 4096)) {
@@ -44,7 +50,14 @@ try {
     }
 
     $helper = realpath(__DIR__ . '/../bin/encdiskmanager-usb-operations');
-    if ($helper === false) throw new RuntimeException('Helper unavailable.');
+    if ($helper === false || !is_file($helper) || is_link($helper)) {
+        throw new RuntimeException('Helper unavailable.');
+    }
+    $helperStat = stat($helper);
+    if ($helperStat === false || $helperStat['uid'] !== 0
+        || ($helperStat['mode'] & 0022) !== 0) {
+        throw new RuntimeException('Helper permissions are unsafe.');
+    }
     $command = '/bin/sh ' . escapeshellarg($helper) . ' '
         . escapeshellarg($action) . ' ' . escapeshellarg($device)
         . ' ' . escapeshellarg($mapper);
