@@ -89,8 +89,9 @@ case "$action" in
         [ -d "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
             fail "Mountpoint is unavailable."
         /bin/umount "$mountpoint"
-        # Leave the mount directory in place: it may be owned by another
-        # application even when its name happens to match the mapper.
+        # Remove the mountpoint directory after a successful unmount.
+        # rmdir only removes empty directories, never their contents.
+        rmdir "$mountpoint" || fail "Unmount succeeded but mountpoint directory could not be removed."
         ;;
     lock)
         verify_open
