@@ -19,7 +19,27 @@ function edm_inventory_action_preview($row)
     // The same discovery fields used by the operation request validator
     // drive the disabled/enabled preview state. Execution is still gated
     // separately by the authenticated endpoint and privileged helper.
-    return edm_disk_available_actions($row['device']);
+    $actions = edm_disk_available_actions($row['device']);
+    $device = $row['device'];
+    $mappers = isset($device['mapper_names']) && is_array($device['mapper_names'])
+        ? $device['mapper_names'] : array();
+    if (count($mappers) === 1) {
+        // The helper only manages mappings created by EncDiskManager.
+        // Legacy backupdisk and other external mappings remain read-only.
+        if (!preg_match('/^edm_[a-zA-Z0-9_-]+$/D', $mappers[0])) {
+            $actions['mount'] = false;
+            $actions['unmount'] = false;
+            $actions['lock'] = false;
+        } elseif (count($device['mapper_mounts']) === 1
+            && $device['mapper_mounts'][0] !== '/mnt/' . $mappers[0]) {
+            $actions['unmount'] = false;
+        }
+    }
+    $uuid = isset($device['uuid']) ? (string)$device['uuid'] : '';
+    if (!preg_match('/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iD', $uuid)) {
+        $actions['unlock'] = false;
+    }
+    return $actions;
 }
 
 function edm_inventory_payload($rows)
