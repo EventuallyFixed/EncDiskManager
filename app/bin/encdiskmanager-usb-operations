@@ -89,10 +89,8 @@ case "$action" in
         [ -d "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
             fail "Mountpoint is unavailable."
         /bin/umount "$mountpoint"
-        # Only remove the directory created by our own mount action.
-        if [ "$mountpoint" = "/mnt/$mapper" ]; then
-            rmdir "$mountpoint" 2>/dev/null || true
-        fi
+        # Leave the mount directory in place: it may be owned by another
+        # application even when its name happens to match the mapper.
         ;;
     lock)
         verify_open
