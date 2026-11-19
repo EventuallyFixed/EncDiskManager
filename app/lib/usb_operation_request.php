@@ -38,5 +38,7 @@ function edm_usb_operation_request($action, $devicePath, $mapperName, $inventory
         && count($mappers) === 0 && count($mounts) === 0;
     if (count($mappers) !== 1 || $mappers[0] !== $mapperName) return false;
     if ($action === 'mount' || $action === 'lock') return count($mounts) === 0;
-    return count($mounts) === 1 && $mounts[0] === '/mnt/' . $mapperName;
+    return count($mounts) === 1
+        && is_string($mounts[0])
+        && preg_match('~^/mnt/[^\\x00-\\x1f]+$~D', $mounts[0]) === 1;
 }
