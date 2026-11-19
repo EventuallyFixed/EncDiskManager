@@ -1,0 +1,68 @@
+#!/bin/sh
+# General-purpose USB LUKS operations. No fixed disk, keyfile or mapper.
+# Call only after authenticated web authorization; validate live state here too.
+set -eu
+fail() { echo "ERROR: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || fail "Root privileges required."
+[ "$#" -eq 3 ] || fail "Usage: helper {unlock|mount|unmount|lock} /dev/sdXN mapper-name"
+action=$1
+device=$2
+mapper=$3
+case "$action" in unlock|mount|unmount|lock) ;; *) fail "Unknown action." ;; esac
+case "$device" in /dev/sd*) suffix=${device#/dev/sd} ;; *) fail "Invalid device." ;; esac
+case "$suffix" in *[!a-z0-9]*|'') fail "Invalid partition name." ;; esac
+case "$suffix" in *[0-9]) ;; *) fail "A partition is required." ;; esac
+case "$mapper" in *[!a-zA-Z0-9_-]*|'') fail "Invalid mapper name." ;; esac
+case "$mapper" in edm_*) ;; *) fail "Only EncDiskManager mappings are managed." ;; esac
+sys=/sys/class/block/${device#/dev/}
+[ -b "$device" ] && [ -f "$sys/partition" ] || fail "Partition is unavailable."
+resolved=$(/usr/bin/readlink -f "$sys") || fail "Cannot resolve partition."
+case "$resolved" in */usb[0-9]*/*) ;; *) fail "Partition is not USB-backed." ;; esac
+crypt=/usr/local/modules/usr/sbin/cryptsetup
+[ -x "$crypt" ] || fail "cryptsetup unavailable."
+uuid=$("$crypt" luksUUID "$device" 2>/dev/null) || fail "Not a LUKS partition."
+[ -n "$uuid" ] || fail "LUKS identity missing."
+mapperdev=/dev/mapper/$mapper
+mountpoint=/mnt/$mapper
+# For existing mappings, verify the actual source is the selected partition.
+verify_open() {
+    [ -b "$mapperdev" ] || fail "Mapping is not open."
+    source=$("$crypt" status "$mapper" 2>/dev/null |
+        sed -n 's/^[[:space:]]*device:[[:space:]]*//p' | head -n 1)
+    [ -n "$source" ] && [ -b "$source" ] || fail "Mapping source unavailable."
+    [ "$(/usr/bin/readlink -f "$source")" = "$(/usr/bin/readlink -f "$device")" ] ||
+        fail "Mapping belongs to another partition."
+}
+# mountinfo is checked by source major:minor for safety across device aliases.
+mounted_id() {
+    id=$(cat "$1/dev") || fail "Cannot identify block device."
+    awk -v id="$id" '$3 == id { found=1 } END { exit !found }' /proc/self/mountinfo
+}
+case "$action" in
+    unlock)
+        [ ! -e "$mapperdev" ] || fail "Mapping already exists."
+        mounted_id "$sys" && fail "Encrypted partition is mounted."
+        # Passphrase is read from stdin, never command-line arguments.
+        "$crypt" open --type luks --key-file - "$device" "$mapper"
+        ;;
+    mount)
+        verify_open
+        dmname=$(basename "$(/usr/bin/readlink -f "$mapperdev")")
+        mounted_id "/sys/class/block/$dmname" && fail "Mapping already mounted."
+        [ ! -e "$mountpoint" ] || [ -d "$mountpoint" ] || fail "Invalid mountpoint."
+        mkdir -p "$mountpoint"
+        /bin/mount -t ext4 "$mapperdev" "$mountpoint"
+        ;;
+    unmount)
+        verify_open
+        dmname=$(basename "$(/usr/bin/readlink -f "$mapperdev")")
+        mounted_id "/sys/class/block/$dmname" || fail "Mapping is not mounted."
+        /bin/umount "$mountpoint"
+        ;;
+    lock)
+        verify_open
+        dmname=$(basename "$(/usr/bin/readlink -f "$mapperdev")")
+        mounted_id "/sys/class/block/$dmname" && fail "Mapping is still mounted."
+        "$crypt" close "$mapper"
+        ;;
+esac
