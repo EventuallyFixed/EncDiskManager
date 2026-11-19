@@ -1,35 +1,34 @@
 <?php
 /**
- * UI action availability for an attached USB partition.
- *
- * This is presentation logic only. Privileged helpers must independently
- * validate the live device and operation immediately before acting.
+ * Display-only action availability derived from the existing USB discovery.
+ * Privileged operations must recheck live device state independently.
  */
-function edm_disk_available_actions($disk, $registered = false)
+function edm_disk_available_actions($disk)
 {
-    $none = array('unlock' => false, 'mount' => false,
+    $actions = array('unlock' => false, 'mount' => false,
         'unmount' => false, 'lock' => false, 'encrypt' => false);
-    if (!is_array($disk) || empty($disk['path']) || !empty($disk['ambiguous'])) {
-        return $none;
+    if (!is_array($disk) || empty($disk['path'])
+        || !preg_match('~^/dev/[a-zA-Z0-9._+-]+$~D', $disk['path'])
+        || empty($disk['luks'])) {
+        return $actions;
     }
 
-    // Never offer LUKS operations for a filesystem that is not LUKS.
-    $encrypted = !empty($disk['luks']);
-    $mounted = !empty($disk['mounted']);
-    $unlocked = !empty($disk['unlocked']);
-    $busy = !empty($disk['busy']);
-    $readOnly = !empty($disk['read_only']);
+    // usb_discovery.php supplies these arrays for every USB partition.
+    $mappers = isset($disk['mapper_names']) && is_array($disk['mapper_names'])
+        ? $disk['mapper_names'] : array();
+    $mounts = isset($disk['mapper_mounts']) && is_array($disk['mapper_mounts'])
+        ? $disk['mapper_mounts'] : array();
 
-    if (!$encrypted) {
-        // Whole-disk encryption is offered from the parent-disk inventory,
-        // not from a partition row. A partition must never be an erase target.
-        return $none;
-    }
+    // An unexpected mapping topology must not enable controls.
+    if (count($mappers) > 1 || count($mounts) > 1) return $actions;
+    if (!empty($disk['mount'])) return $actions;
 
-    if ($busy || $readOnly) return $none;
-    $none['unlock'] = !$unlocked && !$mounted;
-    $none['mount'] = $unlocked && !$mounted;
-    $none['unmount'] = $unlocked && $mounted;
-    $none['lock'] = $unlocked && !$mounted;
-    return $none;
+    $unlocked = count($mappers) === 1;
+    $mounted = count($mounts) === 1;
+    $actions['unlock'] = !$unlocked;
+    $actions['mount'] = $unlocked && !$mounted;
+    $actions['unmount'] = $unlocked && $mounted;
+    $actions['lock'] = $unlocked && !$mounted;
+    // Encryption belongs to the separately validated whole-disk action.
+    return $actions;
 }
