@@ -75,18 +75,24 @@ case "$action" in
         verify_open
         dmname=$(basename "$(/usr/bin/readlink -f "$mapperdev")")
         mounted_id "/sys/class/block/$dmname" || fail "Mapping is not mounted."
-        # Only unmount our exact directory, and only if it holds this mapper.
-        [ -d "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
-            fail "Managed mountpoint is unavailable."
+        # Discover the real mountpoint by the mapping's kernel device ID.
+        # Refuse multiple mounts or anything outside /mnt.
         id=$(cat "/sys/class/block/$dmname/dev") ||
             fail "Cannot identify mapper."
-        awk -v id="$id" -v target="$mountpoint" '
-            $3 == id && $5 == target { found=1 }
-            END { exit !found }
-        ' /proc/self/mountinfo ||
-            fail "Mapper is mounted elsewhere; refusing to unmount."
+        mountpoint=$(awk -v id="$id" '
+            $3 == id { count++; target=$5 }
+            END {
+                if (count != 1 || target !~ /^\\/mnt\\//) exit 1
+                print target
+            }
+        ' /proc/self/mountinfo) || fail "Expected one mapper mount below /mnt."
+        [ -d "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
+            fail "Mountpoint is unavailable."
         /bin/umount "$mountpoint"
-        rmdir "$mountpoint" 2>/dev/null || true
+        # Only remove the directory created by our own mount action.
+        if [ "$mountpoint" = "/mnt/$mapper" ]; then
+            rmdir "$mountpoint" 2>/dev/null || true
+        fi
         ;;
     lock)
         verify_open
