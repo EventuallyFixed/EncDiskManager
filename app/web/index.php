@@ -696,6 +696,9 @@ try {
     }
     function updateRow(row, item) {
         row.setAttribute('data-connection', item.connection);
+        row.dataset.device = item.device;
+        row.dataset.mapper = item.mapper;
+        row.dataset.uuid = item.uuid;
         var values = [item.name, item.device, item.status, item.type, item.uuid, item.mount];
         values.forEach(function (value, index) {
             var cell = row.cells[index];
@@ -707,16 +710,18 @@ try {
             }
         });
         var actionCell = row.cells[6];
-        // Preview eligibility without enabling any disk-changing operation.
+        // Only non-destructive LUKS state transitions are enabled here.
+        // Encryption remains disabled pending the whole-disk implementation.
         ['unlock', 'mount', 'unmount', 'lock', 'encrypt'].forEach(function (action, index) {
             var button = Array.prototype.filter.call(actionCell.querySelectorAll('button'), function (candidate) {
                 return !candidate.classList.contains('configure-disk');
             })[index];
             if (!button) return;
-            button.disabled = true;
-            button.title = item.actions[action]
-                ? action.charAt(0).toUpperCase() + action.slice(1) + ': eligible in current read-only snapshot; operation not yet available'
-                : action.charAt(0).toUpperCase() + action.slice(1) + ': not available for this disk state';
+            button.dataset.operation = action;
+            button.disabled = action === 'encrypt' || !item.actions[action] || operationBusy;
+            button.title = action === 'encrypt'
+                ? 'Whole-disk encryption is not yet implemented'
+                : (item.actions[action] ? 'Perform ' + action : 'Not available for this disk state');
         });
         var configure = actionCell.querySelector('.configure-disk');
         if (item.registered && !configure) {
@@ -749,6 +754,61 @@ try {
             if (body.rows[index] !== row) body.insertBefore(row, body.rows[index] || null);
         });
     }
+    var operationBusy = false;
+    table.addEventListener('click', function (event) {
+        var button = event.target.closest('button[data-operation]');
+        if (!button || button.disabled || operationBusy) return;
+        var row = button.closest('tr');
+        var action = button.dataset.operation;
+        if (!row || !['unlock', 'mount', 'unmount', 'lock'].includes(action)) return;
+        var device = row.dataset.device;
+        var mapper = row.dataset.mapper;
+        if (action === 'unlock') {
+            // Derive a deterministic, app-owned mapper name from the LUKS UUID.
+            // Never reuse the legacy backupdisk mapping.
+            if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(row.dataset.uuid)) {
+                window.alert('The disk has no valid LUKS UUID.');
+                return;
+            }
+            mapper = 'edm_' + row.dataset.uuid.replace(/-/g, '').toLowerCase();
+        }
+        var secret = null;
+        if (action === 'unlock') {
+            secret = window.prompt('Enter the LUKS passphrase for ' + device + ':');
+            if (secret === null || secret === '') return;
+        } else if (!window.confirm('Perform ' + action + ' on ' + device + '?')) {
+            return;
+        }
+        var csrf = document.querySelector('input[name="csrf_token"]');
+        if (!csrf) return;
+        var body = new URLSearchParams();
+        body.set('csrf_token', csrf.value);
+        body.set('action', action);
+        body.set('device', device);
+        body.set('mapper', mapper);
+        if (secret !== null) body.set('passphrase', secret);
+        secret = null;
+        operationBusy = true;
+        Array.prototype.forEach.call(table.querySelectorAll('button[data-operation]'), function (item) {
+            item.disabled = true;
+        });
+        fetch('usb-operation.php', {
+            method: 'POST', credentials: 'same-origin', cache: 'no-store',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: body.toString()
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                if (!response.ok || !result.ok) throw new Error(result.error || 'Operation failed');
+            });
+        }).then(function () {
+            window.alert('Operation completed.');
+        }).catch(function (error) {
+            window.alert(error.message);
+        }).then(function () {
+            operationBusy = false;
+            pollInventory();
+        });
+    });
     var polling = false;
     function pollInventory() {
         if (polling || document.hidden || (dialog && dialog.open)) return;
@@ -772,7 +832,7 @@ try {
                     if (!item || typeof item.key !== 'string' || !item.key ||
                         seen[item.key] || !['connected', 'disconnected'].includes(item.connection) ||
                         typeof item.registered !== 'boolean' ||
-                        ['name', 'device', 'status', 'type', 'uuid', 'mount', 'folder'].some(function (field) {
+                        ['name', 'device', 'status', 'type', 'uuid', 'mount', 'folder', 'mapper'].some(function (field) {
                             return typeof item[field] !== 'string';
                         }) ||
                         (item.registered && item.key !== 'registered:' + item.uuid.toLowerCase()) ||
@@ -797,7 +857,8 @@ try {
                             var button = document.createElement('button');
                             button.type = 'button';
                             button.disabled = true;
-                            button.title = action + ': not yet available in this development build';
+                            button.dataset.operation = action.toLowerCase().split(' ')[0];
+                            button.title = action + ': not available for this disk state';
                             button.textContent = action;
                             row.cells[6].appendChild(button);
                         });
