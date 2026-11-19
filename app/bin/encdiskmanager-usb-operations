@@ -13,7 +13,7 @@ case "$device" in /dev/sd*) suffix=${device#/dev/sd} ;; *) fail "Invalid device.
 case "$suffix" in *[!a-z0-9]*|'') fail "Invalid partition name." ;; esac
 case "$suffix" in *[0-9]) ;; *) fail "A partition is required." ;; esac
 case "$mapper" in *[!a-zA-Z0-9_-]*|'') fail "Invalid mapper name." ;; esac
-case "$mapper" in edm_*) ;; *) fail "Only EncDiskManager mappings are managed." ;; esac
+# Newly created mappings use the edm_ prefix; existing mappings may have any safe name.
 sys=/sys/class/block/${device#/dev/}
 [ -b "$device" ] && [ -f "$sys/partition" ] || fail "Partition is unavailable."
 resolved=$(/usr/bin/readlink -f "$sys") || fail "Cannot resolve partition."
@@ -40,6 +40,7 @@ mounted_id() {
 }
 case "$action" in
     unlock)
+        case "$mapper" in edm_*) ;; *) fail "New mappings must use edm_ prefix." ;; esac
         [ ! -e "$mapperdev" ] || fail "Mapping already exists."
         # Do not open a second mapping for a partition already used by dm,
         # RAID or another kernel block-device holder.
