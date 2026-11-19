@@ -49,15 +49,31 @@ case "$action" in
         verify_open
         dmname=$(basename "$(/usr/bin/readlink -f "$mapperdev")")
         mounted_id "/sys/class/block/$dmname" && fail "Mapping already mounted."
-        [ ! -e "$mountpoint" ] || [ -d "$mountpoint" ] || fail "Invalid mountpoint."
-        mkdir -p "$mountpoint"
-        /bin/mount -t ext4 "$mapperdev" "$mountpoint"
+        # Do not mount over an existing directory or unrelated filesystem.
+        [ ! -e "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
+            fail "Mountpoint already exists; refusing to reuse it."
+        mkdir "$mountpoint"
+        if ! /bin/mount -t ext4 "$mapperdev" "$mountpoint"; then
+            rmdir "$mountpoint" 2>/dev/null || true
+            fail "Mount failed."
+        fi
         ;;
     unmount)
         verify_open
         dmname=$(basename "$(/usr/bin/readlink -f "$mapperdev")")
         mounted_id "/sys/class/block/$dmname" || fail "Mapping is not mounted."
+        # Only unmount our exact directory, and only if it holds this mapper.
+        [ -d "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
+            fail "Managed mountpoint is unavailable."
+        id=$(cat "/sys/class/block/$dmname/dev") ||
+            fail "Cannot identify mapper."
+        awk -v id="$id" -v target="$mountpoint" '
+            $3 == id && $5 == target { found=1 }
+            END { exit !found }
+        ' /proc/self/mountinfo ||
+            fail "Mapper is mounted elsewhere; refusing to unmount."
         /bin/umount "$mountpoint"
+        rmdir "$mountpoint" 2>/dev/null || true
         ;;
     lock)
         verify_open
