@@ -755,7 +755,53 @@ try {
         });
     }
     var operationBusy = false;
-    table.addEventListener('click', function (event) {
+    function requestUnlockPassphrase(device) {
+        return new Promise(function (resolve) {
+            var dialog = document.createElement('dialog');
+            var form = document.createElement('form');
+            form.method = 'dialog';
+            var label = document.createElement('label');
+            label.textContent = 'LUKS passphrase for ' + device;
+            var password = document.createElement('input');
+            password.type = 'password';
+            password.autocomplete = 'off';
+            password.required = true;
+            password.maxLength = 4096;
+            label.appendChild(password);
+            form.appendChild(label);
+            var cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.textContent = 'Cancel';
+            var submit = document.createElement('button');
+            submit.type = 'submit';
+            submit.textContent = 'Unlock';
+            form.appendChild(cancel);
+            form.appendChild(submit);
+            dialog.appendChild(form);
+            document.body.appendChild(dialog);
+            var settled = false;
+            function finish(value) {
+                if (settled) return;
+                settled = true;
+                password.value = '';
+                dialog.close();
+                dialog.remove();
+                resolve(value);
+            }
+            cancel.addEventListener('click', function () { finish(null); });
+            dialog.addEventListener('cancel', function (event) {
+                event.preventDefault();
+                finish(null);
+            });
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+                finish(password.value || null);
+            });
+            dialog.showModal();
+            password.focus();
+        });
+    }
+    table.addEventListener('click', async function (event) {
         var button = event.target.closest('button[data-operation]');
         if (!button || button.disabled || operationBusy) return;
         var row = button.closest('tr');
@@ -774,7 +820,7 @@ try {
         }
         var secret = null;
         if (action === 'unlock') {
-            secret = window.prompt('Enter the LUKS passphrase for ' + device + ':');
+            secret = await requestUnlockPassphrase(device);
             if (secret === null || secret === '') return;
         } else if (!window.confirm('Perform ' + action + ' on ' + device + '?')) {
             return;
