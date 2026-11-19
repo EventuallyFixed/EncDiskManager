@@ -82,10 +82,17 @@ case "$action" in
         mountpoint=$(awk -v id="$id" '
             $3 == id { count++; target=$5 }
             END {
-                if (count != 1 || target !~ /^\\/mnt\\//) exit 1
+                if (count != 1 || substr(target, 1, 5) != "/mnt/") exit 1
                 print target
             }
         ' /proc/self/mountinfo) || fail "Expected one mapper mount below /mnt."
+        # mountinfo escapes spaces and other characters using octal notation.
+        # Decode only after checking the single mount belongs to this mapper.
+        mountpoint=$(printf '%b' "$mountpoint")
+        case "$mountpoint" in
+            /mnt/?*) ;;
+            *) fail "Invalid USB mountpoint." ;;
+        esac
         [ -d "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
             fail "Mountpoint is unavailable."
         /bin/umount "$mountpoint"
