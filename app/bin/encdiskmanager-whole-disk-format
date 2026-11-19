@@ -47,8 +47,8 @@ dd of="$key" bs=4096 count=1 2>/dev/null || fail "Cannot read passphrase."
 # Recheck after receiving the secret, immediately before partitioning.
 sh "$check" check "$disk" "$2" "$3" "$4" "$5" >/dev/null ||
     fail "USB disk changed while awaiting passphrase."
-# Replace the partition table with one Linux partition spanning the disk.
-printf 'label: dos\n, , 83\n' | "$sfdisk" --wipe always "$disk" ||
+# Replace the partition table with one GPT Linux partition spanning the disk.
+printf 'label: gpt\n, , L\n' | "$sfdisk" --wipe always "$disk" ||
     fail "Partition table creation failed."
 /usr/bin/blockdev --rereadpt "$disk" || fail "Kernel partition refresh failed."
 partition="${disk}1"
