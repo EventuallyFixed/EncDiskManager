@@ -86,12 +86,17 @@ case "$action" in
                 print target
             }
         ' /proc/self/mountinfo) || fail "Expected one mapper mount below /mnt."
-        # mountinfo escapes spaces and other characters using octal notation.
-        # Decode only after checking the single mount belongs to this mapper.
-        mountpoint=$(printf '%b' "$mountpoint")
+        # User-configured mount directory names cannot contain spaces.
+        # Refuse mountinfo-escaped paths rather than interpreting escape data
+        # as shell input or operating on an unexpected directory.
         case "$mountpoint" in
-            /mnt/?*) ;;
+            *\\\\*|*[!a-zA-Z0-9_./-]*)
+                fail "Mountpoint contains unsupported characters." ;;
+            /mnt/*) ;;
             *) fail "Invalid USB mountpoint." ;;
+        esac
+        case "$mountpoint" in
+            */../*|*/./*|*/..|*/.) fail "Invalid USB mountpoint." ;;
         esac
         [ -d "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
             fail "Mountpoint is unavailable."
