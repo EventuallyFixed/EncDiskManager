@@ -58,6 +58,13 @@ case "$action" in
         [ ! -e "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
             fail "Mountpoint already exists; refusing to reuse it."
         mkdir "$mountpoint"
+        # Refuse non-ext4 payloads, including arbitrary data on a LUKS mapping.
+        fs_type=$(/usr/bin/blkid -o value -s TYPE "$mapperdev" 2>/dev/null) ||
+            fs_type=''
+        if [ "$fs_type" != ext4 ]; then
+            rmdir "$mountpoint" 2>/dev/null || true
+            fail "Unlocked container does not contain ext4."
+        fi
         if ! /bin/mount -t ext4 "$mapperdev" "$mountpoint"; then
             rmdir "$mountpoint" 2>/dev/null || true
             fail "Mount failed."
