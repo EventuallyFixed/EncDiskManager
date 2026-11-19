@@ -39,6 +39,29 @@ function mounted_devices() {
 }
 
 
+/**
+ * Find mounts by kernel major:minor, not /dev/mapper path spelling.
+ * /proc/self/mountinfo identifies the same filesystem through device aliases.
+ */
+function edm_mounts_for_block($name) {
+    $id = @file_get_contents('/sys/class/block/' . $name . '/dev');
+    if ($id === false) return array();
+    $id = trim($id);
+    $lines = @file('/proc/self/mountinfo', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines)) return array();
+    $mounts = array();
+    foreach ($lines as $line) {
+        $fields = explode(' ', $line);
+        if (count($fields) < 6 || $fields[2] !== $id) continue;
+        // mountinfo escapes whitespace and backslashes as octal sequences.
+        $path = preg_replace_callback('/\\\\([0-7]{3})/', function ($match) {
+            return chr(octdec($match[1]));
+        }, $fields[4]);
+        $mounts[] = $path;
+    }
+    return array_values(array_unique($mounts));
+}
+
 // Follow device-mapper slave links back to detected USB partitions.
 // This is read-only and deliberately excludes mappings with no USB ancestor.
 function find_usb_ancestors($name, $usbNames, $depth = 0, $visited = array()) {
@@ -152,8 +175,8 @@ foreach (is_array($sysEntries) ? $sysEntries : array() as $name) {
     $info = read_blkid($name);
     $mapperPath = '/dev/mapper/' . $mapperName;
     $dmPath = '/dev/' . $name;
-    $mount = isset($mounted[$mapperPath]) ? $mounted[$mapperPath] :
-             (isset($mounted[$dmPath]) ? $mounted[$dmPath] : '');
+    $actualMounts = edm_mounts_for_block($name);
+    $mount = count($actualMounts) === 1 ? $actualMounts[0] : '';
 
     $mapperDevices[] = array(
         'name' => $mapperName,
@@ -161,7 +184,8 @@ foreach (is_array($sysEntries) ? $sysEntries : array() as $name) {
         'parents' => $ancestors,
         'type' => isset($info['TYPE']) ? $info['TYPE'] : '',
         'uuid' => isset($info['UUID']) ? $info['UUID'] : '',
-        'mount' => $mount
+        'mount' => $mount,
+        'mounts' => $actualMounts
     );
 }
 
@@ -186,8 +210,8 @@ foreach ($devices as &$device) {
     $device['mapper_mounts'] = array();
     foreach ($linkedMappers as $mapper) {
         $device['mapper_names'][] = $mapper['name'];
-        if ($mapper['mount'] !== '') {
-            $device['mapper_mounts'][] = $mapper['mount'];
+        foreach ($mapper['mounts'] as $mountPath) {
+            $device['mapper_mounts'][] = $mountPath;
         }
         if ($device['is_backup']) {
             $device['backup_mapper'] = $mapper['name'];
