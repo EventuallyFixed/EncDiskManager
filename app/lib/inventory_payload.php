@@ -25,9 +25,9 @@ function edm_inventory_action_preview($row)
         ? $device['mapper_names'] : array();
     if (count($mappers) === 1) {
         // Existing USB-backed mappings are eligible regardless of creator.
-        // Unmount is restricted to the verified /mnt/<mapper> location.
+        // Only a single actual mount below /mnt can be unmounted.
         if (count($device['mapper_mounts']) === 1
-            && $device['mapper_mounts'][0] !== '/mnt/' . $mappers[0]) {
+            && !preg_match('~^/mnt/[^\\x00-\\x1f]+$~D', $device['mapper_mounts'][0])) {
             $actions['unmount'] = false;
         }
     }
