@@ -41,7 +41,7 @@ cleanup() {
     rm -f "$key"
 }
 trap cleanup EXIT HUP INT TERM
-dd of="$key" bs=4096 count=1 2>/dev/null || fail "Cannot read passphrase."
+dd of="$key" bs=4097 count=1 2>/dev/null || fail "Cannot read passphrase."
 [ -s "$key" ] || fail "Empty passphrase."
 [ "$(wc -c < "$key")" -le 4096 ] || fail "Passphrase too long."
 # Recheck after receiving the secret, immediately before partitioning.
@@ -53,6 +53,19 @@ printf 'label: gpt\n, , L\n' | "$sfdisk" --wipe always "$disk" ||
 /usr/bin/blockdev --rereadpt "$disk" || fail "Kernel partition refresh failed."
 partition="${disk}1"
 [ -b "$partition" ] || fail "New partition is not available."
+partition_sys="/sys/class/block/${partition#/dev/}"
+[ -f "$partition_sys/partition" ] ||
+    fail "Expected new partition is missing from sysfs."
+parent=$( /usr/bin/readlink -f "$partition_sys" ) ||
+    fail "Cannot resolve new partition."
+disk_sys=$( /usr/bin/readlink -f "/sys/class/block/${disk#/dev/}" ) ||
+    fail "Cannot resolve selected disk."
+case "$parent" in
+    "$disk_sys"/*) ;;
+    *) fail "New partition does not belong to selected USB disk." ;;
+esac
+[ "$(cat "$partition_sys/partition")" = 1 ] ||
+    fail "Expected first partition was not created."
 "$crypt" luksFormat --type luks2 --batch-mode --key-file "$key" "$partition" ||
     fail "LUKS2 format failed."
 uuid=$("$crypt" luksUUID "$partition") || fail "LUKS UUID unavailable."
