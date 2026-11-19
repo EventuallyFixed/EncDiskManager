@@ -3,7 +3,7 @@
  * Convert the registry-first inventory into a stable, JSON-safe row contract.
  * This function is pure and can be tested without a NAS or HTTP session.
  */
-require_once __DIR__ . '/disk_actions.php';
+require_once __DIR__ . '/disk_action_availability.php';
 
 /**
  * Advisory policy only. Never authorize an operation using this snapshot.
@@ -12,31 +12,14 @@ function edm_inventory_action_preview($row)
 {
     $none = array('unlock' => false, 'mount' => false,
         'unmount' => false, 'lock' => false, 'encrypt' => false);
-    if (!empty($row['ambiguous']) || empty($row['device']) ||
-        !is_array($row['device']) || empty($row['registered'])) {
+    if (!empty($row['ambiguous']) || empty($row['device'])
+        || !is_array($row['device'])) {
         return $none;
     }
-    $device = $row['device'];
-    if (!isset($device['luks'], $device['status']) ||
-        !is_bool($device['luks'])) {
-        return $none;
-    }
-    $status = $device['status'];
-    $known = in_array($status, array(
-        'Encrypted — Locked', 'Encrypted — Unlocked',
-        'Encrypted — Mounted', 'Mounted', 'Not identified as LUKS'
-    ), true);
-    if (!$known) return $none;
-    // A status string must agree with the independently discovered LUKS type.
-    // Never present encryption as eligible for an existing registration.
-    if ($device['luks'] !== (strpos($status, 'Encrypted — ') === 0)) {
-        return $none;
-    }
-    $open = in_array($status, array('Encrypted — Unlocked', 'Encrypted — Mounted'), true);
-    $mounted = in_array($status, array('Encrypted — Mounted', 'Mounted'), true);
-    $actions = edm_disk_action_policy($device['luks'], $open, $mounted, true);
-    $actions['encrypt'] = false;
-    return $actions;
+    // The same discovery fields used by the operation request validator
+    // drive the disabled/enabled preview state. Execution is still gated
+    // separately by the authenticated endpoint and privileged helper.
+    return edm_disk_available_actions($row['device']);
 }
 
 function edm_inventory_payload($rows)
