@@ -1,0 +1,71 @@
+#!/bin/sh
+# Destructive whole-disk LUKS2 + ext4 formatter.
+# NOT wired to the web UI: integration and NAS testing are still required.
+# Usage: helper /dev/sdX ID SYSFS_PATH SECTORS PARTITION_SNAPSHOT
+# Passphrase is supplied on stdin, never in arguments.
+set -eu
+fail() { echo "ERROR: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || fail "Root privileges required."
+[ "$#" -eq 5 ] || fail "Expected disk and four confirmed identity fields."
+disk=$1
+case "$disk" in /dev/sd*) letters=${disk#/dev/sd} ;; *) fail "Invalid disk." ;; esac
+case "$letters" in ''|*[!a-z]*) fail "Whole USB disk required." ;; esac
+check="$(dirname "$0")/encdiskmanager-whole-disk-helper"
+[ -r "$check" ] || fail "Preflight helper unavailable."
+# Revalidate the selected device, its partitions and all mounts immediately
+# before any destructive command. No external caller may skip this check.
+sh "$check" check "$disk" "$2" "$3" "$4" "$5" >/dev/null ||
+    fail "USB disk identity or busy-state check failed."
+
+crypt=/usr/local/modules/usr/sbin/cryptsetup
+[ -x "$crypt" ] || fail "cryptsetup unavailable."
+find_executable() {
+    for dir in /sbin /usr/sbin /bin /usr/bin /usr/local/sbin /usr/local/bin; do
+        [ ! -x "$dir/$1" ] || { printf '%s\n' "$dir/$1"; return 0; }
+    done
+    return 1
+}
+sfdisk=$(find_executable sfdisk) || fail "sfdisk unavailable."
+mkfs=$(find_executable mkfs.ext4 || find_executable mke2fs) ||
+    fail "ext4 formatter unavailable."
+[ -x /usr/bin/blockdev ] || fail "blockdev unavailable."
+# Read the passphrase before erasing anything. Reject empty or oversized input.
+# A temporary file is necessary because both luksFormat and open consume stdin.
+# It is created in root-only runtime memory and deleted on exit.
+umask 077
+[ -d /run ] || fail "/run unavailable."
+key=$(mktemp /run/encdiskmanager-key.XXXXXX) || fail "Cannot create key buffer."
+mapper=''
+cleanup() {
+    if [ -n "$mapper" ]; then "$crypt" close "$mapper" >/dev/null 2>&1 || true; fi
+    rm -f "$key"
+}
+trap cleanup EXIT HUP INT TERM
+dd of="$key" bs=4096 count=1 2>/dev/null || fail "Cannot read passphrase."
+[ -s "$key" ] || fail "Empty passphrase."
+[ "$(wc -c < "$key")" -le 4096 ] || fail "Passphrase too long."
+# Recheck after receiving the secret, immediately before partitioning.
+sh "$check" check "$disk" "$2" "$3" "$4" "$5" >/dev/null ||
+    fail "USB disk changed while awaiting passphrase."
+# Replace the partition table with one Linux partition spanning the disk.
+printf 'label: dos\n, , 83\n' | "$sfdisk" --wipe always "$disk" ||
+    fail "Partition table creation failed."
+/usr/bin/blockdev --rereadpt "$disk" || fail "Kernel partition refresh failed."
+partition="${disk}1"
+[ -b "$partition" ] || fail "New partition is not available."
+"$crypt" luksFormat --type luks2 --batch-mode --key-file "$key" "$partition" ||
+    fail "LUKS2 format failed."
+uuid=$("$crypt" luksUUID "$partition") || fail "LUKS UUID unavailable."
+case "$uuid" in
+    *[!a-fA-F0-9-]*|'') fail "Invalid LUKS UUID." ;;
+esac
+mapper="edm_$(printf '%s' "$uuid" | tr -d '-' | tr 'A-F' 'a-f')"
+"$crypt" open --type luks --key-file "$key" "$partition" "$mapper" ||
+    fail "LUKS open failed."
+case "$mkfs" in
+    */mke2fs) "$mkfs" -t ext4 -F "/dev/mapper/$mapper" ;;
+    *) "$mkfs" -F "/dev/mapper/$mapper" ;;
+esac || fail "ext4 format failed."
+"$crypt" close "$mapper" || fail "Could not lock newly formatted disk."
+mapper=''
+printf 'Formatted %s as LUKS2 + ext4 (UUID %s). Disk is locked.\n' "$disk" "$uuid"
