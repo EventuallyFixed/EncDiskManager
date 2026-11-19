@@ -76,6 +76,9 @@ function edm_inventory_payload($rows)
             'uuid' => $registered ? $uuid : ((string)$row['luks_uuid'] ?: '—'),
             'mount' => $registered ? '/mnt/' . $row['mount_folder'] : '—',
             'folder' => $registered ? (string)$row['mount_folder'] : '',
+            'mapper' => ($device !== null && isset($device['mapper_names'])
+                && is_array($device['mapper_names']) && count($device['mapper_names']) === 1)
+                ? (string)$device['mapper_names'][0] : '',
             'actions' => edm_inventory_action_preview($row)
         );
     }
