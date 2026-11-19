@@ -41,6 +41,11 @@ mounted_id() {
 case "$action" in
     unlock)
         [ ! -e "$mapperdev" ] || fail "Mapping already exists."
+        # Do not open a second mapping for a partition already used by dm,
+        # RAID or another kernel block-device holder.
+        for holder in "$sys"/holders/*; do
+            [ ! -e "$holder" ] || fail "Partition is already in use."
+        done
         mounted_id "$sys" && fail "Encrypted partition is mounted."
         # Passphrase is read from stdin, never command-line arguments.
         "$crypt" open --type luks --key-file - "$device" "$mapper"
