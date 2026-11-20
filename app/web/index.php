@@ -661,6 +661,11 @@ try {
                 if (!showFormatResult(result)) throw new Error('Unexpected format response.');
             }).catch(function (error) {
                 status.textContent = error.message + ' Check disk state before retrying.';
+            }).then(function () {
+                // Never retain a formatting passphrase after a request, even
+                // when the server rejects it or the connection is interrupted.
+                passphrase.value = '';
+                passphraseConfirm.value = '';
             });
         });
     }
