@@ -449,8 +449,20 @@ try {
                         <td><?php echo h('/dev/' . $wholeDisk['name']); ?></td>
                         <td><?php echo h(number_format($wholeDisk['size_bytes'] / 1073741824, 2) . ' GiB'); ?></td>
                         <td><?php echo h(implode(', ', $wholeDisk['partitions'])); ?></td>
-                        <td><?php echo h($wholeDisk['mounted'] ? 'In use' : (($wholeDisk['has_holders'] || $wholeDisk['has_slaves']) ? 'Has device dependencies' : ($wholeDisk['read_only'] ? 'Read-only' : ($wholeDiskPreflight ? 'Two read-only checks agree (encryption disabled)' : 'Preliminary checks incomplete')))); ?></td>
-                        <td><button type="button" disabled title="Whole-disk encryption is not yet available">Encrypt + ext4</button> <button type="button" class="whole-disk-preview-button" data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>">Preview erase warning</button></td>
+                        <?php
+                        $diskBusy = $wholeDisk['mounted'] || $wholeDisk['has_holders'] || $wholeDisk['has_slaves'];
+                        $diskReady = !$diskBusy && !$wholeDisk['read_only'] && $wholeDiskPreflight !== false;
+                        $diskState = $wholeDisk['mounted'] ? 'Mounted / in use'
+                            : (($wholeDisk['has_holders'] || $wholeDisk['has_slaves']) ? 'In use by another device'
+                            : ($wholeDisk['read_only'] ? 'Read-only'
+                            : ($diskReady ? 'Available (encryption disabled)' : 'Disk checks incomplete')));
+                        $disabledReason = $diskBusy ? 'Disk is in use'
+                            : ($wholeDisk['read_only'] ? 'Disk is read-only'
+                            : (!$diskReady ? 'Disk checks incomplete'
+                            : 'Whole-disk encryption is disabled pending NAS testing'));
+                        ?>
+                        <td><?php echo h($diskState); ?></td>
+                        <td><button type="button" disabled title="<?php echo h($disabledReason); ?>">Encrypt + ext4</button> <button type="button" class="whole-disk-preview-button" data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>">Preview erase warning</button></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
