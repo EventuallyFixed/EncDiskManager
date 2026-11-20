@@ -91,7 +91,26 @@ try {
             'error' => 'Formatting failed. Inspect disk state before retrying.'));
         exit;
     }
-    echo json_encode(array('ok' => true));
+    // Formatting creates a single LUKS partition and mounts its mapping.
+    // Re-discover the actual mount rather than trusting a constructed path.
+    require_once __DIR__ . '/../lib/usb_discovery.php';
+    $inventory = edm_discover_usb_inventory();
+    $partition = $disk . '1';
+    $mountpoint = null;
+    foreach ($inventory['devices'] as $device) {
+        if (!isset($device['path']) || $device['path'] !== $partition) continue;
+        $mounts = isset($device['mapper_mounts']) ? $device['mapper_mounts'] : array();
+        if (count($mounts) === 1 && is_string($mounts[0]) &&
+            strpos($mounts[0], '/mnt/') === 0) {
+            $mountpoint = $mounts[0];
+        }
+        break;
+    }
+    echo json_encode(array('ok' => true, 'mountpoint' => $mountpoint,
+        'warning' => $mountpoint === null
+            ? 'Encryption completed. Check the disk table for its current mount state.'
+            : 'Volume is unlocked and mounted at ' . $mountpoint .
+                '. Use Unmount and Lock in the disk table when finished.'));
 } catch (Throwable $exception) {
     http_response_code(503);
     echo json_encode(array('ok' => false, 'error' => 'Formatting unavailable.'));
