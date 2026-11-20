@@ -24,8 +24,10 @@ check_request('unlocked lock', 'lock','/dev/sdd1','edm_test',$inventory($unlocke
 check_request('mounted unmount', 'unmount','/dev/sdd1','edm_test',$inventory($mounted),true);
 check_request('mounted lock', 'lock','/dev/sdd1','edm_test',$inventory($mounted),false);
 check_request('wrong mapper', 'unmount','/dev/sdd1','edm_other',$inventory($mounted),false);
-check_request('wrong mountpoint', 'unmount','/dev/sdd1','edm_test',
-    $inventory(array_merge($mounted,array('mapper_mounts'=>array('/mnt/elsewhere')))),false);
+check_request('external USB mountpoint', 'unmount','/dev/sdd1','edm_test',
+    $inventory(array_merge($mounted,array('mapper_mounts'=>array('/mnt/elsewhere')))),true);
+check_request('outside allowed mount root', 'unmount','/dev/sdd1','edm_test',
+    $inventory(array_merge($mounted,array('mapper_mounts'=>array('/media/elsewhere')))),false);
 check_request('not LUKS', 'unlock','/dev/sdd1','edm_test',
     $inventory(array_merge($locked,array('luks'=>false))),false);
 check_request('missing device', 'unlock','/dev/sdd2','edm_test',$inventory($locked),false);
