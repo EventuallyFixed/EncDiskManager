@@ -466,6 +466,12 @@ try {
         <p>Are you sure? Your data will be permanently lost!</p>
         <label for="whole-disk-erase-phrase">Final confirmation phrase</label>
         <input id="whole-disk-erase-phrase" type="text" placeholder="ERASE ALL DATA" autocomplete="off">
+        <p>Encryption passphrase (for the future Encrypt + ext4 operation):</p>
+        <label for="whole-disk-passphrase">Passphrase</label>
+        <input id="whole-disk-passphrase" type="password" autocomplete="new-password" maxlength="4096">
+        <label for="whole-disk-passphrase-confirm">Confirm passphrase</label>
+        <input id="whole-disk-passphrase-confirm" type="password" autocomplete="new-password" maxlength="4096">
+        <p>Passphrases are not sent by the read-only preview. Formatting is still disabled.</p>
         <p class="muted">This is a non-operational preview. The disk name is shown for illustration only;
             no encryption request can be submitted.</p>
         <p id="whole-disk-preview-status" role="status" aria-live="polite"></p>
@@ -554,6 +560,8 @@ try {
     var selected = document.getElementById('whole-disk-preview-name');
     var acknowledgement = document.getElementById('whole-disk-erase-ack');
     var phrase = document.getElementById('whole-disk-erase-phrase');
+    var passphrase = document.getElementById('whole-disk-passphrase');
+    var passphraseConfirm = document.getElementById('whole-disk-passphrase-confirm');
     var confirm = document.getElementById('whole-disk-preview-confirm');
     var status = document.getElementById('whole-disk-preview-status');
     if (!dialog || !selected || !acknowledgement || !phrase || !confirm || !status
@@ -612,6 +620,8 @@ try {
             selected.textContent = button.getAttribute('data-disk') || 'Unknown';
             acknowledgement.checked = false;
             phrase.value = '';
+            passphrase.value = '';
+            passphraseConfirm.value = '';
             refresh();
             dialog.showModal();
         });
