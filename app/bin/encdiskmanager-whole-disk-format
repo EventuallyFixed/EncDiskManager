@@ -72,9 +72,13 @@ uuid=$("$crypt" luksUUID "$partition") || fail "LUKS UUID unavailable."
 case "$uuid" in
     *[!a-fA-F0-9-]*|'') fail "Invalid LUKS UUID." ;;
 esac
-mapper="edm_$(printf '%s' "$uuid" | tr -d '-' | tr 'A-F' 'a-f')"
-"$crypt" open --type luks --key-file "$key" "$partition" "$mapper" ||
+new_mapper="edm_$(printf '%s' "$uuid" | tr -d '-' | tr 'A-F' 'a-f')"
+# Never close an existing mapping if opening our new mapping fails.
+[ ! -e "/dev/mapper/$new_mapper" ] ||
+    fail "A mapping with this name already exists."
+"$crypt" open --type luks --key-file "$key" "$partition" "$new_mapper" ||
     fail "LUKS open failed."
+mapper=$new_mapper
 case "$mkfs" in
     */mke2fs) "$mkfs" -t ext4 -F "/dev/mapper/$mapper" ;;
     *) "$mkfs" -F "/dev/mapper/$mapper" ;;
