@@ -475,6 +475,7 @@ try {
         <p class="muted">This is a non-operational preview. The disk name is shown for illustration only;
             no encryption request can be submitted.</p>
         <p id="whole-disk-preview-status" role="status" aria-live="polite"></p>
+        <p id="whole-disk-mount-warning" role="alert" hidden></p>
         <button id="whole-disk-preview-confirm" type="button" disabled title="Preview only; no disk operation is available">Validate confirmation (preview)</button>
         <form method="dialog"><button type="submit">Close preview</button></form>
     </dialog>
@@ -564,6 +565,7 @@ try {
     var passphraseConfirm = document.getElementById('whole-disk-passphrase-confirm');
     var confirm = document.getElementById('whole-disk-preview-confirm');
     var status = document.getElementById('whole-disk-preview-status');
+    var mountWarning = document.getElementById('whole-disk-mount-warning');
     if (!dialog || !selected || !acknowledgement || !phrase || !confirm || !status
         || typeof dialog.showModal !== 'function') return;
     var selectionVersion = 0;
@@ -622,6 +624,10 @@ try {
             phrase.value = '';
             passphrase.value = '';
             passphraseConfirm.value = '';
+            if (mountWarning) {
+                mountWarning.hidden = true;
+                mountWarning.textContent = '';
+            }
             refresh();
             dialog.showModal();
         });
