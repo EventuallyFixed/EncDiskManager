@@ -41,7 +41,9 @@ cleanup() {
     rm -f "$key"
 }
 trap cleanup EXIT HUP INT TERM
-dd of="$key" bs=4097 count=1 2>/dev/null || fail "Cannot read passphrase."
+# head reads until EOF or the byte limit; unlike dd count=1, it does not
+# treat a short pipe read as the complete passphrase.
+head -c 4097 > "$key" || fail "Cannot read passphrase."
 [ -s "$key" ] || fail "Empty passphrase."
 [ "$(wc -c < "$key")" -le 4096 ] || fail "Passphrase too long."
 # Recheck after receiving the secret, immediately before partitioning.
