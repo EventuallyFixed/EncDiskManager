@@ -477,6 +477,7 @@ try {
         <p id="whole-disk-preview-status" role="status" aria-live="polite"></p>
         <p id="whole-disk-mount-warning" role="alert" hidden></p>
         <button id="whole-disk-preview-confirm" type="button" disabled title="Preview only; no disk operation is available">Validate confirmation (preview)</button>
+        <button id="whole-disk-format-confirm" type="button" disabled title="Encryption is disabled until NAS testing is complete">Encrypt + ext4 (not enabled)</button>
         <form method="dialog"><button type="submit">Close preview</button></form>
     </dialog>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
@@ -564,6 +565,7 @@ try {
     var passphrase = document.getElementById('whole-disk-passphrase');
     var passphraseConfirm = document.getElementById('whole-disk-passphrase-confirm');
     var confirm = document.getElementById('whole-disk-preview-confirm');
+    var formatConfirm = document.getElementById('whole-disk-format-confirm');
     var status = document.getElementById('whole-disk-preview-status');
     var mountWarning = document.getElementById('whole-disk-mount-warning');
     if (!dialog || !selected || !acknowledgement || !phrase || !confirm || !status
@@ -614,6 +616,42 @@ try {
             if (requestVersion === selectionVersion) refreshButton();
         });
     });
+    // The live action is intentionally disabled until EX4100 testing is
+    // complete. Once enabled, this sends the same confirmed disk and secret
+    // to the authenticated endpoint, never in the URL.
+    if (formatConfirm) {
+        formatConfirm.addEventListener('click', function () {
+            if (formatConfirm.disabled || !acknowledgement.checked ||
+                phrase.value !== 'ERASE ALL DATA' ||
+                !passphrase.value || passphrase.value !== passphraseConfirm.value) return;
+            var csrfInput = document.querySelector('input[name="csrf_token"]');
+            if (!csrfInput) return;
+            var form = new URLSearchParams();
+            form.set('csrf_token', csrfInput.value);
+            form.set('disk', selected.textContent);
+            form.set('warning_accepted', 'yes');
+            form.set('confirmation_phrase', phrase.value);
+            form.set('passphrase', passphrase.value);
+            form.set('passphrase_confirm', passphraseConfirm.value);
+            formatConfirm.disabled = true;
+            status.textContent = 'Encrypting and mounting USB volume…';
+            fetch('whole-disk-format.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: form.toString()
+            }).then(function (response) {
+                return response.json().then(function (result) {
+                    if (!response.ok) throw new Error(result.error || 'Encryption failed.');
+                    return result;
+                });
+            }).then(function (result) {
+                if (!showFormatResult(result)) throw new Error('Unexpected format response.');
+            }).catch(function (error) {
+                status.textContent = error.message + ' Check disk state before retrying.';
+            });
+        });
+    }
     // Shared completion handler for the eventual enabled formatting request.
     // Do not infer the mountpoint: display only the server-confirmed result.
     function showFormatResult(result) {
