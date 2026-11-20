@@ -100,7 +100,16 @@ case "$mkfs" in
     */mke2fs) "$mkfs" -t ext4 -F "/dev/mapper/$mapper" ;;
     *) "$mkfs" -F "/dev/mapper/$mapper" ;;
 esac || fail "ext4 format failed."
-# Leave the new mapping unlocked and unmounted. The user can mount it,
-# then unmount and lock it using the disk table actions.
+# Mount the newly formatted volume using the same convention as the
+# table's Mount action. Never reuse an existing directory or mount.
+mountpoint="/mnt/$mapper"
+[ ! -e "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
+    fail "Mountpoint already exists; refusing to reuse it."
+mkdir "$mountpoint" || fail "Could not create mountpoint."
+if ! /bin/mount -t ext4 "/dev/mapper/$mapper" "$mountpoint"; then
+    rmdir "$mountpoint" 2>/dev/null || true
+    fail "ext4 filesystem created, but mounting failed."
+fi
+# A successfully mounted mapping must not be closed by the exit trap.
 mapper=''
-printf 'Formatted %s as LUKS2 + ext4 (UUID %s). Disk is unlocked and unmounted.\n' "$disk" "$uuid"
+printf 'WARNING: %s is unlocked and mounted at %s. Unmount and Lock it using the table buttons when finished.\n' "$disk" "$mountpoint"
