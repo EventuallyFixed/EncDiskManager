@@ -593,6 +593,12 @@ try {
     }
     acknowledgement.addEventListener('change', refresh);
     phrase.addEventListener('input', refresh);
+    // Closing the dialog must also discard unsent passphrases.
+    dialog.addEventListener('close', function () {
+        selectionVersion++;
+        passphrase.value = '';
+        passphraseConfirm.value = '';
+    });
     confirm.addEventListener('click', function () {
         if (confirm.disabled) return;
         confirm.disabled = true;
