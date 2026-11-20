@@ -100,6 +100,7 @@ case "$mkfs" in
     */mke2fs) "$mkfs" -t ext4 -F "/dev/mapper/$mapper" ;;
     *) "$mkfs" -F "/dev/mapper/$mapper" ;;
 esac || fail "ext4 format failed."
-"$crypt" close "$mapper" || fail "Could not lock newly formatted disk."
+# Leave the new mapping unlocked and unmounted. The user can mount it,
+# then unmount and lock it using the disk table actions.
 mapper=''
-printf 'Formatted %s as LUKS2 + ext4 (UUID %s). Disk is locked.\n' "$disk" "$uuid"
+printf 'Formatted %s as LUKS2 + ext4 (UUID %s). Disk is unlocked and unmounted.\n' "$disk" "$uuid"
