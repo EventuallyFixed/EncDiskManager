@@ -1,0 +1,86 @@
+<?php
+/**
+ * Whole-disk formatting endpoint. Deliberately gated off until EX4100
+ * dependency checks and end-to-end testing have been completed.
+ */
+require_once __DIR__ . '/../lib/auth.php';
+require_once __DIR__ . '/../lib/whole_disk_format_request.php';
+require_once __DIR__ . '/../lib/whole_usb_disk_discovery.php';
+require_once __DIR__ . '/../lib/whole_usb_disk_stable_candidate.php';
+require_once __DIR__ . '/../lib/whole_disk_read_only_check.php';
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+
+try {
+    edm_auth_start_session();
+    $disk = edm_whole_disk_format_request(
+        isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : '',
+        edm_auth_is_https(), edm_auth_is_authenticated(),
+        isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : null,
+        $_POST
+    );
+    if ($disk === false) {
+        http_response_code(403);
+        echo json_encode(array('ok' => false, 'error' => 'Invalid or unauthorized format request.'));
+        exit;
+    }
+
+    // This must remain false until the entire destructive workflow is
+    // verified on the target NAS and intentionally enabled in a later commit.
+    $formatExecutionEnabled = false;
+    if (!$formatExecutionEnabled) {
+        http_response_code(503);
+        echo json_encode(array('ok' => false,
+            'error' => 'Whole-disk encryption is not enabled in this build.'));
+        exit;
+    }
+
+    $first = edm_discover_whole_usb_disks();
+    $second = edm_discover_whole_usb_disks();
+    $arguments = edm_whole_usb_disk_stable_check_arguments(
+        $first, $second, substr($disk, 5));
+    if ($arguments === false || !edm_whole_disk_read_only_check($arguments)) {
+        http_response_code(409);
+        echo json_encode(array('ok' => false, 'error' => 'USB disk state changed.'));
+        exit;
+    }
+
+    $helper = realpath(__DIR__ . '/../bin/encdiskmanager-whole-disk-format');
+    if ($helper === false || !is_file($helper) || is_link($helper)) {
+        throw new RuntimeException('Formatting helper unavailable.');
+    }
+    $stat = stat($helper);
+    if ($stat === false || $stat['uid'] !== 0 || ($stat['mode'] & 0022) !== 0) {
+        throw new RuntimeException('Formatting helper permissions are unsafe.');
+    }
+    $command = '/bin/sh ' . escapeshellarg($helper);
+    // The read-only check arguments include the literal 'check' subcommand.
+    foreach (array_slice($arguments, 1) as $argument) {
+        $command .= ' ' . escapeshellarg($argument);
+    }
+    $process = proc_open($command, array(
+        0 => array('pipe', 'r'),
+        1 => array('pipe', 'w'),
+        2 => array('pipe', 'w')
+    ), $pipes);
+    if (!is_resource($process)) throw new RuntimeException('Could not start formatter.');
+    fwrite($pipes[0], $_POST['passphrase']);
+    fclose($pipes[0]);
+    stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+    $exit = proc_close($process);
+    if ($exit !== 0) {
+        http_response_code(409);
+        echo json_encode(array('ok' => false,
+            'error' => 'Formatting failed. Inspect disk state before retrying.'));
+        exit;
+    }
+    echo json_encode(array('ok' => true));
+} catch (Throwable $exception) {
+    http_response_code(503);
+    echo json_encode(array('ok' => false, 'error' => 'Formatting unavailable.'));
+}
