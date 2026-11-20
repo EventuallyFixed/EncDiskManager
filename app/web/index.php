@@ -542,8 +542,9 @@ try {
         <strong>Status information:</strong> This page uses detected block-device,
         encryption, and mount information to estimate each USB partition’s state.
         An open encrypted volume is shown separately when its device-mapper
-        relationship to a detected USB partition can be established. This page
-        makes no storage changes.
+        relationship to a detected USB partition can be established. Unlock,
+        Mount, Unmount and Lock are available only for eligible disk states.
+        Whole-disk encryption remains disabled in this development build.
     </section>
 
 </main>
