@@ -667,11 +667,6 @@ try {
         passphraseConfirm.value = '';
         return true;
     }
-    // The format endpoint is intentionally disabled. Keep the completion
-    // presentation ready without allowing the preview to modify a disk.
-    dialog.addEventListener('edm-format-complete', function (event) {
-        showFormatResult(event.detail);
-    });
     function refreshButton() {
         confirm.disabled = !acknowledgement.checked || phrase.value !== 'ERASE ALL DATA';
     }
