@@ -8,7 +8,7 @@ require_once __DIR__ . '/../../app/lib/whole_disk_format_request.php';
 function assert_format_request($expected, $post, $label)
 {
     $actual = edm_whole_disk_format_request('POST', true, true,
-        'csrf-test-token', $post);
+        str_repeat('a', 64), $post);
     if ($actual !== $expected) {
         fwrite(STDERR, "FAIL: $label\n");
         exit(1);
@@ -16,7 +16,7 @@ function assert_format_request($expected, $post, $label)
 }
 
 $valid = array(
-    'csrf_token' => 'csrf-test-token',
+    'csrf_token' => str_repeat('a', 64),
     'disk' => '/dev/sdd',
     'warning_accepted' => 'yes',
     'confirmation_phrase' => 'ERASE ALL DATA',
@@ -53,7 +53,7 @@ foreach (array(
     array('POST', true, false)
 ) as $case) {
     if (edm_whole_disk_format_request($case[0], $case[1], $case[2],
-        'csrf-test-token', $valid) !== false) {
+        str_repeat('a', 64), $valid) !== false) {
         fwrite(STDERR, "FAIL: reject unauthorized request\n");
         exit(1);
     }
