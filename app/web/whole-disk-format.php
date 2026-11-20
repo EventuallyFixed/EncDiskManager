@@ -62,8 +62,10 @@ try {
     }
     $process = proc_open($command, array(
         0 => array('pipe', 'r'),
-        1 => array('pipe', 'w'),
-        2 => array('pipe', 'w')
+        // The formatter reports only a final status; discard subprocess
+        // output rather than risking a pipe deadlock during a long format.
+        1 => array('file', '/dev/null', 'w'),
+        2 => array('file', '/dev/null', 'w')
     ), $pipes);
     if (!is_resource($process)) throw new RuntimeException('Could not start formatter.');
     // fwrite may write fewer bytes than requested; never format with a
@@ -75,8 +77,6 @@ try {
         $written = fwrite($pipes[0], substr($passphrase, $offset));
         if ($written === false || $written === 0) {
             fclose($pipes[0]);
-            fclose($pipes[1]);
-            fclose($pipes[2]);
             proc_close($process);
             throw new RuntimeException('Could not deliver the complete passphrase.');
         }
@@ -84,10 +84,6 @@ try {
     }
     fclose($pipes[0]);
     unset($passphrase);
-    stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-    stream_get_contents($pipes[2]);
-    fclose($pipes[2]);
     $exit = proc_close($process);
     if ($exit !== 0) {
         http_response_code(409);
