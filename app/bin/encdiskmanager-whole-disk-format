@@ -48,9 +48,19 @@ dd of="$key" bs=4097 count=1 2>/dev/null || fail "Cannot read passphrase."
 sh "$check" check "$disk" "$2" "$3" "$4" "$5" >/dev/null ||
     fail "USB disk changed while awaiting passphrase."
 # Replace the partition table with one GPT Linux partition spanning the disk.
+# All existing partitions must disappear before any LUKS operation begins.
 printf 'label: gpt\n, , L\n' | "$sfdisk" --wipe always "$disk" ||
     fail "Partition table creation failed."
 /usr/bin/blockdev --rereadpt "$disk" || fail "Kernel partition refresh failed."
+partition_count=0
+for entry in "/sys/class/block/${disk#/dev/}"/"${disk#/dev/}"[0-9]*; do
+    [ -f "$entry/partition" ] || continue
+    partition_count=$((partition_count + 1))
+    [ "${entry##*/}" = "${disk#/dev/}1" ] ||
+        fail "Unexpected partition remains after repartitioning."
+done
+[ "$partition_count" -eq 1 ] ||
+    fail "Expected exactly one partition after repartitioning."
 partition="${disk}1"
 [ -b "$partition" ] || fail "New partition is not available."
 partition_sys="/sys/class/block/${partition#/dev/}"
