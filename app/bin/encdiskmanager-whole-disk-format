@@ -56,16 +56,26 @@ sh "$check" check "$disk" "$2" "$3" "$4" "$5" >/dev/null ||
 printf 'label: gpt\n, , L\n' | "$sfdisk" --wipe always "$disk" ||
     fail "Partition table creation failed."
 /usr/bin/blockdev --rereadpt "$disk" || fail "Kernel partition refresh failed."
-partition_count=0
-for entry in "/sys/class/block/${disk#/dev/}"/"${disk#/dev/}"[0-9]*; do
-    [ -f "$entry/partition" ] || continue
-    partition_count=$((partition_count + 1))
-    [ "${entry##*/}" = "${disk#/dev/}1" ] ||
-        fail "Unexpected partition remains after repartitioning."
-done
-[ "$partition_count" -eq 1 ] ||
-    fail "Expected exactly one partition after repartitioning."
 partition="${disk}1"
+# The kernel may need a moment to expose the replacement partition.
+# Wait briefly, but reject unexpected leftover partitions immediately.
+attempt=0
+while :; do
+    partition_count=0
+    for entry in "/sys/class/block/${disk#/dev/}"/"${disk#/dev/}"[0-9]*; do
+        [ -f "$entry/partition" ] || continue
+        partition_count=$((partition_count + 1))
+        [ "${entry##*/}" = "${disk#/dev/}1" ] ||
+            fail "Unexpected partition remains after repartitioning."
+    done
+    if [ "$partition_count" -eq 1 ] && [ -b "$partition" ]; then
+        break
+    fi
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 10 ] ||
+        fail "Expected partition did not appear after repartitioning."
+    sleep 1
+done
 [ -b "$partition" ] || fail "New partition is not available."
 partition_sys="/sys/class/block/${partition#/dev/}"
 [ -f "$partition_sys/partition" ] ||
