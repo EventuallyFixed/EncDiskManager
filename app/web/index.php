@@ -614,6 +614,26 @@ try {
             if (requestVersion === selectionVersion) refreshButton();
         });
     });
+    // Shared completion handler for the eventual enabled formatting request.
+    // Do not infer the mountpoint: display only the server-confirmed result.
+    function showFormatResult(result) {
+        if (!result || result.ok !== true) return false;
+        if (mountWarning) {
+            mountWarning.textContent = typeof result.warning === 'string'
+                ? result.warning
+                : 'Encryption completed. Check the disk table for its current mount state.';
+            mountWarning.hidden = false;
+        }
+        status.textContent = 'Encryption completed. Disk inventory will refresh automatically.';
+        passphrase.value = '';
+        passphraseConfirm.value = '';
+        return true;
+    }
+    // The format endpoint is intentionally disabled. Keep the completion
+    // presentation ready without allowing the preview to modify a disk.
+    dialog.addEventListener('edm-format-complete', function (event) {
+        showFormatResult(event.detail);
+    });
     function refreshButton() {
         confirm.disabled = !acknowledgement.checked || phrase.value !== 'ERASE ALL DATA';
     }
