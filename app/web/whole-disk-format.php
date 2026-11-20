@@ -37,25 +37,6 @@ try {
         exit;
     }
 
-    // Check NAS formatting dependencies before inspecting a candidate disk.
-    // This script only examines installed tools and writable runtime paths.
-    $preflight = realpath(__DIR__ . '/../bin/whole-disk-tool-preflight.sh');
-    if ($preflight === false || !is_file($preflight) || is_link($preflight)) {
-        throw new RuntimeException('Formatting dependency check unavailable.');
-    }
-    $preflightCommand = '/bin/sh ' . escapeshellarg($preflight) . ' >/dev/null 2>&1';
-    if (!function_exists('exec')) {
-        throw new RuntimeException('Formatting dependency check cannot run.');
-    }
-    $preflightExit = 1;
-    exec($preflightCommand, $preflightOutput, $preflightExit);
-    if ($preflightExit !== 0) {
-        http_response_code(503);
-        echo json_encode(array('ok' => false,
-            'error' => 'Required NAS formatting utilities are unavailable.'));
-        exit;
-    }
-
     $first = edm_discover_whole_usb_disks();
     $second = edm_discover_whole_usb_disks();
     $arguments = edm_whole_usb_disk_stable_check_arguments(
