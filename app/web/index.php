@@ -803,8 +803,8 @@ try {
             }
         });
         var actionCell = row.cells[6];
-        // Only non-destructive LUKS state transitions are enabled here.
-        // Encryption remains disabled pending the whole-disk implementation.
+        // LUKS state transitions are enabled according to the current disk
+        // state. Whole-disk encryption remains disabled pending NAS testing.
         ['unlock', 'mount', 'unmount', 'lock', 'encrypt'].forEach(function (action, index) {
             var button = Array.prototype.filter.call(actionCell.querySelectorAll('button'), function (candidate) {
                 return !candidate.classList.contains('configure-disk');
@@ -813,7 +813,7 @@ try {
             button.dataset.operation = action;
             button.disabled = action === 'encrypt' || !item.actions[action] || operationBusy;
             button.title = action === 'encrypt'
-                ? 'Whole-disk encryption is not yet implemented'
+                ? 'Whole-disk encryption is disabled pending NAS testing'
                 : (item.actions[action] ? 'Perform ' + action : 'Not available for this disk state');
         });
         var configure = actionCell.querySelector('.configure-disk');
