@@ -583,9 +583,12 @@ try {
     if (!dialog || !selected || !acknowledgement || !phrase || !confirm || !status
         || typeof dialog.showModal !== 'function') return;
     var selectionVersion = 0;
+    function refreshButton() {
+        confirm.disabled = !acknowledgement.checked || phrase.value !== 'ERASE ALL DATA';
+    }
     function refresh() {
         selectionVersion++;
-        confirm.disabled = !acknowledgement.checked || phrase.value !== 'ERASE ALL DATA';
+        refreshButton();
         status.textContent = '';
     }
     acknowledgement.addEventListener('change', refresh);
@@ -597,8 +600,8 @@ try {
         var form = new URLSearchParams();
         var csrfInput = document.querySelector('input[name="csrf_token"]');
         if (!csrfInput) {
-            status.textContent = 'Confirmation unavailable. No disk was modified.';
             refreshButton();
+            status.textContent = 'Confirmation unavailable. No disk was modified.';
             return;
         }
         form.set('csrf_token', csrfInput.value);
@@ -683,9 +686,6 @@ try {
         passphrase.value = '';
         passphraseConfirm.value = '';
         return true;
-    }
-    function refreshButton() {
-        confirm.disabled = !acknowledgement.checked || phrase.value !== 'ERASE ALL DATA';
     }
     document.querySelectorAll('.whole-disk-preview-button').forEach(function (button) {
         button.addEventListener('click', function () {
