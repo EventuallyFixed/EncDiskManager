@@ -66,8 +66,24 @@ try {
         2 => array('pipe', 'w')
     ), $pipes);
     if (!is_resource($process)) throw new RuntimeException('Could not start formatter.');
-    fwrite($pipes[0], $_POST['passphrase']);
+    // fwrite may write fewer bytes than requested; never format with a
+    // truncated passphrase. Keep the secret out of command arguments.
+    $passphrase = $_POST['passphrase'];
+    $length = strlen($passphrase);
+    $offset = 0;
+    while ($offset < $length) {
+        $written = fwrite($pipes[0], substr($passphrase, $offset));
+        if ($written === false || $written === 0) {
+            fclose($pipes[0]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($process);
+            throw new RuntimeException('Could not deliver the complete passphrase.');
+        }
+        $offset += $written;
+    }
     fclose($pipes[0]);
+    unset($passphrase);
     stream_get_contents($pipes[1]);
     fclose($pipes[1]);
     stream_get_contents($pipes[2]);
