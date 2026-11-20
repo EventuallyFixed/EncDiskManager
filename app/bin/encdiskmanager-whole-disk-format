@@ -93,6 +93,9 @@ new_mapper="edm_$(printf '%s' "$uuid" | tr -d '-' | tr 'A-F' 'a-f')"
 "$crypt" open --type luks --key-file "$key" "$partition" "$new_mapper" ||
     fail "LUKS open failed."
 mapper=$new_mapper
+# Neither ext4 formatting nor closing the mapping needs the passphrase.
+# Discard the temporary key immediately after the second cryptsetup use.
+rm -f "$key" || fail "Could not remove temporary passphrase."
 case "$mkfs" in
     */mke2fs) "$mkfs" -t ext4 -F "/dev/mapper/$mapper" ;;
     *) "$mkfs" -F "/dev/mapper/$mapper" ;;
