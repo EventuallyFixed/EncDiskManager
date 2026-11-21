@@ -22,6 +22,9 @@ function edm_disk_available_actions($disk)
     // An unexpected mapping topology must not enable controls.
     if (count($mappers) > 1 || count($mounts) > 1) return $actions;
     if (!empty($disk['mount'])) return $actions;
+    // A mapper mount without its mapper is an inconsistent snapshot.
+    // Never offer Unlock against a volume that might already be mounted.
+    if (count($mounts) === 1 && count($mappers) !== 1) return $actions;
 
     $unlocked = count($mappers) === 1;
     $mounted = count($mounts) === 1;
