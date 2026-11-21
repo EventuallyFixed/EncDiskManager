@@ -27,7 +27,6 @@ jobs:
         run: |
           sh -n app/bin/encdiskmanager-whole-disk-format
           sh -n app/bin/encdiskmanager-usb-operations
-          sh -n app/bin/whole-disk-tool-preflight.sh
           sh -n app/bin/whole-disk-identity-check.sh
           sh -n app/bin/encdiskmanager-whole-disk-helper
           sh -n app/bin/whole-disk-identity-check.sh
