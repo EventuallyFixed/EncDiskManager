@@ -1015,6 +1015,11 @@ try {
             })
             .catch(function () {
                 pollNotice.textContent = 'Live inventory unavailable; displayed disk status may be stale.';
+                // Do not allow actions based on a stale disk state.
+                Array.prototype.forEach.call(table.querySelectorAll('button[data-operation]'), function (button) {
+                    button.disabled = true;
+                    button.title = 'Disk state unavailable; wait for inventory to refresh';
+                });
             })
             .then(function () { polling = false; });
     }
