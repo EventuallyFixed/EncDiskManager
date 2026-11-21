@@ -48,6 +48,7 @@ try {
                 'mounted' => $disk['mounted'],
                 'busy' => $disk['mounted'] || $disk['has_holders'] || $disk['has_slaves'],
                 'read_only' => $disk['read_only'],
+                'safe_to_unplug' => edm_whole_usb_disk_safe_to_unplug($whole, $second, $disk['name']),
                 'can_encrypt' => $ready
             );
         }
