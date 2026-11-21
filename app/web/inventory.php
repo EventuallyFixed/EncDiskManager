@@ -61,7 +61,18 @@ try {
             ? $partitionParents[$deviceName] : '';
     }
     unset($item);
+    $mappers = array();
+    foreach ($snapshot['mapperDevices'] as $mapper) {
+        $mappers[] = array(
+            'path' => $mapper['path'],
+            'parents' => $mapper['parents'],
+            'type' => $mapper['type'],
+            'uuid' => $mapper['uuid'],
+            'mount' => $mapper['mount']
+        );
+    }
     echo json_encode(array('rows' => $result,
+        'mappers' => $mappers,
         'whole_disks' => $wholeRows,
         'whole_disks_complete' => $grouped !== false), JSON_THROW_ON_ERROR);
 } catch (Throwable $exception) {
