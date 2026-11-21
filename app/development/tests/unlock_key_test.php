@@ -42,9 +42,21 @@ try {
     key_check($otherKey !== $candidate, 'Each disk has an independent key');
     edm_unlock_key_remove($dir, $uuid);
     key_check(edm_unlock_key_read($dir, $uuid) === null && edm_unlock_key_read($dir, $other) === $otherKey, 'Local key removal preserves other key');
+    file_put_contents($dir . '/unrelated.txt', 'preserve');
+    key_check(edm_unlock_key_filenames($dir) === array(basename(edm_unlock_key_path($dir, $other))), 'Cleanup identifies only application keyfiles');
+    $result = edm_unlock_key_with_lock($dir, function () use ($dir) {
+        return count(edm_unlock_key_filenames($dir));
+    });
+    key_check($result === 1, 'Key cleanup runs under the shared lock');
+    edm_unlock_key_remove($dir, $other);
+    key_check(edm_unlock_key_filenames($dir) === array() && file_exists($dir . '/unrelated.txt'), 'Removing all keys preserves unrelated files and lock');
+
 } finally {
     foreach (glob($dir . '/unlock-*.key') as $file) unlink($file);
     foreach (glob($dir . '/.unlock-key-*') as $file) unlink($file);
+    foreach (array('unlock-keys.lock', 'unrelated.txt') as $name) {
+        if (file_exists($dir . '/' . $name)) unlink($dir . '/' . $name);
+    }
     rmdir($dir);
 }
 exit($failed ? 1 : 0);
