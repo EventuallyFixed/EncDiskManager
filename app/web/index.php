@@ -262,7 +262,7 @@ try {
     }
     .backup-link:hover { background: #f3f7f9; }
     h1 { margin: 0; font-size: 1.45rem; }
-    main { max-width: 1050px; margin: 24px auto; padding: 0 18px; }
+    main { margin: 24px 0; padding: 0 18px; }
     .panel {
         background: #fff;
         border: 1px solid #d9dfe2;
