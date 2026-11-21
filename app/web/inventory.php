@@ -31,10 +31,14 @@ try {
     $whole = edm_discover_whole_usb_disks();
     $grouped = edm_group_usb_inventory($rows, $whole);
     $wholeRows = array();
+    $partitionParents = array();
     if ($grouped !== false) {
         $second = edm_discover_whole_usb_disks();
         foreach ($grouped['connected'] as $group) {
             $disk = $group['disk'];
+            foreach ($group['partitions'] as $partitionRow) {
+                $partitionParents[$partitionRow['device']['name']] = $disk['name'];
+            }
             $ready = edm_whole_usb_disk_stable_candidate($whole, $second, $disk['name']) !== false;
             $wholeRows[] = array(
                 'name' => $disk['name'],
@@ -48,6 +52,14 @@ try {
             );
         }
     }
+    // Preserve the original row contract while identifying its parent disk.
+    foreach ($result as &$item) {
+        $deviceName = substr($item['device'], 5);
+        $item['parent_disk'] = $item['connection'] === 'connected'
+            && isset($partitionParents[$deviceName])
+            ? $partitionParents[$deviceName] : '';
+    }
+    unset($item);
     echo json_encode(array('rows' => $result,
         'whole_disks' => $wholeRows,
         'whole_disks_complete' => $grouped !== false), JSON_THROW_ON_ERROR);
