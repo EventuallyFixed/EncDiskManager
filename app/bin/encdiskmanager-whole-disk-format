@@ -58,7 +58,7 @@ sh "$check" check "$disk" "$2" "$3" "$4" "$5" >/dev/null ||
 # before any LUKS operation; subsequent checks verify the new partition.
 # o: new GPT, y: confirm, n: partition 1, default start/end, 8300: Linux,
 # w: write, y: final confirmation.
-printf 'o\\ny\\nn\\n1\\n\\n\\n8300\\nw\\ny\\n' | "$gdisk" "$disk" >/dev/null ||
+printf 'o\ny\nn\n1\n\n\n8300\nw\ny\n' | "$gdisk" "$disk" >/dev/null ||
     fail "Partition table creation failed."
 /usr/bin/blockdev --rereadpt "$disk" || fail "Kernel partition refresh failed."
 partition="${disk}1"
