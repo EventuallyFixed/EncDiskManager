@@ -836,7 +836,7 @@ try {
             var groupA = a.dataset.wholeDisk || a.dataset.parentDisk || a.dataset.key || '';
             var groupB = b.dataset.wholeDisk || b.dataset.parentDisk || b.dataset.key || '';
             var groupOrder = groupA.localeCompare(groupB, undefined, {numeric: true});
-            if (groupOrder !== 0) return groupOrder;
+            if (groupOrder !== 0) return ascending ? groupOrder : -groupOrder;
             if (!!a.dataset.wholeDisk !== !!b.dataset.wholeDisk) return a.dataset.wholeDisk ? -1 : 1;
             var x = a.cells[active].textContent.trim();
             var y = b.cells[active].textContent.trim();
@@ -863,11 +863,13 @@ try {
         }
         var body = table.tBodies[0];
         var present = Object.create(null);
+        // Validate the complete snapshot before changing any disk controls.
         snapshot.whole_disks.forEach(function (disk) {
             if (!disk || typeof disk.name !== 'string' || !/^[a-zA-Z0-9._+-]+$/.test(disk.name)
                 || typeof disk.path !== 'string' || disk.path !== '/dev/' + disk.name
                 || !Array.isArray(disk.partitions) || typeof disk.can_encrypt !== 'boolean'
                 || typeof disk.size_bytes !== 'number') throw new Error('Invalid physical disk inventory');
+            if (present[disk.name]) throw new Error('Duplicate physical USB disk');
             present[disk.name] = true;
             var row = Array.prototype.filter.call(body.rows, function (item) {
                 return item.dataset.wholeDisk === disk.name;
