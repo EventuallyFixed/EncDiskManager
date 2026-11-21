@@ -366,7 +366,7 @@ try {
         <h2>Disk inventory</h2>
         <?php if ($configValidationNotice !== ''): ?><p role="status"><?php echo h($configValidationNotice); ?></p><?php endif; ?>
         <?php if ($configValidationError !== ''): ?><p role="alert"><?php echo h($configValidationError); ?></p><?php endif; ?>
-        <p class="muted">Registered disks remain listed when disconnected. Available disk actions depend on the disk's encryption and mount state. Whole-disk encryption is currently disabled in this development version.</p>
+        <p class="muted">Registered disks remain listed when disconnected. Available disk actions depend on the disk's encryption and mount state. Whole-disk encryption permanently erases the selected USB disk and requires explicit confirmation.</p>
         <?php if ($inventoryError !== ''): ?>
             <p class="error"><?php echo h($inventoryError); ?></p>
         <?php endif; ?>
@@ -435,7 +435,7 @@ try {
     </section>
     <section aria-labelledby="whole-usb-disks-title">
         <h2 id="whole-usb-disks-title">Whole USB disks</h2>
-        <p class="muted">Read-only parent-disk inventory. Encryption and repartitioning are not yet available.</p>
+        <p class="muted">Encrypting a whole USB disk erases all existing partitions and data.</p>
         <?php if (!$wholeDiskInventory['complete']): ?>
             <p class="muted">Whole-disk discovery is temporarily unavailable.</p>
         <?php elseif (!$wholeDiskInventory['disks']): ?>
@@ -456,14 +456,14 @@ try {
                         $diskState = $wholeDisk['mounted'] ? 'Mounted / in use'
                             : (($wholeDisk['has_holders'] || $wholeDisk['has_slaves']) ? 'In use by another device'
                             : ($wholeDisk['read_only'] ? 'Read-only'
-                            : ($diskReady ? 'Available (encryption disabled)' : 'Disk checks incomplete')));
+                            : ($diskReady ? 'Available' : 'Disk checks incomplete')));
                         $disabledReason = $diskBusy ? 'Disk is in use'
                             : ($wholeDisk['read_only'] ? 'Disk is read-only'
                             : (!$diskReady ? 'Disk checks incomplete'
-                            : 'Whole-disk encryption is disabled pending NAS testing'));
+                            : 'Disk is ready for encryption'));
                         ?>
                         <td><?php echo h($diskState); ?></td>
-                        <td><button type="button" disabled title="<?php echo h($disabledReason); ?>">Encrypt + ext4</button> <button type="button" class="whole-disk-preview-button" data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>">Preview erase warning</button></td>
+                        <td><button type="button" class="whole-disk-preview-button" data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>" <?php echo $diskReady ? '' : 'disabled'; ?> title="<?php echo h($disabledReason); ?>">Encrypt + ext4</button></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -471,7 +471,7 @@ try {
         <?php endif; ?>
     </section>
     <dialog id="whole-disk-erase-preview" aria-labelledby="whole-disk-erase-title">
-        <h2 id="whole-disk-erase-title">Whole-disk erase confirmation preview</h2>
+        <h2 id="whole-disk-erase-title">Whole-disk erase confirmation</h2>
         <p>Selected disk: <strong id="whole-disk-preview-name">None</strong></p>
         <p><strong>Warning:</strong> Encrypting a whole USB disk will erase and repartition
             the entire selected disk, permanently destroying all existing data.</p>
@@ -479,19 +479,18 @@ try {
         <p>Are you sure? Your data will be permanently lost!</p>
         <label for="whole-disk-erase-phrase">Final confirmation phrase</label>
         <input id="whole-disk-erase-phrase" type="text" placeholder="ERASE ALL DATA" autocomplete="off">
-        <p>Encryption passphrase (for the future Encrypt + ext4 operation):</p>
+        <p>Encryption passphrase:</p>
         <label for="whole-disk-passphrase">Passphrase</label>
         <input id="whole-disk-passphrase" type="password" autocomplete="new-password" maxlength="4096">
         <label for="whole-disk-passphrase-confirm">Confirm passphrase</label>
         <input id="whole-disk-passphrase-confirm" type="password" autocomplete="new-password" maxlength="4096">
-        <p>Passphrases are not sent by the read-only preview. Formatting is still disabled.</p>
-        <p class="muted">This is a non-operational preview. The disk name is shown for illustration only;
-            no encryption request can be submitted.</p>
+        
+        
         <p id="whole-disk-preview-status" role="status" aria-live="polite"></p>
         <p id="whole-disk-mount-warning" role="alert" hidden></p>
         <button id="whole-disk-preview-confirm" type="button" disabled title="Preview only; no disk operation is available">Validate confirmation (preview)</button>
-        <button id="whole-disk-format-confirm" type="button" disabled title="Encryption is disabled until NAS testing is complete">Encrypt + ext4 (not enabled)</button>
-        <form method="dialog"><button type="submit">Close preview</button></form>
+        <button id="whole-disk-format-confirm" type="button" disabled>Encrypt + ext4 — erase disk</button>
+        <form method="dialog"><button type="submit">Cancel</button></form>
     </dialog>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
         <h2 id="disk-config-title">Disk configuration</h2>
@@ -565,7 +564,7 @@ try {
         An open encrypted volume is shown separately when its device-mapper
         relationship to a detected USB partition can be established. Unlock,
         Mount, Unmount and Lock are available only for eligible disk states.
-        Whole-disk encryption remains disabled in this development build.
+        Whole-disk encryption permanently erases the selected USB disk.
     </section>
 
 </main>
@@ -586,6 +585,7 @@ try {
     var selectionVersion = 0;
     function refreshButton() {
         confirm.disabled = !acknowledgement.checked || phrase.value !== 'ERASE ALL DATA';
+        formatConfirm.disabled = confirm.disabled || !passphrase.value || passphrase.value !== passphraseConfirm.value;
     }
     function refresh() {
         selectionVersion++;
@@ -593,6 +593,8 @@ try {
         status.textContent = '';
     }
     acknowledgement.addEventListener('change', refresh);
+    passphrase.addEventListener('input', refresh);
+    passphraseConfirm.addEventListener('input', refresh);
     phrase.addEventListener('input', refresh);
     // Closing the dialog must also discard unsent passphrases.
     dialog.addEventListener('close', function () {
@@ -638,9 +640,7 @@ try {
             if (requestVersion === selectionVersion) refreshButton();
         });
     });
-    // The live action is intentionally disabled until EX4100 testing is
-    // complete. Once enabled, this sends the same confirmed disk and secret
-    // to the authenticated endpoint, never in the URL.
+    // Send the confirmed disk and passphrase only to the authenticated endpoint.
     if (formatConfirm) {
         formatConfirm.addEventListener('click', function () {
             if (formatConfirm.disabled || !acknowledgement.checked ||
@@ -679,7 +679,7 @@ try {
             });
         });
     }
-    // Shared completion handler for the eventual enabled formatting request.
+    // Shared completion handler for the formatting request.
     // Do not infer the mountpoint: display only the server-confirmed result.
     function showFormatResult(result) {
         if (!result || result.ok !== true) return false;
