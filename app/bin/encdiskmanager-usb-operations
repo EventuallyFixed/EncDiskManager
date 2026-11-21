@@ -39,6 +39,19 @@ verify_open() {
     [ "$(/usr/bin/readlink -f "$source")" = "$(/usr/bin/readlink -f "$device")" ] ||
         fail "Mapping belongs to another partition."
 }
+# WD OS5 may create native block nodes instead of symlinks to /dev/dm-N.
+# Resolve the device number independently of the node's pathname.
+mapper_sys_path() {
+    numbers=$(stat -L -c '%t:%T' "$mapperdev") || fail "Cannot identify mapper."
+    major=${numbers%:*}
+    minor=${numbers#*:}
+    case "$major" in ''|*[!0-9a-fA-F]*) fail "Invalid mapper major number." ;; esac
+    case "$minor" in ''|*[!0-9a-fA-F]*) fail "Invalid mapper minor number." ;; esac
+    id=$(printf '%d:%d' "0x$major" "0x$minor") || fail "Cannot identify mapper."
+    path=/sys/dev/block/$id
+    [ -r "$path/dev" ] || fail "Mapper kernel device unavailable."
+    printf '%s\n' "$path"
+}
 # mountinfo is checked by source major:minor for safety across device aliases.
 mounted_id() {
     id=$(cat "$1/dev") || fail "Cannot identify block device."
@@ -59,8 +72,8 @@ case "$action" in
         ;;
     mount)
         verify_open
-        dmname=$(basename "$(/usr/bin/readlink -f "$mapperdev")")
-        mounted_id "/sys/class/block/$dmname" && fail "Mapping already mounted."
+        mapper_sys=$(mapper_sys_path) || exit 1
+        mounted_id "$mapper_sys" && fail "Mapping already mounted."
         # Do not mount over an existing directory or unrelated filesystem.
         [ ! -e "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
             fail "Mountpoint already exists; refusing to reuse it."
@@ -79,11 +92,11 @@ case "$action" in
         ;;
     unmount)
         verify_open
-        dmname=$(basename "$(/usr/bin/readlink -f "$mapperdev")")
-        mounted_id "/sys/class/block/$dmname" || fail "Mapping is not mounted."
+        mapper_sys=$(mapper_sys_path) || exit 1
+        mounted_id "$mapper_sys" || fail "Mapping is not mounted."
         # Discover the real mountpoint by the mapping's kernel device ID.
         # Refuse multiple mounts or anything outside /mnt.
-        id=$(cat "/sys/class/block/$dmname/dev") ||
+        id=$(cat "$mapper_sys/dev") ||
             fail "Cannot identify mapper."
         mountpoint=$(awk -v id="$id" '
             $3 == id { count++; target=$5 }
@@ -114,8 +127,8 @@ case "$action" in
         ;;
     lock)
         verify_open
-        dmname=$(basename "$(/usr/bin/readlink -f "$mapperdev")")
-        mounted_id "/sys/class/block/$dmname" && fail "Mapping is still mounted."
+        mapper_sys=$(mapper_sys_path) || exit 1
+        mounted_id "$mapper_sys" && fail "Mapping is still mounted."
         "$crypt" close "$mapper"
         ;;
 esac
