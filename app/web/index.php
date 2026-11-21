@@ -1130,6 +1130,11 @@ try {
             var actions = row.cells[0];
             ['mount', 'unmount'].forEach(function (action) {
                 var button = actions.querySelector('button[data-operation="' + action + '"]');
+                // A mounted mapper needs only Unmount; do not show a redundant Mount button.
+                if (action === 'mount' && mapper.mount) {
+                    if (button) button.remove();
+                    return;
+                }
                 if (!button) {
                     button = document.createElement('button');
                     button.type = 'button';
