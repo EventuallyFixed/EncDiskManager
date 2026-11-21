@@ -1092,6 +1092,8 @@ try {
         if (!document.hidden) pollInventory();
     });
     window.setInterval(pollInventory, 3000);
+    // Group server-rendered physical disks with their partitions immediately.
+    sortRows();
     // Refresh immediately: the server-rendered snapshot may already be stale.
     pollInventory();
 
@@ -1102,17 +1104,7 @@ try {
         button.addEventListener('click', function () {
             ascending = active === column ? !ascending : true;
             active = column;
-            var body = table.tBodies[0];
-            var rows = Array.prototype.slice.call(body.rows);
-            rows.sort(function (a, b) {
-                var x = a.cells[column].textContent.trim();
-                var y = b.cells[column].textContent.trim();
-                var cmp = x.localeCompare(y, undefined, {sensitivity: 'base', numeric: true});
-                return ascending ? cmp : -cmp;
-            });
-            rows.forEach(function (row, index) {
-                if (body.rows[index] !== row) body.insertBefore(row, body.rows[index] || null);
-            });
+            sortRows();
             buttons.forEach(function (item, index) {
                 item.textContent = item.textContent.replace(/ [▲▼]$/, '');
                 item.removeAttribute('aria-sort');
