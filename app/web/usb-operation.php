@@ -11,6 +11,45 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
+// Run each operation through the existing privileged helper. Secrets use stdin only.
+function edm_run_usb_helper($helper, $action, $device, $mapper, $passphrase = null, $argument = null)
+{
+    $command = '/bin/sh ' . escapeshellarg($helper) . ' '
+        . escapeshellarg($action) . ' ' . escapeshellarg($device)
+        . ' ' . escapeshellarg($mapper);
+    if ($argument !== null) $command .= ' ' . escapeshellarg($argument);
+    // The endpoint does not return helper output. Discard it instead of
+    // risking a blocked child while PHP waits on the other output pipe.
+    $descriptors = array(
+        0 => array('pipe', 'r'),
+        1 => array('file', '/dev/null', 'w'),
+        2 => array('file', '/dev/null', 'w')
+    );
+    $process = proc_open($command, $descriptors, $pipes);
+    if (!is_resource($process)) throw new RuntimeException('Could not start operation.');
+    try {
+        if ($passphrase !== null) {
+            // A pipe write can be short; cryptsetup must receive the entire key.
+            $length = strlen($passphrase);
+            $written = 0;
+            while ($written < $length) {
+                $count = fwrite($pipes[0], substr($passphrase, $written));
+                if ($count === false || $count === 0) {
+                    throw new RuntimeException('Could not send unlock passphrase.');
+                }
+                $written += $count;
+            }
+        }
+        fclose($pipes[0]);
+        $exit = proc_close($process);
+    } finally {
+        unset($passphrase);
+        if (is_resource($pipes[0])) fclose($pipes[0]);
+        if (is_resource($process)) proc_close($process);
+    }
+    return $exit;
+}
+
 try {
     edm_auth_start_session();
     $authorized = edm_privileged_web_request_authorized(
@@ -71,39 +110,8 @@ try {
             }
         }
     }
-    $command = '/bin/sh ' . escapeshellarg($helper) . ' '
-        . escapeshellarg($action) . ' ' . escapeshellarg($device)
-        . ' ' . escapeshellarg($mapper);
-    if ($action === 'mount') $command .= ' ' . escapeshellarg($folder);
-    // The endpoint does not return helper output. Discard it instead of
-    // risking a blocked child while PHP waits on the other output pipe.
-    $descriptors = array(
-        0 => array('pipe', 'r'),
-        1 => array('file', '/dev/null', 'w'),
-        2 => array('file', '/dev/null', 'w')
-    );
-    $process = proc_open($command, $descriptors, $pipes);
-    if (!is_resource($process)) throw new RuntimeException('Could not start operation.');
-    try {
-        if ($action === 'unlock') {
-            // A pipe write can be short; cryptsetup must receive the entire key.
-            $length = strlen($passphrase);
-            $written = 0;
-            while ($written < $length) {
-                $count = fwrite($pipes[0], substr($passphrase, $written));
-                if ($count === false || $count === 0) {
-                    throw new RuntimeException('Could not send unlock passphrase.');
-                }
-                $written += $count;
-            }
-        }
-        fclose($pipes[0]);
-        $exit = proc_close($process);
-    } finally {
-        unset($passphrase);
-        if (is_resource($pipes[0])) fclose($pipes[0]);
-        if (is_resource($process)) proc_close($process);
-    }
+    $exit = edm_run_usb_helper($helper, $action, $device, $mapper, $passphrase,
+        $action === 'mount' ? $folder : null);
     if ($exit !== 0) {
         http_response_code(409);
         echo json_encode(array('ok' => false, 'error' => 'Operation failed; refresh disk state.'));
