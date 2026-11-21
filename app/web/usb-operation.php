@@ -58,9 +58,23 @@ try {
         || ($helperStat['mode'] & 0022) !== 0) {
         throw new RuntimeException('Helper permissions are unsafe.');
     }
+    $folder = $mapper;
+    if ($action === 'mount') {
+        require_once __DIR__ . '/../lib/registry.php';
+        $registry = edm_registry_load(edm_auth_data_path() . '/disks.json');
+        foreach ($registry['disks'] as $entry) {
+            foreach ($inventory['devices'] as $disk) {
+                if ($disk['path'] === $device && !empty($disk['luks'])
+                    && strcasecmp($disk['uuid'], $entry['luks_uuid']) === 0) {
+                    $folder = $entry['mount_folder'];
+                }
+            }
+        }
+    }
     $command = '/bin/sh ' . escapeshellarg($helper) . ' '
         . escapeshellarg($action) . ' ' . escapeshellarg($device)
         . ' ' . escapeshellarg($mapper);
+    if ($action === 'mount') $command .= ' ' . escapeshellarg($folder);
     // The endpoint does not return helper output. Discard it instead of
     // risking a blocked child while PHP waits on the other output pipe.
     $descriptors = array(
