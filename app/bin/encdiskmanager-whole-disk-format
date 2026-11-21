@@ -101,12 +101,12 @@ esac
 # potentially stale filesystem signature, before formatting anything.
 logical=$(cat "$disk_sys/queue/logical_block_size") ||
     fail "Cannot read disk logical sector size."
-case "$logical" in 512|1024|2048|4096) ;; *) fail "Unexpected logical sector size." ;; esac
+[ "$logical" = 512 ] || fail "Only 512-byte logical sectors are supported."
 case "$4" in ''|*[!0-9]*) fail "Invalid confirmed disk sector count." ;; esac
 [ "$4" -gt 4096 ] || fail "Disk is too small for the expected layout."
 [ "$(cat "$disk_sys/size")" = "$4" ] ||
     fail "Disk capacity changed after repartitioning."
-expected_end=$(( $4 - (16384 + logical - 1) / logical - 2 ))
+expected_end=$(( $4 - 34 ))
 expected_size=$(( expected_end - 2048 + 1 ))
 [ "$(cat "$partition_sys/start")" = 2048 ] ||
     fail "Unexpected partition starting sector."
