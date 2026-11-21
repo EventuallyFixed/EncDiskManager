@@ -356,6 +356,9 @@ try {
         <div class="muted">USB storage · LUKS inventory</div>
     </div>
     <div class="header-actions">
+        <button type="button" class="backup-link" id="open-information" title="Application information">
+            <span>Information</span>
+        </button>
         <a class="backup-link" href="settings.php"
            title="Manage configuration and backups">
             
@@ -372,14 +375,6 @@ try {
     </div>
 </header>
 <main>
-    <section class="panel safe-note">
-        <strong>Before uninstalling or reinstalling:</strong>
-        download a configuration backup from the Backup section on the Settings page.
-        Normal upgrades and ordinary app removal preserve the administrator account
-        and registered-disk configuration in WD's persistent app-data directory.
-        Use Settings to restore a .tgz backup or explicitly delete saved configuration.
-        Backups contain a password hash and disk settings, never plaintext passwords or LUKS passphrases.
-    </section>
     <section class="panel">
         <h2>Disk inventory</h2>
         <?php if ($configValidationNotice !== ''): ?><p role="status"><?php echo h($configValidationNotice); ?></p><?php endif; ?>
@@ -515,17 +510,38 @@ try {
         </div>
         </form>
     </dialog>
-    <section class="panel safe-note">
-        <strong>Status information:</strong> This page uses detected block-device,
-        encryption, and mount information to estimate each USB partition’s state.
-        An open encrypted volume is shown separately when its device-mapper
-        relationship to a detected USB partition can be established. Unlock,
-        Mount, Unmount and Lock are available only for eligible disk states.
-        Whole-disk encryption permanently erases the selected USB disk.
-    </section>
+
+    <dialog id="information-dialog" aria-labelledby="information-title">
+        <h2 id="information-title">Information</h2>
+        <section class="panel safe-note">
+            <strong>Before uninstalling or reinstalling:</strong>
+            download a configuration backup from the Backup section on the Settings page.
+            Normal upgrades and ordinary app removal preserve the administrator account
+            and registered-disk configuration in WD's persistent app-data directory.
+            Use Settings to restore a .tgz backup or explicitly delete saved configuration.
+            Backups contain a password hash and disk settings, never plaintext passwords or LUKS passphrases.
+        </section>
+        <section class="panel safe-note">
+            <strong>Status information:</strong> This page uses detected block-device,
+            encryption, and mount information to estimate each USB partition’s state.
+            An open encrypted volume is shown separately when its device-mapper
+            relationship to a detected USB partition can be established. Unlock,
+            Mount, Unmount and Lock are available only for eligible disk states.
+            Whole-disk encryption permanently erases the selected USB disk.
+        </section>
+        <form method="dialog" class="dialog-actions">
+            <button type="submit">Close</button>
+        </form>
+    </dialog>
 
 </main>
 <script>
+(function () {
+    var dialog = document.getElementById('information-dialog');
+    document.getElementById('open-information').addEventListener('click', function () {
+        dialog.showModal();
+    });
+}());
 (function () {
     var dialog = document.getElementById('whole-disk-erase-preview');
     var selected = document.getElementById('whole-disk-preview-name');
