@@ -90,7 +90,7 @@ case "$action" in
         # Refuse mountinfo-escaped paths rather than interpreting escape data
         # as shell input or operating on an unexpected directory.
         case "$mountpoint" in
-            *\\\\*|*[!a-zA-Z0-9_./-]*)
+            *\\*|*[!a-zA-Z0-9_./-]*)
                 fail "Mountpoint contains unsupported characters." ;;
             /mnt/*) ;;
             *) fail "Invalid USB mountpoint." ;;
