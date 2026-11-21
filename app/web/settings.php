@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../lib/auth.php';
+require_once __DIR__ . '/../lib/app_version.php';
 require_once __DIR__ . '/../lib/backup.php';
 
 function edm_settings_h($value)
@@ -121,7 +122,7 @@ button{margin-top:16px;padding:10px 15px;border:0;border-radius:5px;background:#
 </style>
 </head>
 <body>
-<header><h1>Encrypted Disk Manager · Configuration</h1></header>
+<header><h1>Encrypted Disk Manager<?php if (edm_app_version() !== ''): ?> · v<?php echo edm_settings_h(edm_app_version()); ?><?php endif; ?> · Configuration</h1></header>
 <main>
 <p><a href="index.php">← Return to Encrypted Disk Manager</a></p>
 <?php if ($error !== ''): ?><p class="error"><?php echo edm_settings_h($error); ?></p><?php endif; ?>
