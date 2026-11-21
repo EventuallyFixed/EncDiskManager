@@ -66,3 +66,27 @@ function edm_unlock_key_remove($directory, $uuid)
     edm_registry_assert_file($path, 'Unlock key');
     if (!unlink($path)) throw new RuntimeException('Could not remove stored unlock key.');
 }
+
+/** Serialize changes to stored keys and their use by composite operations. */
+function edm_unlock_key_with_lock($directory, $operation)
+{
+    edm_registry_assert_directory($directory);
+    $path = $directory . '/unlock-keys.lock';
+    if (file_exists($path) || is_link($path)) {
+        edm_registry_assert_file($path, 'Unlock key lock');
+    }
+    $mask = umask(0077);
+    try {
+        $lock = fopen($path, 'c');
+    } finally {
+        umask($mask);
+    }
+    if ($lock === false) throw new RuntimeException('Could not open unlock key lock.');
+    try {
+        if (!flock($lock, LOCK_EX)) throw new RuntimeException('Could not lock unlock keys.');
+        return $operation();
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
