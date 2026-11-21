@@ -54,9 +54,10 @@ try {
     }
     // Preserve the original row contract while identifying its parent disk.
     foreach ($result as &$item) {
-        $deviceName = substr($item['device'], 5);
-        $item['parent_disk'] = $item['connection'] === 'connected'
-            && isset($partitionParents[$deviceName])
+        $deviceName = $item['connection'] === 'connected'
+            && strncmp($item['device'], '/dev/', 5) === 0
+            ? substr($item['device'], 5) : '';
+        $item['parent_disk'] = isset($partitionParents[$deviceName])
             ? $partitionParents[$deviceName] : '';
     }
     unset($item);
