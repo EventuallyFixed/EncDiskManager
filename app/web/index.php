@@ -434,7 +434,8 @@ try {
             <?php foreach ($inventoryRows as $row):
                 $disk = $row['device'];
                 $status = $row['status'];
-                $mountFolder = $row['registered'] ? '/mnt/' . $row['mount_folder'] : '—';
+                $mountFolder = $row['registered'] && $status !== 'Encrypted — Mounted'
+                    ? '/mnt/' . $row['mount_folder'] : '—';
             ?>
                 <tr data-key="<?php echo h($row['registered'] ? 'registered:' . strtolower($row['luks_uuid']) : 'device:' . $disk['name']); ?>" data-parent-disk="<?php echo h($disk !== null && isset($partitionParents[$disk['name']]) ? $partitionParents[$disk['name']] : ''); ?>" data-connection="<?php echo $disk === null ? 'disconnected' : 'connected'; ?>"<?php echo $disk === null ? ' hidden' : ''; ?>>
                     <td class="disk-actions">
@@ -777,7 +778,8 @@ try {
         row.dataset.mapper = item.mapper;
         row.dataset.uuid = item.uuid;
         row.dataset.parentDisk = item.parent_disk || '';
-        var values = [item.name, item.device, item.status, item.type, item.mount, item.uuid];
+        var mount = item.status === 'Encrypted — Mounted' ? '—' : item.mount;
+        var values = [item.name, item.device, item.status, item.type, mount, item.uuid];
         values.forEach(function (value, index) {
             var cell = row.cells[index + 1];
             if (index === 0) {
