@@ -84,7 +84,8 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
                 return array('complete' => false, 'disks' => array());
             }
             if (count($holders) > 2) $hasHolders = true;
-            $slaves = @scandir($devicePath . '/slaves');
+            $slaves = is_dir($devicePath . '/slaves')
+                ? @scandir($devicePath . '/slaves') : array();
             if (!is_array($slaves)) {
                 return array('complete' => false, 'disks' => array());
             }
