@@ -179,6 +179,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
             } elseif ($request['action'] === 'delete') {
                 $request['confirmation'] = isset($_POST['confirmation']) ? $_POST['confirmation'] : null;
             }
+            if ($request['action'] === 'key_preference') {
+                if (isset($_POST['store_unlock_key']) && $_POST['store_unlock_key'] !== '1') {
+                    throw new RuntimeException('Invalid unlock key preference.');
+                }
+                edm_registry_set_key_preference(edm_auth_data_path() . '/disks.json',
+                    $request['luks_uuid'], isset($_POST['store_unlock_key']));
+                header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+                exit;
+            }
             if ($request['action'] === 'register') {
                 edm_registry_register(edm_auth_data_path() . '/disks.json', $request['luks_uuid'],
                     isset($_POST['name']) ? $_POST['name'] : null,
@@ -446,6 +455,7 @@ try {
                                 data-uuid="<?php echo h($row['luks_uuid']); ?>"
                                 data-name="<?php echo h($row['name']); ?>"
                                 data-folder="<?php echo h($row['mount_folder']); ?>"
+                                data-store-key="<?php echo !empty($row['store_unlock_key']) ? '1' : '0'; ?>"
                                 data-status="<?php echo h($row['status']); ?>"
                                 title="View registered disk configuration">Configure</button>
                         <?php foreach (array('Unlock', 'Mount', 'Unmount', 'Lock') as $action): ?>
@@ -490,7 +500,7 @@ try {
     </dialog>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
         <h2 id="disk-config-title">Disk configuration</h2>
-        <p class="muted" id="config-preview-note">Configuration preview. Editing, key management and registration deletion are not yet enabled.</p>
+        <p class="muted" id="config-preview-note">The unlock key preference can be saved even when the disk is disconnected. Name and mount directory editing and registration deletion are not yet enabled.</p>
         <p id="registration-note" hidden>Registration does not change the current mount or disk contents. The configured directory is saved for future mount support.</p>
         <p><strong>LUKS UUID:</strong> <code id="config-uuid"></code></p>
         <p><strong>Connection:</strong> <span id="config-status"></span></p>
@@ -502,8 +512,10 @@ try {
         <input id="config-name" name="name" type="text" maxlength="160" required>
         <label for="config-folder">Unique mount directory under /mnt</label>
         <input id="config-folder" name="mount_folder" type="text" maxlength="48" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,47}" required>
-        <label><input type="checkbox" disabled> Store an unlock key on this NAS (optional)</label>
-        <p class="muted">Key storage is not configured in this development build.</p>
+        <div id="config-key-options">
+            <label><input type="checkbox" id="config-store-key" name="store_unlock_key" value="1"> Store an unlock key on this NAS to automatically mount the disk when Connect is clicked</label>
+            <p class="muted">Preference only in this development build; key enrolment and Connect are not yet available.</p>
+        </div>
         <div class="dialog-actions">
             <button type="submit">Validate changes (no save)</button>
             <button type="button" disabled>Delete registration</button>
@@ -693,10 +705,15 @@ try {
             if (!button || button.disabled || !document.getElementById('disk-inventory').contains(button)) return;
             var registering = button.classList.contains('register-disk');
             document.getElementById('disk-config-title').textContent = registering ? 'Register disk' : 'Disk configuration';
-            document.querySelector('#disk-config-form [name=config_action]').value = registering ? 'register' : 'edit';
-            document.querySelector('#disk-config-form button[type=submit]').textContent = registering ? 'Register' : 'Validate changes (no save)';
+            document.querySelector('#disk-config-form [name=config_action]').value = registering ? 'register' : 'key_preference';
+            document.querySelector('#disk-config-form button[type=submit]').textContent = registering ? 'Register' : 'Save';
             document.getElementById('config-preview-note').hidden = registering;
             document.getElementById('registration-note').hidden = !registering;
+            document.getElementById('config-key-options').hidden = registering;
+            document.getElementById('config-store-key').disabled = registering;
+            document.getElementById('config-store-key').checked = !registering && button.dataset.storeKey === '1';
+            document.getElementById('config-name').readOnly = !registering;
+            document.getElementById('config-folder').readOnly = !registering;
             document.getElementById('config-uuid').textContent = button.getAttribute('data-uuid');
             document.getElementById('config-form-uuid').value = button.getAttribute('data-uuid');
             document.getElementById('config-status').textContent = button.getAttribute('data-status');
@@ -818,6 +835,7 @@ try {
             button.dataset.uuid = item.uuid;
             button.dataset.name = item.name;
             button.dataset.folder = item.folder;
+            button.dataset.storeKey = item.store_unlock_key === true ? '1' : '0';
             button.dataset.status = item.status;
         });
     }
