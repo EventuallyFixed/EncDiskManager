@@ -76,6 +76,17 @@ function edm_composite_step($helper, $action, $device, $uuid, $mapper, $secret =
     }
 }
 
+// The original passphrase authorizes a new random keyslot; it is never saved.
+function edm_enrol_disk_key($directory, $helper, $device, $entry, $passphrase)
+{
+    $uuid = $entry['luks_uuid'];
+    edm_unlock_key_enrol($directory, $uuid, function ($file) use ($helper, $device, $uuid, $entry, $passphrase) {
+        edm_composite_device($device, $uuid);
+        return edm_run_usb_helper($helper, 'enrol', $device, $entry['mapper_name'], $passphrase, $file) === 0;
+    });
+    return edm_unlock_key_read($directory, $uuid);
+}
+
 function edm_composite_operation($helper, $action, $device, $uuid, $passphrase)
 {
     require_once __DIR__ . '/../lib/unlock_key.php';
@@ -111,11 +122,7 @@ function edm_composite_operation($helper, $action, $device, $uuid, $passphrase)
         $stored = edm_unlock_key_read($directory, $uuid);
         if ($stored === null) {
             if ($passphrase === null) throw new RuntimeException('Recovery passphrase required.');
-            edm_unlock_key_enrol($directory, $uuid, function ($file) use ($helper, $device, $uuid, $entry, $passphrase) {
-                edm_composite_device($device, $uuid);
-                return edm_run_usb_helper($helper, 'enrol', $device, $entry['mapper_name'], $passphrase, $file) === 0;
-            });
-            $stored = edm_unlock_key_read($directory, $uuid);
+            $stored = edm_enrol_disk_key($directory, $helper, $device, $entry, $passphrase);
         }
         // Use the generated key even on the first Mount, verifying enrolment.
         $secret = $stored;
@@ -160,6 +167,14 @@ try {
         exit;
     }
 
+    // Saving is an explicit opt-in on a manual Unlock request only.
+    $saveKey = isset($_POST['save_unlock_key']);
+    if ($saveKey && ($action !== 'unlock' || $_POST['save_unlock_key'] !== '1')) {
+        http_response_code(400);
+        echo json_encode(array('ok' => false, 'error' => 'Invalid unlock key request.'));
+        exit;
+    }
+
     $helper = realpath(__DIR__ . '/../bin/encdiskmanager-usb-operations');
     if ($helper === false || !is_file($helper) || is_link($helper)) {
         throw new RuntimeException('Helper unavailable.');
@@ -172,7 +187,7 @@ try {
     require_once __DIR__ . '/../lib/unlock_key.php';
     // Use the current saved preference, not the browser's cached button state.
     $directory = edm_auth_data_path();
-    edm_unlock_key_with_lock($directory, function () use ($directory, $helper, $action, $device, $mapper, $passphrase) {
+    edm_unlock_key_with_lock($directory, function () use ($directory, $helper, $action, $device, $mapper, $passphrase, $saveKey) {
         $inventory = edm_discover_usb_inventory();
         $registry = edm_registry_load($directory . '/disks.json');
         $entry = null;
@@ -205,6 +220,19 @@ try {
         }
         if (!edm_usb_operation_request($action, $device, $mapper, $inventory)) {
             throw new RuntimeException('Disk state or selection is invalid.');
+        }
+        if ($saveKey) {
+            if ($entry === null || !is_string($postedUuid)
+                || strcasecmp($postedUuid, $entry['luks_uuid']) !== 0
+                || $mapper !== $entry['mapper_name']) {
+                throw new RuntimeException('Register the disk before saving an unlock key.');
+            }
+            // A failed enrolment (including a wrong passphrase) leaves the
+            // preference unchanged. Unlock with the generated credential.
+            $key = edm_enrol_disk_key($directory, $helper, $device, $entry, $passphrase);
+            edm_registry_set_key_preference($directory . '/disks.json', $entry['luks_uuid'], true);
+            edm_composite_step($helper, 'unlock', $device, $entry['luks_uuid'], $mapper, $key);
+            return;
         }
         $folder = $entry !== null ? $entry['mount_folder'] : $mapper;
         $exit = edm_run_usb_helper($helper, $action, $device, $mapper, $passphrase,
