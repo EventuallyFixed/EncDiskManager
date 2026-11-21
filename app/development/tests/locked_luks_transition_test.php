@@ -33,14 +33,14 @@ try {
                 return $plan['argv'][1] === 'luksOpen';
             }, function () use ($usb) { return $usb; }, $discoverMappers,
             function () { return array(); },
-            function () { return '/usr/sbin/cryptsetup'; });
+            function () { return '/usr/local/modules/usr/sbin/cryptsetup'; });
         check_locked_transition($result === true && $calls === 1,
             'Locked verified transition probes before and after Unlock');
         $result = edm_with_locked_luks_transition($dir, $uuid, 'unlock',
             'edm_backup', function () use (&$calls) { ++$calls; return true; },
             function () use ($usb) { return $usb; }, $discoverMappers,
             function () { return array(); },
-            function () { return '/usr/sbin/cryptsetup'; });
+            function () { return '/usr/local/modules/usr/sbin/cryptsetup'; });
         check_locked_transition($result === false && $calls === 1,
             'Already-open mapper cannot be unlocked again');
         $result = edm_with_locked_luks_transition($dir, $uuid, 'lock', null,
@@ -50,7 +50,7 @@ try {
                 return $plan['argv'][1] === 'luksClose';
             }, function () use ($usb) { return $usb; }, $discoverMappers,
             function () { return array(); },
-            function () { return '/usr/sbin/cryptsetup'; });
+            function () { return '/usr/local/modules/usr/sbin/cryptsetup'; });
         check_locked_transition($result === true && $calls === 2,
             'Locked verified transition probes before and after Lock');
     } else {
