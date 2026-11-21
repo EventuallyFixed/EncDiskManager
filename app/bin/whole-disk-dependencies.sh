@@ -8,7 +8,11 @@ for device in "$disk" "$disk"/*; do
     [ "$device" = "$disk" ] || [ -f "$device/partition" ] || continue
     for kind in holders slaves; do
         directory="$device/$kind"
-        [ -d "$directory" ] && [ -r "$directory" ] || exit 1
+        if [ ! -d "$directory" ]; then
+            [ "$kind" = slaves ] && [ ! -e "$directory" ] && [ ! -L "$directory" ] && continue
+            exit 1
+        fi
+        [ -r "$directory" ] || exit 1
         for entry in "$directory"/*; do
             [ ! -e "$entry" ] && [ ! -L "$entry" ] || exit 1
         done
