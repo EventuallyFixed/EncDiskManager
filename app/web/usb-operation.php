@@ -50,6 +50,81 @@ function edm_run_usb_helper($helper, $action, $device, $mapper, $passphrase = nu
     return $exit;
 }
 
+// Composite operations resolve a registered UUID again before each step.
+function edm_composite_device($device, $uuid)
+{
+    $inventory = edm_discover_usb_inventory();
+    $matches = array();
+    foreach ($inventory['devices'] as $disk) {
+        if (!empty($disk['luks']) && isset($disk['uuid'])
+            && strcasecmp($disk['uuid'], $uuid) === 0) $matches[] = $disk;
+    }
+    if (count($matches) !== 1 || $matches[0]['path'] !== $device) {
+        throw new RuntimeException('Registered USB disk is missing or ambiguous.');
+    }
+    return array($inventory, $matches[0]);
+}
+
+function edm_composite_step($helper, $action, $device, $uuid, $mapper, $secret = null, $argument = null)
+{
+    list($inventory, $disk) = edm_composite_device($device, $uuid);
+    if (!edm_usb_operation_request($action, $device, $mapper, $inventory)) {
+        throw new RuntimeException('Disk state changed.');
+    }
+    if (edm_run_usb_helper($helper, $action, $device, $mapper, $secret, $argument) !== 0) {
+        throw new RuntimeException('Disk operation failed.');
+    }
+}
+
+function edm_composite_operation($helper, $action, $device, $uuid, $passphrase)
+{
+    require_once __DIR__ . '/../lib/unlock_key.php';
+    $directory = edm_auth_data_path();
+    // Validate the UUID before using it as a key identity.
+    edm_unlock_key_path($directory, $uuid);
+    $registry = edm_registry_load($directory . '/disks.json');
+    $entry = null;
+    foreach ($registry['disks'] as $candidate) {
+        if (strcasecmp($candidate['luks_uuid'], $uuid) === 0) $entry = $candidate;
+    }
+    if ($entry === null) throw new RuntimeException('Disk is not registered.');
+    list($inventory, $disk) = edm_composite_device($device, $uuid);
+    $mappers = $disk['mapper_names'];
+    $mounts = $disk['mapper_mounts'];
+    if (count($mappers) > 1 || count($mounts) > 1 || !empty($disk['mount'])) {
+        throw new RuntimeException('Disk state is ambiguous.');
+    }
+    $mapper = count($mappers) === 1 ? $mappers[0] : $entry['mapper_name'];
+    if ($action === 'disconnect') {
+        if (count($mappers) !== 1) throw new RuntimeException('Disk is already locked.');
+        if (count($mounts) === 1) {
+            edm_composite_step($helper, 'unmount', $device, $uuid, $mapper);
+        }
+        edm_composite_step($helper, 'lock', $device, $uuid, $mapper);
+        return;
+    }
+    if (count($mounts) !== 0) throw new RuntimeException('Disk is already mounted.');
+    $secret = $passphrase;
+    if (!empty($entry['store_unlock_key'])) {
+        $stored = edm_unlock_key_read($directory, $uuid);
+        if ($stored === null) {
+            if ($passphrase === null) throw new RuntimeException('Recovery passphrase required.');
+            edm_unlock_key_enrol($directory, $uuid, function ($file) use ($helper, $device, $uuid, $entry, $passphrase) {
+                edm_composite_device($device, $uuid);
+                return edm_run_usb_helper($helper, 'enrol', $device, $entry['mapper_name'], $passphrase, $file) === 0;
+            });
+            $stored = edm_unlock_key_read($directory, $uuid);
+        }
+        // An explicitly entered passphrase can also recover access if a stored key is stale.
+        $secret = $passphrase !== null ? $passphrase : $stored;
+    }
+    if (count($mappers) === 0) {
+        if ($secret === null) throw new RuntimeException('Passphrase required.');
+        edm_composite_step($helper, 'unlock', $device, $uuid, $mapper, $secret);
+    }
+    edm_composite_step($helper, 'mount', $device, $uuid, $mapper, null, $entry['mount_folder']);
+}
+
 try {
     edm_auth_start_session();
     $authorized = edm_privileged_web_request_authorized(
@@ -67,21 +142,22 @@ try {
     $action = isset($_POST['action']) ? $_POST['action'] : null;
     $device = isset($_POST['device']) ? $_POST['device'] : null;
     $mapper = isset($_POST['mapper']) ? $_POST['mapper'] : null;
+    $composite = in_array($action, array('connect', 'disconnect'), true);
     $inventory = edm_discover_usb_inventory();
-    if (!edm_usb_operation_request($action, $device, $mapper, $inventory)) {
+    if (!$composite && !edm_usb_operation_request($action, $device, $mapper, $inventory)) {
         http_response_code(400);
         echo json_encode(array('ok' => false, 'error' => 'Disk state or selection is invalid.'));
         exit;
     }
 
-    // Only unlock may carry a secret; reject unexpected passphrase submissions.
-    if ($action !== 'unlock' && isset($_POST['passphrase'])) {
+    // Only unlock or Connect may carry a secret.
+    if (!in_array($action, array('unlock', 'connect'), true) && isset($_POST['passphrase'])) {
         http_response_code(400);
         echo json_encode(array('ok' => false, 'error' => 'Unexpected passphrase.'));
         exit;
     }
     $passphrase = isset($_POST['passphrase']) ? $_POST['passphrase'] : null;
-    if ($action === 'unlock' && (!is_string($passphrase)
+    if (($action === 'unlock' || $passphrase !== null) && (!is_string($passphrase)
         || $passphrase === '' || strlen($passphrase) > 4096)) {
         http_response_code(400);
         echo json_encode(array('ok' => false, 'error' => 'Passphrase is required.'));
@@ -96,6 +172,12 @@ try {
     if ($helperStat === false || $helperStat['uid'] !== 0
         || ($helperStat['mode'] & 0022) !== 0) {
         throw new RuntimeException('Helper permissions are unsafe.');
+    }
+    if ($composite) {
+        $uuid = isset($_POST['luks_uuid']) ? $_POST['luks_uuid'] : null;
+        edm_composite_operation($helper, $action, $device, $uuid, $passphrase);
+        echo json_encode(array('ok' => true));
+        exit;
     }
     $folder = $mapper;
     if ($action === 'mount') {
