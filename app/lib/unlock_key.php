@@ -90,3 +90,20 @@ function edm_unlock_key_with_lock($directory, $operation)
         fclose($lock);
     }
 }
+
+/** Enumerate only this application's private unlock keyfiles for explicit deletion. */
+function edm_unlock_key_filenames($directory)
+{
+    edm_registry_assert_directory($directory);
+    $entries = scandir($directory);
+    if ($entries === false) throw new RuntimeException('Could not list stored unlock keys.');
+    $names = array();
+    foreach ($entries as $name) {
+        if (preg_match('/^unlock-[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}\.key$/D', $name)
+            || strpos($name, '.unlock-key-') === 0) {
+            edm_registry_assert_file($directory . '/' . $name, 'Unlock key');
+            $names[] = $name;
+        }
+    }
+    return $names;
+}
