@@ -175,7 +175,10 @@ try {
     }
     if ($composite) {
         $uuid = isset($_POST['luks_uuid']) ? $_POST['luks_uuid'] : null;
-        edm_composite_operation($helper, $action, $device, $uuid, $passphrase);
+        require_once __DIR__ . '/../lib/unlock_key.php';
+        edm_unlock_key_with_lock(edm_auth_data_path(), function () use ($helper, $action, $device, $uuid, $passphrase) {
+            edm_composite_operation($helper, $action, $device, $uuid, $passphrase);
+        });
         echo json_encode(array('ok' => true));
         exit;
     }
