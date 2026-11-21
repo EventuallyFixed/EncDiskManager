@@ -572,6 +572,8 @@ try {
             An open encrypted volume is shown separately when its device-mapper
             relationship to a detected USB partition can be established. Unlock,
             Mount, Unmount and Lock are available only for eligible disk states.
+            A stored key allows Mount to unlock automatically. Before unplugging a disk,
+            click Unmount and then Lock separately, even if a key is stored.
             Whole-disk encryption permanently erases the selected USB disk.
         </section>
         <form method="dialog" class="dialog-actions">
@@ -878,8 +880,9 @@ try {
                 action === 'mount' && directMount ? true : item.actions[action];
             button.disabled = !available || operationBusy;
             button.title = !available ? 'Not available for this disk state' :
-                combined && action === 'mount' ? 'Unlock and mount' :
-                combined && action === 'unmount' ? 'Unmount and lock' : 'Perform ' + action;
+                directMount && action === 'mount' ? 'Unlock and mount' :
+                action === 'unmount' ? 'Unmount filesystem (then Lock before unplugging)' :
+                action === 'lock' ? 'Lock encrypted disk before unplugging' : 'Perform ' + action;
         });
         ['register', 'configure'].forEach(function (mode) {
             var button = actionCell.querySelector('.' + mode + '-disk');
