@@ -31,6 +31,7 @@ function edm_inventory_rows($registeredDisks, $detectedDevices)
         $device = $attached ? $detectedDevices[$matches[0]] : null;
         $rows[] = array(
             'registered' => true,
+            'store_unlock_key' => !empty($registration['store_unlock_key']),
             'name' => $registration['name'],
             'luks_uuid' => $registration['luks_uuid'],
             'mount_folder' => $registration['mount_folder'],
