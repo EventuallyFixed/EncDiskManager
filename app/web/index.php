@@ -514,7 +514,7 @@ try {
         <input id="config-folder" name="mount_folder" type="text" maxlength="48" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,47}" required>
         <div id="config-key-options">
             <label><input type="checkbox" id="config-store-key" name="store_unlock_key" value="1"> Store an unlock key on this NAS to automatically mount the disk when Connect is clicked</label>
-            <p class="muted">Preference only in this development build; key enrolment and Connect are not yet available.</p>
+            <p class="muted">When enabled, the first Connect without a stored key requires the LUKS passphrase. Unchecking removes the local key, not its LUKS keyslot.</p>
         </div>
         <div class="dialog-actions">
             <button type="submit">Validate changes (no save)</button>
@@ -794,6 +794,9 @@ try {
         row.dataset.device = item.device;
         row.dataset.mapper = item.mapper;
         row.dataset.uuid = item.uuid;
+        row.dataset.storeKey = item.store_unlock_key ? '1' : '0';
+        row.dataset.keyAvailable = item.stored_key_available ? '1' : '0';
+        row.dataset.unlocked = item.actions.mount ? '1' : '0';
         row.dataset.parentDisk = item.parent_disk || '';
         var mount = item.status === 'Encrypted — Mounted' ? '—' : item.mount;
         var values = [item.name, item.device, item.status, item.type, mount, item.uuid];
@@ -811,7 +814,8 @@ try {
         // encryption is controlled separately on the physical USB disk row.
         ['unlock', 'mount', 'unmount', 'lock'].forEach(function (action, index) {
             var button = Array.prototype.filter.call(actionCell.querySelectorAll('button'), function (candidate) {
-                return !candidate.classList.contains('configure-disk') && !candidate.classList.contains('register-disk');
+                return !candidate.classList.contains('configure-disk') && !candidate.classList.contains('register-disk')
+                    && !candidate.classList.contains('composite-operation');
             })[index];
             if (!button) return;
             button.dataset.operation = action;
@@ -837,6 +841,20 @@ try {
             button.dataset.folder = item.folder;
             button.dataset.storeKey = item.store_unlock_key === true ? '1' : '0';
             button.dataset.status = item.status;
+        });
+        ['connect', 'disconnect'].forEach(function (action) {
+            var button = actionCell.querySelector('button[data-operation="' + action + '"]');
+            if (!button) {
+                button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'composite-operation';
+                button.dataset.operation = action;
+                button.textContent = action === 'connect' ? 'Connect' : 'Disconnect';
+                actionCell.appendChild(button);
+            }
+            button.disabled = operationBusy || !item.registered || item.connection !== 'connected' ||
+                !(action === 'connect' ? item.actions.unlock || item.actions.mount : item.actions.unmount || item.actions.lock);
+            button.title = action === 'connect' ? 'Unlock and mount this registered disk' : 'Unmount and lock this registered disk';
         });
     }
     function sortRows() {
@@ -980,7 +998,7 @@ try {
         if (!button || button.disabled || operationBusy) return;
         var row = button.closest('tr');
         var action = button.dataset.operation;
-        if (!row || !['unlock', 'mount', 'unmount', 'lock'].includes(action)) return;
+        if (!row || !['unlock', 'mount', 'unmount', 'lock', 'connect', 'disconnect'].includes(action)) return;
         var device = row.dataset.device;
         var mapper = row.dataset.mapper;
         if (action === 'unlock') {
@@ -993,7 +1011,8 @@ try {
             mapper = 'edm_' + row.dataset.uuid.replace(/-/g, '').toLowerCase();
         }
         var secret = null;
-        if (action === 'unlock') {
+        if (action === 'unlock' || (action === 'connect' && row.dataset.keyAvailable !== '1' &&
+            (row.dataset.unlocked !== '1' || row.dataset.storeKey === '1'))) {
             secret = await requestUnlockPassphrase(device);
             if (secret === null || secret === '') return;
         } else if (!window.confirm('Perform ' + action + ' on ' + device + '?')) {
@@ -1006,6 +1025,7 @@ try {
         body.set('action', action);
         body.set('device', device);
         body.set('mapper', mapper);
+        if (action === 'connect' || action === 'disconnect') body.set('luks_uuid', row.dataset.uuid);
         if (secret !== null) body.set('passphrase', secret);
         secret = null;
         operationBusy = true;
