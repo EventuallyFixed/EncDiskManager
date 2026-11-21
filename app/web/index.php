@@ -183,8 +183,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
                 if (isset($_POST['store_unlock_key']) && $_POST['store_unlock_key'] !== '1') {
                     throw new RuntimeException('Invalid unlock key preference.');
                 }
-                edm_registry_set_key_preference(edm_auth_data_path() . '/disks.json',
-                    $request['luks_uuid'], isset($_POST['store_unlock_key']));
+                require_once __DIR__ . '/../lib/unlock_key.php';
+                $directory = edm_auth_data_path();
+                $uuid = $request['luks_uuid'];
+                $enabled = isset($_POST['store_unlock_key']);
+                edm_unlock_key_with_lock($directory, function () use ($directory, $uuid, $enabled) {
+                    edm_registry_set_key_preference($directory . '/disks.json', $uuid, $enabled);
+                    if (!$enabled) edm_unlock_key_remove($directory, $uuid);
+                });
                 header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
                 exit;
             }
