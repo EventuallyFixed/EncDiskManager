@@ -199,6 +199,15 @@ try {
         throw new RuntimeException('Kernel block device discovery is unavailable.');
     }
     $inventoryRows = edm_inventory_rows($registry['disks'], $devices);
+    // Display-only association; never used to authorize encryption.
+    $partitionParents = array();
+    if (!empty($wholeDiskInventory['complete'])) {
+        foreach ($wholeDiskInventory['disks'] as $wholeDisk) {
+            foreach ($wholeDisk['partitions'] as $partitionName) {
+                $partitionParents[$partitionName] = $wholeDisk['name'];
+            }
+        }
+    }
 } catch (Throwable $exception) {
     error_log('EncDiskManager inventory error: ' . $exception->getMessage());
     $inventoryError = 'Registered disk inventory is temporarily unavailable.';
@@ -406,7 +415,7 @@ try {
                 $status = $row['status'];
                 $mountFolder = $row['registered'] ? '/mnt/' . $row['mount_folder'] : '—';
             ?>
-                <tr data-key="<?php echo h($row['registered'] ? 'registered:' . strtolower($row['luks_uuid']) : 'device:' . $disk['name']); ?>" data-connection="<?php echo $disk === null ? 'disconnected' : 'connected'; ?>"<?php echo $disk === null ? ' hidden' : ''; ?>>
+                <tr data-key="<?php echo h($row['registered'] ? 'registered:' . strtolower($row['luks_uuid']) : 'device:' . $disk['name']); ?>" data-parent-disk="<?php echo h($disk !== null && isset($partitionParents[$disk['name']]) ? $partitionParents[$disk['name']] : ''); ?>" data-connection="<?php echo $disk === null ? 'disconnected' : 'connected'; ?>"<?php echo $disk === null ? ' hidden' : ''; ?>>
                     <td><?php echo h($row['name']); ?><?php if (!$row['registered']): ?> <small>(unregistered)</small><?php endif; ?></td>
                     <td><code><?php echo h($disk === null ? '—' : $disk['path']); ?></code></td>
                     <td><?php echo h($status); ?></td>
@@ -793,6 +802,7 @@ try {
         row.dataset.device = item.device;
         row.dataset.mapper = item.mapper;
         row.dataset.uuid = item.uuid;
+        row.dataset.parentDisk = item.parent_disk || '';
         var values = [item.name, item.device, item.status, item.type, item.uuid, item.mount];
         values.forEach(function (value, index) {
             var cell = row.cells[index];
@@ -1026,6 +1036,7 @@ try {
                     if (!item || typeof item.key !== 'string' || !item.key ||
                         seen[item.key] || !['connected', 'disconnected'].includes(item.connection) ||
                         typeof item.registered !== 'boolean' ||
+                         typeof item.parent_disk !== 'string' ||
                         ['name', 'device', 'status', 'type', 'uuid', 'mount', 'folder', 'mapper'].some(function (field) {
                             return typeof item[field] !== 'string';
                         }) ||
