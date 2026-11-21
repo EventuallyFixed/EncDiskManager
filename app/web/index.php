@@ -797,8 +797,8 @@ try {
             }
         });
         var actionCell = row.cells[6];
-        // LUKS state transitions are enabled according to the current disk
-        // state. Whole-disk encryption remains disabled pending NAS testing.
+        // LUKS actions follow the current partition state. Whole-disk
+        // encryption is controlled separately on the physical USB disk row.
         ['unlock', 'mount', 'unmount', 'lock', 'encrypt'].forEach(function (action, index) {
             var button = Array.prototype.filter.call(actionCell.querySelectorAll('button'), function (candidate) {
                 return !candidate.classList.contains('configure-disk');
@@ -874,10 +874,6 @@ try {
             present[disk.name] = true;
         });
         snapshot.whole_disks.forEach(function (disk) {
-            if (!disk || typeof disk.name !== 'string' || !/^[a-zA-Z0-9._+-]+$/.test(disk.name)
-                || typeof disk.path !== 'string' || disk.path !== '/dev/' + disk.name
-                || !Array.isArray(disk.partitions) || typeof disk.can_encrypt !== 'boolean'
-                || typeof disk.size_bytes !== 'number') throw new Error('Invalid physical disk inventory');
             var row = Array.prototype.filter.call(body.rows, function (item) {
                 return item.dataset.wholeDisk === disk.name;
             })[0];
