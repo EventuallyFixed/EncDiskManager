@@ -794,10 +794,12 @@ try {
             var groupOrder = groupA.localeCompare(groupB, undefined, {numeric: true});
             if (groupOrder !== 0) return ascending ? groupOrder : -groupOrder;
             if (!!a.dataset.wholeDisk !== !!b.dataset.wholeDisk) return a.dataset.wholeDisk ? -1 : 1;
-            // A mapper follows its source partition even when another column
-            // is selected for sorting.
-            if (a.dataset.mapperRow && a.dataset.mapperParent === b.dataset.device) return 1;
-            if (b.dataset.mapperRow && b.dataset.mapperParent === a.dataset.device) return -1;
+            var partitionA = a.dataset.mapperParent || a.dataset.device || '';
+            var partitionB = b.dataset.mapperParent || b.dataset.device || '';
+            if (partitionA && partitionB && partitionA !== partitionB) {
+                var partitionOrder = partitionA.localeCompare(partitionB, undefined, {numeric: true});
+                if (partitionOrder !== 0) return ascending ? partitionOrder : -partitionOrder;
+            }
             if (!!a.dataset.mapperRow !== !!b.dataset.mapperRow) return a.dataset.mapperRow ? 1 : -1;
             var x = a.cells[active].textContent.trim();
             var y = b.cells[active].textContent.trim();
@@ -986,7 +988,7 @@ try {
         });
         mappers.forEach(function (mapper) {
             if (!mapper || typeof mapper.path !== 'string' ||
-                !/^\\/dev\\/mapper\\/[a-zA-Z0-9._+-]+$/.test(mapper.path) ||
+                !/^\/dev\/mapper\/[a-zA-Z0-9._+-]+$/.test(mapper.path) ||
                 !Array.isArray(mapper.parents) || mapper.parents.length !== 1 ||
                 !/^[a-zA-Z0-9._+-]+$/.test(mapper.parents[0]) ||
                 ['type', 'uuid', 'mount'].some(function (key) { return typeof mapper[key] !== 'string'; }) ||
