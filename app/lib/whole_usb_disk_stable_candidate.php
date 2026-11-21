@@ -39,3 +39,25 @@ function edm_whole_usb_disk_stable_check_arguments($first, $second, $name)
     }
     return false;
 }
+
+/**
+ * Removal advice uses the whole disk, including all partition holders.
+ * Read-only media may be unplugged too; erase eligibility is separate.
+ */
+function edm_whole_usb_disk_safe_to_unplug($first, $second, $name)
+{
+    $matches = array();
+    foreach (array($first, $second) as $snapshot) {
+        if (empty($snapshot['complete']) || !isset($snapshot['disks'])) return false;
+        $found = array();
+        foreach ($snapshot['disks'] as $disk) {
+            if ($disk['name'] === $name) $found[] = $disk;
+        }
+        if (count($found) !== 1) return false;
+        foreach (array('mounted', 'has_holders', 'has_slaves') as $field) {
+            if (!isset($found[0][$field]) || $found[0][$field] !== false) return false;
+        }
+        $matches[] = $found[0];
+    }
+    return edm_whole_disk_identity_matches($matches[0], $matches[1]);
+}
