@@ -1,7 +1,7 @@
 <?php
 /**
- * Whole-disk formatting endpoint. Deliberately gated off until EX4100
- * dependency checks and end-to-end testing have been completed.
+ * Authenticated whole-disk formatting endpoint. The privileged helper
+ * rechecks disk identity and busy state before destructive operations.
  */
 require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/whole_disk_format_request.php';
@@ -24,16 +24,6 @@ try {
     if ($disk === false) {
         http_response_code(403);
         echo json_encode(array('ok' => false, 'error' => 'Invalid or unauthorized format request.'));
-        exit;
-    }
-
-    // This must remain false until the entire destructive workflow is
-    // verified on the target NAS and intentionally enabled in a later commit.
-    $formatExecutionEnabled = false;
-    if (!$formatExecutionEnabled) {
-        http_response_code(503);
-        echo json_encode(array('ok' => false,
-            'error' => 'Whole-disk encryption is not enabled in this build.'));
         exit;
     }
 
