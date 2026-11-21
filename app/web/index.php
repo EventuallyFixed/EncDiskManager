@@ -323,6 +323,8 @@ try {
     .disk-actions { min-width: 220px; }
     .disk-actions button { margin: 2px; padding: 5px; }
     .disk-actions button:disabled { opacity: .5; cursor: not-allowed; }
+    .unplug-status { display: block; margin: 4px 2px 0; font-size: .85rem; color: #b42318; }
+    .unplug-status.is-safe { color: #18743a; }
     .configure-disk { border: 1px solid #aebac1; background: #fff; border-radius: 4px; color: #075f91; cursor: pointer; }
     table { border-collapse: collapse; width: 100%; }
     th, td {
@@ -455,12 +457,14 @@ try {
             <?php foreach ($wholeDiskInventory['disks'] as $wholeDisk):
                 $candidate = edm_whole_usb_disk_stable_candidate($wholeDiskInventory, $wholeDiskSecondSnapshot, $wholeDisk['name']);
                 $ready = $candidate !== false;
+                $safeToUnplug = edm_whole_usb_disk_safe_to_unplug($wholeDiskInventory, $wholeDiskSecondSnapshot, $wholeDisk['name']);
                 $busy = $wholeDisk['mounted'] || $wholeDisk['has_holders'] || $wholeDisk['has_slaves'];
             ?>
                 <tr data-whole-disk="<?php echo h($wholeDisk['name']); ?>" data-key="whole:<?php echo h($wholeDisk['name']); ?>" data-connection="connected">
                     <td class="disk-actions"><button type="button" class="whole-disk-preview-button"
                         data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>"
-                        <?php echo $ready ? '' : 'disabled'; ?>>Encrypt + ext4</button></td>
+                        <?php echo $ready ? '' : 'disabled'; ?>>Encrypt + ext4</button>
+                        <span class="unplug-status<?php echo $safeToUnplug ? ' is-safe' : ''; ?>"><?php echo $safeToUnplug ? 'Safe to unplug' : 'Do not unplug'; ?></span></td>
                     <td><?php echo h('USB disk ' . $wholeDisk['name']); ?></td>
                     <td><code><?php echo h('/dev/' . $wholeDisk['name']); ?></code></td>
                     <td><?php echo h($busy ? 'In use' : ($wholeDisk['read_only'] ? 'Read-only' : ($ready ? 'Available' : 'Disk checks incomplete'))); ?></td>
@@ -583,6 +587,21 @@ try {
 
 </main>
 <script>
+function edmSetUnplugStatus(row, safe) {
+    var note = row.querySelector('.unplug-status');
+    if (!note) {
+        note = document.createElement('span');
+        note.className = 'unplug-status';
+        row.cells[0].appendChild(note);
+    }
+    note.classList.toggle('is-safe', safe);
+    note.textContent = safe ? 'Safe to unplug' : 'Do not unplug';
+}
+function edmMarkUnplugUnsafe() {
+    document.querySelectorAll('#disk-inventory tr[data-whole-disk]').forEach(function (row) {
+        edmSetUnplugStatus(row, false);
+    });
+}
 (function () {
     var dialog = document.getElementById('information-dialog');
     document.getElementById('open-information').addEventListener('click', function () {
@@ -677,6 +696,8 @@ try {
             form.set('passphrase_confirm', passphraseConfirm.value);
             formatConfirm.disabled = true;
             status.textContent = 'Encrypting and mounting USB volume…';
+            document.getElementById('disk-inventory').dataset.formatBusy = '1';
+            edmMarkUnplugUnsafe();
             fetch('whole-disk-format.php', {
                 method: 'POST',
                 credentials: 'same-origin',
@@ -692,6 +713,7 @@ try {
             }).catch(function (error) {
                 status.textContent = error.message + ' Check disk state before retrying.';
             }).then(function () {
+                delete document.getElementById('disk-inventory').dataset.formatBusy;
                 // Never retain a formatting passphrase after a request, even
                 // when the server rejects it or the connection is interrupted.
                 passphrase.value = '';
@@ -943,6 +965,7 @@ try {
                     button.title = 'Physical disk discovery incomplete; encryption unavailable';
                 }
                 row.cells[3].textContent = 'Disk checks incomplete';
+                edmSetUnplugStatus(row, false);
             });
             return;
         }
@@ -953,6 +976,7 @@ try {
             if (!disk || typeof disk.name !== 'string' || !/^[a-zA-Z0-9._+-]+$/.test(disk.name)
                 || typeof disk.path !== 'string' || disk.path !== '/dev/' + disk.name
                 || !Array.isArray(disk.partitions) || typeof disk.can_encrypt !== 'boolean'
+                || typeof disk.safe_to_unplug !== 'boolean'
                 || typeof disk.size_bytes !== 'number' || present[disk.name]) {
                 throw new Error('Invalid or duplicate physical USB disk');
             }
@@ -988,6 +1012,7 @@ try {
             var action = row.querySelector('.whole-disk-preview-button');
             action.dataset.disk = disk.path;
             action.disabled = !disk.can_encrypt || operationBusy;
+            edmSetUnplugStatus(row, disk.safe_to_unplug && !operationBusy && table.dataset.formatBusy !== '1');
             action.title = action.disabled ? 'Disk not eligible for whole-disk encryption'
                 : 'Erase and encrypt the entire USB disk';
         });
@@ -1096,6 +1121,7 @@ try {
         }
         credentials = null;
         operationBusy = true;
+        edmMarkUnplugUnsafe();
         Array.prototype.forEach.call(table.querySelectorAll('button[data-operation]'), function (item) {
             item.disabled = true;
         });
@@ -1262,6 +1288,7 @@ try {
             })
             .catch(function () {
                 pollNotice.textContent = 'Live inventory unavailable; displayed disk status may be stale.';
+                edmMarkUnplugUnsafe();
                 // Do not allow actions based on a stale disk state.
                 Array.prototype.forEach.call(table.querySelectorAll('.configure-disk'), function (button) {
                     button.dataset.canDelete = '0';
