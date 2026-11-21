@@ -408,8 +408,8 @@ try {
                 <th><button type="button" class="sort-heading" data-column="2">Device</button></th>
                 <th><button type="button" class="sort-heading" data-column="3">Status</button></th>
                 <th><button type="button" class="sort-heading" data-column="4">Filesystem / type</button></th>
-                <th><button type="button" class="sort-heading" data-column="5">LUKS UUID</button></th>
-                <th><button type="button" class="sort-heading" data-column="6">Mount directory</button></th>
+                <th><button type="button" class="sort-heading" data-column="5">Mount directory</button></th>
+                <th><button type="button" class="sort-heading" data-column="6">LUKS UUID</button></th>
             </tr></thead>
             <tbody>
             <?php if (!empty($wholeDiskInventory['complete'])): ?>
@@ -455,8 +455,8 @@ try {
                     <td><code><?php echo h($disk === null ? '—' : $disk['path']); ?></code></td>
                     <td><?php echo h($status); ?></td>
                     <td><?php echo h($disk === null ? '—' : ($disk['type'] ?: 'Unknown')); ?></td>
-                    <td><code><?php echo h($row['luks_uuid'] ?: '—'); ?></code></td>
                     <td><?php echo h($mountFolder); ?></td>
+                    <td><code><?php echo h($row['luks_uuid'] ?: '—'); ?></code></td>
 
                 </tr>
             <?php endforeach; ?>
@@ -777,7 +777,7 @@ try {
         row.dataset.mapper = item.mapper;
         row.dataset.uuid = item.uuid;
         row.dataset.parentDisk = item.parent_disk || '';
-        var values = [item.name, item.device, item.status, item.type, item.uuid, item.mount];
+        var values = [item.name, item.device, item.status, item.type, item.mount, item.uuid];
         values.forEach(function (value, index) {
             var cell = row.cells[index + 1];
             if (index === 0) {
@@ -1054,8 +1054,8 @@ try {
             row.cells[2].textContent = mapper.path;
             row.cells[3].textContent = mapper.mount ? 'Mounted' : 'Unlocked';
             row.cells[4].textContent = mapper.type || 'Unknown';
-            row.cells[5].textContent = mapper.uuid || '—';
-            row.cells[6].textContent = mapper.mount || '—';
+            row.cells[5].textContent = mapper.mount || '—';
+            row.cells[6].textContent = mapper.uuid || '—';
             row.dataset.device = parent.dataset.device;
             row.dataset.mapper = mapper.path.substring('/dev/mapper/'.length);
             row.dataset.uuid = parent.dataset.uuid || '';
