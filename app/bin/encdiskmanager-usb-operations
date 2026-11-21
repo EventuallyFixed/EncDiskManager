@@ -101,9 +101,10 @@ case "$action" in
         [ -d "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
             fail "Mountpoint is unavailable."
         /bin/umount "$mountpoint"
-        # Remove the mountpoint directory after a successful unmount.
-        # rmdir only removes empty directories, never their contents.
-        rmdir "$mountpoint" || fail "Unmount succeeded but mountpoint directory could not be removed."
+        # Unmount has succeeded. Remove an empty mountpoint if possible,
+        # but do not report a disk-operation failure just because the
+        # directory cannot be removed.
+        rmdir "$mountpoint" 2>/dev/null || true
         ;;
     lock)
         verify_open
