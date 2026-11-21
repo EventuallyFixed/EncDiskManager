@@ -488,7 +488,7 @@ try {
         
         <p id="whole-disk-preview-status" role="status" aria-live="polite"></p>
         <p id="whole-disk-mount-warning" role="alert" hidden></p>
-        <button id="whole-disk-preview-confirm" type="button" disabled title="Preview only; no disk operation is available">Validate confirmation (preview)</button>
+        <button id="whole-disk-preview-confirm" type="button" disabled title="This button only validates the confirmation">Validate confirmation (read-only)</button>
         <button id="whole-disk-format-confirm" type="button" disabled>Encrypt + ext4 — erase disk</button>
         <form method="dialog"><button type="submit">Cancel</button></form>
     </dialog>
@@ -631,7 +631,7 @@ try {
             if (!result || result.confirmed !== true || result.execution_enabled !== false) {
                 throw new Error('Confirmation rejected');
             }
-            status.textContent = 'Server validated the confirmation. Encryption remains disabled; no disk was modified.';
+            status.textContent = 'Server validated the confirmation. No disk was modified by this check.';
         }).catch(function () {
             if (requestVersion === selectionVersion) {
                 status.textContent = 'Confirmation could not be validated. No disk was modified.';
@@ -814,7 +814,7 @@ try {
             button.dataset.operation = action;
             button.disabled = action === 'encrypt' || !item.actions[action] || operationBusy;
             button.title = action === 'encrypt'
-                ? 'Whole-disk encryption is disabled pending NAS testing'
+                ? 'Whole-disk encryption requires whole-disk confirmation'
                 : (item.actions[action] ? 'Perform ' + action : 'Not available for this disk state');
         });
         var configure = actionCell.querySelector('.configure-disk');
