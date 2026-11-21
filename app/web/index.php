@@ -1092,13 +1092,14 @@ try {
         if (!document.hidden) pollInventory();
     });
     window.setInterval(pollInventory, 3000);
+    var active = 0, ascending = true;
     // Group server-rendered physical disks with their partitions immediately.
     sortRows();
     // Refresh immediately: the server-rendered snapshot may already be stale.
     pollInventory();
 
     var buttons = Array.prototype.slice.call(table.querySelectorAll('.sort-heading'));
-    var active = 0, ascending = true;
+
     buttons.forEach(function (button, column) {
         var label = button.textContent.replace(/[ ▲▼]$/, '').trim();
         button.addEventListener('click', function () {
