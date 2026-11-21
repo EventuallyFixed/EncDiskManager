@@ -153,8 +153,7 @@ $devices = $discovery['devices'];
 $mapperDevices = $discovery['mapperDevices'];
 $sysEntries = $discovery['sysEntries'];
 
-// Validate authenticated configuration submissions without performing mutations.
-// The live privileged verifier and keyfile retirement are not yet integrated.
+// Handle authenticated disk registration and configuration requests.
 $configValidationNotice = '';
 $configValidationError = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST'
@@ -205,6 +204,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
                 exit;
             }
             $validated = edm_configuration_request($request);
+            if ($validated['action'] === 'delete') {
+                require_once __DIR__ . '/../lib/unlock_key.php';
+                $directory = edm_auth_data_path();
+                $uuid = $validated['luks_uuid'];
+                edm_unlock_key_with_lock($directory, function () use ($directory, $uuid, $validated) {
+                    edm_registry_save($directory . '/disks.json', null, function ($registry) use ($directory, $uuid, $validated) {
+                        edm_configuration_registration_preflight($validated, $registry);
+                        $live = edm_discover_usb_inventory();
+                        if (!is_array($live['sysEntries']) || !is_readable('/proc/self/mountinfo')
+                            || !edm_registration_can_delete($uuid, $live['devices'])) {
+                            throw new RuntimeException('Unmount the disk before deleting its registration, or wait for disk state to become available.');
+                        }
+                        edm_unlock_key_remove($directory, $uuid);
+                        $registry['disks'] = array_values(array_filter($registry['disks'], function ($disk) use ($uuid) {
+                            return strcasecmp($disk['luks_uuid'], $uuid) !== 0;
+                        }));
+                        return $registry;
+                    });
+                });
+                header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+                exit;
+            }
             $currentRegistry = edm_registry_load(edm_auth_data_path() . '/disks.json');
             edm_configuration_registration_preflight($validated, $currentRegistry);
             $configValidationNotice = 'Configuration request validated for ' . $validated['luks_uuid']
@@ -509,7 +530,7 @@ try {
     </dialog>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
         <h2 id="disk-config-title">Disk configuration</h2>
-        <p class="muted" id="config-preview-note">The unlock key preference can be saved even when the disk is disconnected. Name and mount directory editing and registration deletion are not yet enabled.</p>
+        <p class="muted" id="config-preview-note">A stored key or an unmounted disk registration can be removed even when the disk is disconnected. Name and mount directory editing are not yet enabled.</p>
         <p id="registration-note" hidden>Registration does not change the current mount or disk contents. The configured directory is saved for future mount support.</p>
         <p><strong>LUKS UUID:</strong> <code id="config-uuid"></code></p>
         <p><strong>Connection:</strong> <span id="config-status"></span></p>
@@ -517,6 +538,7 @@ try {
         <input type="hidden" name="csrf_token" value="<?php echo h($_SESSION['csrf_token']); ?>">
         <input type="hidden" name="config_action" value="edit">
         <input type="hidden" name="luks_uuid" id="config-form-uuid">
+        <input type="hidden" name="confirmation" id="config-delete-confirmation" disabled>
         <label for="config-name">Registered name</label>
         <input id="config-name" name="name" type="text" maxlength="160" required>
         <label for="config-folder">Unique mount directory under /mnt</label>
@@ -528,7 +550,7 @@ try {
         </div>
         <div class="dialog-actions">
             <button type="submit">Validate changes (no save)</button>
-            <button type="button" disabled>Delete registration</button>
+            <button type="button" id="config-delete-registration" disabled>Delete registration</button>
             <button type="button" id="close-disk-config">Close</button>
         </div>
         </form>
@@ -717,6 +739,10 @@ try {
             document.getElementById('disk-config-title').textContent = registering ? 'Register disk' : 'Disk configuration';
             document.querySelector('#disk-config-form [name=config_action]').value = registering ? 'register' : 'key_preference';
             document.querySelector('#disk-config-form button[type=submit]').textContent = registering ? 'Register' : 'Save';
+            var deleteButton = document.getElementById('config-delete-registration');
+            deleteButton.disabled = registering || button.dataset.canDelete !== '1';
+            deleteButton.title = deleteButton.disabled ? 'Available only for unmounted registrations with known disk state' : 'Remove registration without erasing the disk';
+            document.getElementById('config-delete-confirmation').disabled = true;
             document.getElementById('config-preview-note').hidden = registering;
             document.getElementById('registration-note').hidden = !registering;
             document.getElementById('config-key-options').hidden = registering;
@@ -736,6 +762,17 @@ try {
                 ? 'edm_' + button.dataset.uuid.toLowerCase().replace(/-/g, '')
                 : button.getAttribute('data-folder');
             dialog.showModal();
+        });
+        document.getElementById('config-delete-registration').addEventListener('click', function () {
+            if (this.disabled) return;
+            if (!window.confirm('Delete this disk registration and its locally stored unlock key? Disk contents and LUKS encryption will not be changed. Keep your original passphrase.')) return;
+            var form = document.getElementById('disk-config-form');
+            var uuid = document.getElementById('config-form-uuid').value;
+            var confirmation = document.getElementById('config-delete-confirmation');
+            confirmation.value = 'DELETE ' + uuid.toLowerCase();
+            confirmation.disabled = false;
+            form.querySelector('[name=config_action]').value = 'delete';
+            form.submit();
         });
         document.getElementById('close-disk-config').addEventListener('click', function () { dialog.close(); });
     }
@@ -861,6 +898,7 @@ try {
             button.dataset.folder = item.folder;
             button.dataset.storeKey = item.store_unlock_key === true ? '1' : '0';
             button.dataset.keyAvailable = item.stored_key_available ? '1' : '0';
+            button.dataset.canDelete = item.can_delete_registration === true && !operationBusy ? '1' : '0';
             button.dataset.status = item.status;
         });
 
@@ -1173,6 +1211,7 @@ try {
                     if (!item || typeof item.key !== 'string' || !item.key ||
                         seen[item.key] || !['connected', 'disconnected'].includes(item.connection) ||
                         typeof item.registered !== 'boolean' ||
+                        typeof item.can_delete_registration !== 'boolean' ||
                          typeof item.parent_disk !== 'string' ||
                         ['name', 'device', 'status', 'type', 'uuid', 'mount', 'folder', 'mapper'].some(function (field) {
                             return typeof item[field] !== 'string';
@@ -1221,6 +1260,9 @@ try {
             .catch(function () {
                 pollNotice.textContent = 'Live inventory unavailable; displayed disk status may be stale.';
                 // Do not allow actions based on a stale disk state.
+                Array.prototype.forEach.call(table.querySelectorAll('.configure-disk'), function (button) {
+                    button.dataset.canDelete = '0';
+                });
                 Array.prototype.forEach.call(table.querySelectorAll('button[data-operation], .whole-disk-preview-button'), function (button) {
                     button.disabled = true;
                     button.title = 'Disk state unavailable; wait for inventory to refresh';
