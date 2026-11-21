@@ -761,6 +761,8 @@ try {
             })[index];
             if (!button) return;
             button.dataset.operation = action;
+            // Mount operations belong to the unlocked mapper row.
+            button.hidden = action === 'mount' || action === 'unmount';
             button.disabled = action === 'encrypt' || !item.actions[action] || operationBusy;
             button.title = action === 'encrypt'
                 ? 'Whole-disk encryption requires whole-disk confirmation'
@@ -1021,7 +1023,24 @@ try {
             row.cells[3].textContent = mapper.type || 'Unknown';
             row.cells[4].textContent = mapper.uuid || '—';
             row.cells[5].textContent = mapper.mount || '—';
-            row.cells[6].textContent = '';
+            row.dataset.device = parent.dataset.device;
+            row.dataset.mapper = mapper.path.substring('/dev/mapper/'.length);
+            row.dataset.uuid = parent.dataset.uuid || '';
+            var actions = row.cells[6];
+            ['mount', 'unmount'].forEach(function (action) {
+                var button = actions.querySelector('button[data-operation="' + action + '"]');
+                if (!button) {
+                    button = document.createElement('button');
+                    button.type = 'button';
+                    button.dataset.operation = action;
+                    button.textContent = action === 'mount' ? 'Mount' : 'Unmount';
+                    actions.appendChild(button);
+                }
+                // Reuse the parent partition's existing state policy.
+                var source = parent.querySelector('button[data-operation="' + action + '"]');
+                button.disabled = !source || source.disabled || operationBusy;
+                button.title = source ? source.title : 'Not available for this disk state';
+            });
             row.cells[0].style.paddingLeft = '3rem';
         });
     }
