@@ -19,8 +19,21 @@ function edm_inventory_action_preview($row)
     // The same discovery fields used by the operation request validator
     // drive the disabled/enabled preview state. Execution is still gated
     // separately by the authenticated endpoint and privileged helper.
-    $actions = edm_disk_available_actions($row['device']);
     $device = $row['device'];
+    $mappers = isset($device['mapper_names']) && is_array($device['mapper_names'])
+        ? $device['mapper_names'] : array();
+    $mounts = isset($device['mapper_mounts']) && is_array($device['mapper_mounts'])
+        ? $device['mapper_mounts'] : array();
+    $expectedStatus = count($mappers) === 0 ? 'Encrypted — Locked'
+        : (count($mappers) === 1 && count($mounts) === 0
+            ? 'Encrypted — Unlocked'
+            : (count($mappers) === 1 && count($mounts) === 1
+                ? 'Encrypted — Mounted' : ''));
+    if ($expectedStatus === '' || empty($device['luks'])
+        || !isset($device['status']) || $device['status'] !== $expectedStatus) {
+        return $none;
+    }
+    $actions = edm_disk_available_actions($device);
     $mappers = isset($device['mapper_names']) && is_array($device['mapper_names'])
         ? $device['mapper_names'] : array();
     if (count($mappers) === 1) {
