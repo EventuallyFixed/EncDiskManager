@@ -519,8 +519,8 @@ try {
         <label for="config-folder">Unique mount directory under /mnt</label>
         <input id="config-folder" name="mount_folder" type="text" maxlength="48" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,47}" required>
         <div id="config-key-options">
-            <label><input type="checkbox" id="config-store-key" name="store_unlock_key" value="1"> Store an unlock key on this NAS to automatically mount the disk when Connect is clicked</label>
-            <p class="muted">When enabled, the first Connect without a stored key requires the LUKS passphrase. Unchecking removes the local key, not its LUKS keyslot.</p>
+            <label><input type="checkbox" id="config-store-key" name="store_unlock_key" value="1"> Store an unlock key on this NAS to automatically unlock the disk when Mount is clicked</label>
+            <p class="muted">When enabled, Mount also unlocks the disk and Unmount also locks it. The first Mount requires the LUKS passphrase to enrol a key. Unchecking removes the local key, not its LUKS keyslot.</p>
         </div>
         <div class="dialog-actions">
             <button type="submit">Validate changes (no save)</button>
@@ -802,7 +802,6 @@ try {
         row.dataset.uuid = item.uuid;
         row.dataset.storeKey = item.store_unlock_key ? '1' : '0';
         row.dataset.keyAvailable = item.stored_key_available ? '1' : '0';
-        row.dataset.unlocked = item.actions.mount ? '1' : '0';
         row.dataset.parentDisk = item.parent_disk || '';
         var mount = item.status === 'Encrypted — Mounted' ? '—' : item.mount;
         var values = [item.name, item.device, item.status, item.type, mount, item.uuid];
@@ -820,15 +819,21 @@ try {
         // encryption is controlled separately on the physical USB disk row.
         ['unlock', 'mount', 'unmount', 'lock'].forEach(function (action, index) {
             var button = Array.prototype.filter.call(actionCell.querySelectorAll('button'), function (candidate) {
-                return !candidate.classList.contains('configure-disk') && !candidate.classList.contains('register-disk')
-                    && !candidate.classList.contains('composite-operation');
+                return !candidate.classList.contains('configure-disk') && !candidate.classList.contains('register-disk');
             })[index];
             if (!button) return;
             button.dataset.operation = action;
-            // Mount operations belong to the unlocked mapper row.
-            button.hidden = action === 'mount' || action === 'unmount';
-            button.disabled = !item.actions[action] || operationBusy;
-            button.title = item.actions[action] ? 'Perform ' + action : 'Not available for this disk state';
+            // A locked disk with key storage enabled can mount directly.
+            // Once a mapper exists, Mount and Unmount stay on that child row.
+            var combined = item.registered && item.store_unlock_key;
+            var directMount = combined && item.actions.unlock;
+            button.hidden = action === 'unmount' || (action === 'mount' && !directMount);
+            var available = action === 'unlock' && combined ? false :
+                action === 'mount' && directMount ? true : item.actions[action];
+            button.disabled = !available || operationBusy;
+            button.title = !available ? 'Not available for this disk state' :
+                combined && action === 'mount' ? 'Unlock and mount' :
+                combined && action === 'unmount' ? 'Unmount and lock' : 'Perform ' + action;
         });
         ['register', 'configure'].forEach(function (mode) {
             var button = actionCell.querySelector('.' + mode + '-disk');
@@ -848,20 +853,7 @@ try {
             button.dataset.storeKey = item.store_unlock_key === true ? '1' : '0';
             button.dataset.status = item.status;
         });
-        ['connect', 'disconnect'].forEach(function (action) {
-            var button = actionCell.querySelector('button[data-operation="' + action + '"]');
-            if (!button) {
-                button = document.createElement('button');
-                button.type = 'button';
-                button.className = 'composite-operation';
-                button.dataset.operation = action;
-                button.textContent = action === 'connect' ? 'Connect' : 'Disconnect';
-                actionCell.appendChild(button);
-            }
-            button.disabled = operationBusy || !item.registered || item.connection !== 'connected' ||
-                !(action === 'connect' ? item.actions.unlock || item.actions.mount : item.actions.unmount || item.actions.lock);
-            button.title = action === 'connect' ? 'Unlock and mount this registered disk' : 'Unmount and lock this registered disk';
-        });
+
     }
     function sortRows() {
         var body = table.tBodies[0];
@@ -1004,7 +996,7 @@ try {
         if (!button || button.disabled || operationBusy) return;
         var row = button.closest('tr');
         var action = button.dataset.operation;
-        if (!row || !['unlock', 'mount', 'unmount', 'lock', 'connect', 'disconnect'].includes(action)) return;
+        if (!row || !['unlock', 'mount', 'unmount', 'lock'].includes(action)) return;
         var device = row.dataset.device;
         var mapper = row.dataset.mapper;
         if (action === 'unlock') {
@@ -1017,8 +1009,8 @@ try {
             mapper = 'edm_' + row.dataset.uuid.replace(/-/g, '').toLowerCase();
         }
         var secret = null;
-        if (action === 'unlock' || (action === 'connect' && row.dataset.keyAvailable !== '1' &&
-            (row.dataset.unlocked !== '1' || row.dataset.storeKey === '1'))) {
+        if (action === 'unlock' || (action === 'mount' && row.dataset.storeKey === '1' &&
+            row.dataset.keyAvailable !== '1')) {
             secret = await requestUnlockPassphrase(device);
             if (secret === null || secret === '') return;
         } else if (!window.confirm('Perform ' + action + ' on ' + device + '?')) {
@@ -1031,7 +1023,7 @@ try {
         body.set('action', action);
         body.set('device', device);
         body.set('mapper', mapper);
-        if (action === 'connect' || action === 'disconnect') body.set('luks_uuid', row.dataset.uuid);
+        body.set('luks_uuid', row.dataset.uuid);
         if (secret !== null) body.set('passphrase', secret);
         secret = null;
         operationBusy = true;
@@ -1105,6 +1097,8 @@ try {
             row.dataset.device = parent.dataset.device;
             row.dataset.mapper = mapper.path.substring('/dev/mapper/'.length);
             row.dataset.uuid = parent.dataset.uuid || '';
+            row.dataset.storeKey = parent.dataset.storeKey;
+            row.dataset.keyAvailable = parent.dataset.keyAvailable;
             var actions = row.cells[0];
             ['mount', 'unmount'].forEach(function (action) {
                 var button = actions.querySelector('button[data-operation="' + action + '"]');
