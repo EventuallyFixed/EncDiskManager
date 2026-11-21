@@ -54,7 +54,10 @@ try {
     }
     // Preserve the original row contract while identifying its parent disk.
     require_once __DIR__ . '/../lib/unlock_key.php';
+    require_once __DIR__ . '/../lib/configuration_authorization.php';
     foreach ($result as &$item) {
+        $item['can_delete_registration'] = $item['registered'] && is_readable('/proc/self/mountinfo')
+            && edm_registration_can_delete($item['uuid'], $snapshot['devices']);
         $item['stored_key_available'] = $item['registered'] && $item['store_unlock_key']
             && edm_unlock_key_read(edm_auth_data_path(), $item['uuid']) !== null;
         $deviceName = $item['connection'] === 'connected'
