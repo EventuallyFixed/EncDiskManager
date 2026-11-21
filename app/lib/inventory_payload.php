@@ -81,6 +81,7 @@ function edm_inventory_payload($rows)
             'key' => $key,
             'connection' => $device === null ? 'disconnected' : 'connected',
             'registered' => $registered,
+            'store_unlock_key' => $registered && !empty($row['store_unlock_key']),
             'name' => (string)$row['name'],
             'device' => $device === null ? '—' : (string)$device['path'],
             'status' => (string)$row['status'],
