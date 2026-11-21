@@ -84,9 +84,18 @@ function edm_discover_whole_usb_disks($sysBlock = '/sys/class/block',
                 return array('complete' => false, 'disks' => array());
             }
             if (count($holders) > 2) $hasHolders = true;
-            $slaves = @scandir($devicePath . '/slaves');
-            if (!is_array($slaves)) {
-                return array('complete' => false, 'disks' => array());
+            // Linux may omit the slaves directory for ordinary partitions.
+            // A missing whole-disk directory or an unreadable existing
+            // directory still makes the inventory incomplete.
+            $slavesPath = $devicePath . '/slaves';
+            if ($device !== $name && !file_exists($slavesPath)
+                && !is_link($slavesPath)) {
+                $slaves = array();
+            } else {
+                $slaves = @scandir($slavesPath);
+                if (!is_array($slaves)) {
+                    return array('complete' => false, 'disks' => array());
+                }
             }
             if (count($slaves) > 2) $hasSlaves = true;
         }
