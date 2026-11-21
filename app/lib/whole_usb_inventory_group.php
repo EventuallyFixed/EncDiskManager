@@ -21,12 +21,15 @@ function edm_group_usb_inventory($partitionRows, $wholeInventory)
 
     $result = array();
     $seen = array();
+    $seenPartitions = array();
     foreach ($wholeInventory['disks'] as $disk) {
         if (!isset($disk['name'], $disk['partitions']) || !is_array($disk['partitions'])
             || isset($seen[$disk['name']])) return false;
         $seen[$disk['name']] = true;
         $parts = array();
         foreach ($disk['partitions'] as $name) {
+            if (!is_string($name) || $name === '' || isset($seenPartitions[$name])) return false;
+            $seenPartitions[$name] = true;
             if (isset($byPartition[$name])) {
                 $parts[] = $byPartition[$name];
                 unset($byPartition[$name]);
