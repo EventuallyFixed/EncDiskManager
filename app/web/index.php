@@ -179,6 +179,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
             } elseif ($request['action'] === 'delete') {
                 $request['confirmation'] = isset($_POST['confirmation']) ? $_POST['confirmation'] : null;
             }
+            if ($request['action'] === 'register') {
+                edm_registry_register(edm_auth_data_path() . '/disks.json', $request['luks_uuid'],
+                    isset($_POST['name']) ? $_POST['name'] : null,
+                    isset($_POST['mount_folder']) ? $_POST['mount_folder'] : null, $devices);
+                header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+                exit;
+            }
             $validated = edm_configuration_request($request);
             $currentRegistry = edm_registry_load(edm_auth_data_path() . '/disks.json');
             edm_configuration_registration_preflight($validated, $currentRegistry);
@@ -436,14 +443,15 @@ try {
             ?>
                 <tr data-key="<?php echo h($row['registered'] ? 'registered:' . strtolower($row['luks_uuid']) : 'device:' . $disk['name']); ?>" data-parent-disk="<?php echo h($disk !== null && isset($partitionParents[$disk['name']]) ? $partitionParents[$disk['name']] : ''); ?>" data-connection="<?php echo $disk === null ? 'disconnected' : 'connected'; ?>"<?php echo $disk === null ? ' hidden' : ''; ?>>
                     <td class="disk-actions">
-                        <?php if ($row['registered']): ?>
-                            <button type="button" class="configure-disk"
+                        <button type="button" class="register-disk" data-uuid="<?php echo h($row['luks_uuid']); ?>"
+                            data-name="<?php echo h($row['name']); ?>" data-status="<?php echo h($row['status']); ?>"
+                            <?php echo !$row['registered'] && $disk !== null && !empty($disk['luks']) && $row['luks_uuid'] !== '' ? '' : 'disabled'; ?>>Register</button>
+                            <button type="button" class="configure-disk" <?php echo $row['registered'] ? '' : 'disabled'; ?>
                                 data-uuid="<?php echo h($row['luks_uuid']); ?>"
                                 data-name="<?php echo h($row['name']); ?>"
                                 data-folder="<?php echo h($row['mount_folder']); ?>"
                                 data-status="<?php echo h($row['status']); ?>"
                                 title="View registered disk configuration">Configure</button>
-                        <?php endif; ?>
                         <?php foreach (array('Unlock', 'Mount', 'Unmount', 'Lock') as $action): ?>
                             <button type="button" disabled title="<?php echo h($action . ': not yet available in this development build'); ?>"><?php echo h($action); ?></button>
                         <?php endforeach; ?>
@@ -486,7 +494,7 @@ try {
     </dialog>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
         <h2 id="disk-config-title">Disk configuration</h2>
-        <p class="muted">Configuration preview. Editing, key management and registration deletion are not yet enabled.</p>
+        <p class="muted" id="config-preview-note">Configuration preview. Editing, key management and registration deletion are not yet enabled.</p>
         <p><strong>LUKS UUID:</strong> <code id="config-uuid"></code></p>
         <p><strong>Connection:</strong> <span id="config-status"></span></p>
         <form method="post" id="disk-config-form">
@@ -663,8 +671,13 @@ try {
     var dialog = document.getElementById('disk-config-dialog');
     if (dialog && typeof dialog.showModal === 'function') {
         document.addEventListener('click', function (event) {
-            var button = event.target.closest('.configure-disk');
-            if (!button || !document.getElementById('disk-inventory').contains(button)) return;
+            var button = event.target.closest('.configure-disk, .register-disk');
+            if (!button || button.disabled || !document.getElementById('disk-inventory').contains(button)) return;
+            var registering = button.classList.contains('register-disk');
+            document.getElementById('disk-config-title').textContent = registering ? 'Register disk' : 'Disk configuration';
+            document.querySelector('#disk-config-form [name=config_action]').value = registering ? 'register' : 'edit';
+            document.querySelector('#disk-config-form button[type=submit]').textContent = registering ? 'Register' : 'Validate changes (no save)';
+            document.getElementById('config-preview-note').hidden = registering;
             document.getElementById('config-uuid').textContent = button.getAttribute('data-uuid');
             document.getElementById('config-form-uuid').value = button.getAttribute('data-uuid');
             document.getElementById('config-status').textContent = button.getAttribute('data-status');
@@ -759,7 +772,7 @@ try {
         // encryption is controlled separately on the physical USB disk row.
         ['unlock', 'mount', 'unmount', 'lock'].forEach(function (action, index) {
             var button = Array.prototype.filter.call(actionCell.querySelectorAll('button'), function (candidate) {
-                return !candidate.classList.contains('configure-disk');
+                return !candidate.classList.contains('configure-disk') && !candidate.classList.contains('register-disk');
             })[index];
             if (!button) return;
             button.dataset.operation = action;
@@ -768,23 +781,23 @@ try {
             button.disabled = !item.actions[action] || operationBusy;
             button.title = item.actions[action] ? 'Perform ' + action : 'Not available for this disk state';
         });
-        var configure = actionCell.querySelector('.configure-disk');
-        if (item.registered && !configure) {
-            configure = document.createElement('button');
-            configure.type = 'button';
-            configure.className = 'configure-disk';
-            configure.textContent = 'Configure';
-            actionCell.insertBefore(configure, actionCell.firstChild);
-        } else if (!item.registered && configure) {
-            configure.remove();
-            configure = null;
-        }
-        if (configure) {
-            configure.setAttribute('data-uuid', item.uuid);
-            configure.setAttribute('data-name', item.name);
-            configure.setAttribute('data-folder', item.folder);
-            configure.setAttribute('data-status', item.status);
-        }
+        ['register', 'configure'].forEach(function (mode) {
+            var button = actionCell.querySelector('.' + mode + '-disk');
+            if (!button) {
+                button = document.createElement('button');
+                button.type = 'button';
+                button.className = mode + '-disk';
+                button.textContent = mode === 'register' ? 'Register' : 'Configure';
+                actionCell.insertBefore(button, actionCell.firstChild);
+            }
+            button.disabled = mode === 'configure' ? !item.registered :
+                item.registered || item.connection !== 'connected' ||
+                !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(item.uuid);
+            button.dataset.uuid = item.uuid;
+            button.dataset.name = item.name;
+            button.dataset.folder = item.folder;
+            button.dataset.status = item.status;
+        });
     }
     function sortRows() {
         var body = table.tBodies[0];
