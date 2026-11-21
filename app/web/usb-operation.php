@@ -87,7 +87,9 @@ function edm_composite_operation($helper, $action, $device, $uuid, $passphrase)
     foreach ($registry['disks'] as $candidate) {
         if (strcasecmp($candidate['luks_uuid'], $uuid) === 0) $entry = $candidate;
     }
-    if ($entry === null) throw new RuntimeException('Disk is not registered.');
+    if ($entry === null || empty($entry['store_unlock_key'])) {
+        throw new RuntimeException('Stored unlock key is not enabled for this disk.');
+    }
     list($inventory, $disk) = edm_composite_device($device, $uuid);
     $mappers = $disk['mapper_names'];
     $mounts = $disk['mapper_mounts'];
@@ -142,16 +144,10 @@ try {
     $action = isset($_POST['action']) ? $_POST['action'] : null;
     $device = isset($_POST['device']) ? $_POST['device'] : null;
     $mapper = isset($_POST['mapper']) ? $_POST['mapper'] : null;
-    $composite = in_array($action, array('connect', 'disconnect'), true);
-    $inventory = edm_discover_usb_inventory();
-    if (!$composite && !edm_usb_operation_request($action, $device, $mapper, $inventory)) {
-        http_response_code(400);
-        echo json_encode(array('ok' => false, 'error' => 'Disk state or selection is invalid.'));
-        exit;
+    if (!in_array($action, array('unlock', 'mount', 'unmount', 'lock'), true)) {
+        throw new RuntimeException('Unknown disk operation.');
     }
-
-    // Only unlock or Connect may carry a secret.
-    if (!in_array($action, array('unlock', 'connect'), true) && isset($_POST['passphrase'])) {
+    if (!in_array($action, array('unlock', 'mount'), true) && isset($_POST['passphrase'])) {
         http_response_code(400);
         echo json_encode(array('ok' => false, 'error' => 'Unexpected passphrase.'));
         exit;
@@ -173,35 +169,48 @@ try {
         || ($helperStat['mode'] & 0022) !== 0) {
         throw new RuntimeException('Helper permissions are unsafe.');
     }
-    if ($composite) {
-        $uuid = isset($_POST['luks_uuid']) ? $_POST['luks_uuid'] : null;
-        require_once __DIR__ . '/../lib/unlock_key.php';
-        edm_unlock_key_with_lock(edm_auth_data_path(), function () use ($helper, $action, $device, $uuid, $passphrase) {
-            edm_composite_operation($helper, $action, $device, $uuid, $passphrase);
-        });
-        echo json_encode(array('ok' => true));
-        exit;
-    }
-    $folder = $mapper;
-    if ($action === 'mount') {
-        require_once __DIR__ . '/../lib/registry.php';
-        $registry = edm_registry_load(edm_auth_data_path() . '/disks.json');
-        foreach ($registry['disks'] as $entry) {
-            foreach ($inventory['devices'] as $disk) {
-                if ($disk['path'] === $device && !empty($disk['luks'])
-                    && strcasecmp($disk['uuid'], $entry['luks_uuid']) === 0) {
-                    $folder = $entry['mount_folder'];
-                }
+    require_once __DIR__ . '/../lib/unlock_key.php';
+    // Use the current saved preference, not the browser's cached button state.
+    $directory = edm_auth_data_path();
+    edm_unlock_key_with_lock($directory, function () use ($directory, $helper, $action, $device, $mapper, $passphrase) {
+        $inventory = edm_discover_usb_inventory();
+        $registry = edm_registry_load($directory . '/disks.json');
+        $entry = null;
+        foreach ($inventory['devices'] as $disk) {
+            if ($disk['path'] !== $device || empty($disk['luks'])) continue;
+            foreach ($registry['disks'] as $candidate) {
+                if (strcasecmp($disk['uuid'], $candidate['luks_uuid']) === 0) $entry = $candidate;
             }
         }
-    }
-    $exit = edm_run_usb_helper($helper, $action, $device, $mapper, $passphrase,
-        $action === 'mount' ? $folder : null);
-    if ($exit !== 0) {
-        http_response_code(409);
-        echo json_encode(array('ok' => false, 'error' => 'Operation failed; refresh disk state.'));
-        exit;
-    }
+        $postedUuid = isset($_POST['luks_uuid']) ? $_POST['luks_uuid'] : null;
+        if ($postedUuid !== null) {
+            if (!is_string($postedUuid)) throw new RuntimeException('Invalid disk identity.');
+            edm_composite_device($device, $postedUuid);
+        }
+        if ($entry !== null && !empty($entry['store_unlock_key'])) {
+            if ($action === 'unlock') {
+                throw new RuntimeException('Use Mount when stored key support is enabled.');
+            }
+            if ($action === 'mount' || $action === 'unmount') {
+                if (!is_string($postedUuid) || strcasecmp($postedUuid, $entry['luks_uuid']) !== 0) {
+                    throw new RuntimeException('Registered disk identity changed.');
+                }
+                edm_composite_operation($helper, $action === 'mount' ? 'connect' : 'disconnect',
+                    $device, $entry['luks_uuid'], $passphrase);
+                return;
+            }
+        }
+        if ($action !== 'unlock' && $passphrase !== null) {
+            throw new RuntimeException('Unexpected passphrase.');
+        }
+        if (!edm_usb_operation_request($action, $device, $mapper, $inventory)) {
+            throw new RuntimeException('Disk state or selection is invalid.');
+        }
+        $folder = $entry !== null ? $entry['mount_folder'] : $mapper;
+        $exit = edm_run_usb_helper($helper, $action, $device, $mapper, $passphrase,
+            $action === 'mount' ? $folder : null);
+        if ($exit !== 0) throw new RuntimeException('Disk operation failed.');
+    });
     echo json_encode(array('ok' => true));
 } catch (Throwable $exception) {
     http_response_code(503);
