@@ -853,7 +853,11 @@ try {
         if (!snapshot.whole_disks_complete || !Array.isArray(snapshot.whole_disks)) {
             Array.prototype.forEach.call(table.querySelectorAll('tr[data-whole-disk]'), function (row) {
                 var button = row.querySelector('.whole-disk-preview-button');
-                if (button) button.disabled = true;
+                if (button) {
+                    button.disabled = true;
+                    button.title = 'Physical disk discovery incomplete; encryption unavailable';
+                }
+                row.cells[2].textContent = 'Disk checks incomplete';
             });
             return;
         }
@@ -863,7 +867,7 @@ try {
             if (!disk || typeof disk.name !== 'string' || !/^[a-zA-Z0-9._+-]+$/.test(disk.name)
                 || typeof disk.path !== 'string' || disk.path !== '/dev/' + disk.name
                 || !Array.isArray(disk.partitions) || typeof disk.can_encrypt !== 'boolean'
-                || typeof disk.size_bytes !== 'number') return;
+                || typeof disk.size_bytes !== 'number') throw new Error('Invalid physical disk inventory');
             present[disk.name] = true;
             var row = Array.prototype.filter.call(body.rows, function (item) {
                 return item.dataset.wholeDisk === disk.name;
