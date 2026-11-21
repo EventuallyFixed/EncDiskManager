@@ -510,10 +510,7 @@ try {
             Only device-mapper volumes that can be traced through sysfs
             to a detected USB partition are shown here.
         </p>
-        <?php if (!$mapperDevices): ?>
-            <p>No open device-mapper volumes linked to the detected USB
-            partitions were found.</p>
-        <?php else: ?>
+        <p id="mapper-empty" <?php echo $mapperDevices ? 'hidden' : ''; ?>>No open device-mapper volumes linked to the detected USB partitions were found.</p>
         <div class="table-wrap">
         <table>
             <thead>
@@ -525,7 +522,7 @@ try {
                     <th>Mounted at</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="usb-mapper-rows">
             <?php foreach ($mapperDevices as $mapper): ?>
                 <tr>
                     <td><code><?php echo h($mapper['path']); ?></code></td>
@@ -546,7 +543,6 @@ try {
             </tbody>
         </table>
         </div>
-        <?php endif; ?>
     </section>
     <section class="panel safe-note">
         <strong>Status information:</strong> This page uses detected block-device,
@@ -1011,6 +1007,34 @@ try {
             pollInventory();
         });
     });
+    function updateMapperTable(mappers) {
+        if (!Array.isArray(mappers)) throw new Error('Missing mapper inventory');
+        var body = document.getElementById('usb-mapper-rows');
+        var empty = document.getElementById('mapper-empty');
+        var seen = Object.create(null);
+        mappers.forEach(function (mapper) {
+            if (!mapper || typeof mapper.path !== 'string' ||
+                !/^\\/dev\\/mapper\\/[a-zA-Z0-9._+-]+$/.test(mapper.path) ||
+                !Array.isArray(mapper.parents) || !mapper.parents.length ||
+                mapper.parents.some(function (p) { return typeof p !== 'string' || !/^[a-zA-Z0-9._+-]+$/.test(p); }) ||
+                ['type', 'uuid', 'mount'].some(function (key) { return typeof mapper[key] !== 'string'; }) ||
+                seen[mapper.path]) throw new Error('Invalid mapper inventory');
+            seen[mapper.path] = true;
+        });
+        body.replaceChildren();
+        mappers.forEach(function (mapper) {
+            var row = document.createElement('tr');
+            [mapper.path, mapper.parents.map(function (p) { return '/dev/' + p; }).join(', '),
+             mapper.type || 'Unknown', mapper.uuid || '—', mapper.mount || 'Not mounted'
+            ].forEach(function (value) {
+                var cell = document.createElement('td');
+                cell.textContent = value;
+                row.appendChild(cell);
+            });
+            body.appendChild(row);
+        });
+        empty.hidden = mappers.length > 0;
+    }
     var polling = false;
     function pollInventory() {
         if (polling || document.hidden || (dialog && dialog.open)) return;
@@ -1073,6 +1097,7 @@ try {
                     if (!seen[key]) existing[key].remove();
                 });
                 reconcileWholeDisks(snapshot);
+                updateMapperTable(snapshot.mappers);
                 sortRows();
                 updateCounts();
                 selectConnection(currentConnection(), false);
