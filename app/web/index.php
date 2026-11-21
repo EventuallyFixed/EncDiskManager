@@ -444,7 +444,7 @@ try {
                                 data-status="<?php echo h($row['status']); ?>"
                                 title="View registered disk configuration">Configure</button>
                         <?php endif; ?>
-                        <?php foreach (array('Unlock', 'Mount', 'Unmount', 'Lock', 'Encrypt + ext4') as $action): ?>
+                        <?php foreach (array('Unlock', 'Mount', 'Unmount', 'Lock') as $action): ?>
                             <button type="button" disabled title="<?php echo h($action . ': not yet available in this development build'); ?>"><?php echo h($action); ?></button>
                         <?php endforeach; ?>
                     </td>
@@ -757,7 +757,7 @@ try {
         var actionCell = row.cells[0];
         // LUKS actions follow the current partition state. Whole-disk
         // encryption is controlled separately on the physical USB disk row.
-        ['unlock', 'mount', 'unmount', 'lock', 'encrypt'].forEach(function (action, index) {
+        ['unlock', 'mount', 'unmount', 'lock'].forEach(function (action, index) {
             var button = Array.prototype.filter.call(actionCell.querySelectorAll('button'), function (candidate) {
                 return !candidate.classList.contains('configure-disk');
             })[index];
@@ -765,10 +765,8 @@ try {
             button.dataset.operation = action;
             // Mount operations belong to the unlocked mapper row.
             button.hidden = action === 'mount' || action === 'unmount';
-            button.disabled = action === 'encrypt' || !item.actions[action] || operationBusy;
-            button.title = action === 'encrypt'
-                ? 'Whole-disk encryption requires whole-disk confirmation'
-                : (item.actions[action] ? 'Perform ' + action : 'Not available for this disk state');
+            button.disabled = !item.actions[action] || operationBusy;
+            button.title = item.actions[action] ? 'Perform ' + action : 'Not available for this disk state';
         });
         var configure = actionCell.querySelector('.configure-disk');
         if (item.registered && !configure) {
@@ -1091,7 +1089,7 @@ try {
                         row.setAttribute('data-key', item.key);
                         for (var i = 0; i < 7; i++) row.appendChild(document.createElement('td'));
                         row.cells[0].className = 'disk-actions';
-                        ['Unlock', 'Mount', 'Unmount', 'Lock', 'Encrypt + ext4'].forEach(function (action) {
+                        ['Unlock', 'Mount', 'Unmount', 'Lock'].forEach(function (action) {
                             var button = document.createElement('button');
                             button.type = 'button';
                             button.disabled = true;
