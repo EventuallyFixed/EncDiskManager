@@ -725,7 +725,7 @@ try {
         var visible = 0;
         Array.prototype.forEach.call(table.tBodies[0].rows, function (row) {
             row.hidden = row.getAttribute('data-connection') !== connection;
-            if (!row.hidden) visible++;
+            if (!row.hidden && (connection !== 'connected' || !!row.dataset.wholeDisk)) visible++;
         });
         tabs.forEach(function (tab) {
             var selected = tab.getAttribute('data-filter') === connection;
@@ -770,7 +770,9 @@ try {
     }
     function updateCounts() {
         ['connected', 'disconnected'].forEach(function (connection) {
-            var count = table.tBodies[0].querySelectorAll('tr[data-connection="' + connection + '"]').length;
+            var count = connection === 'connected'
+                ? table.tBodies[0].querySelectorAll('tr[data-whole-disk]').length
+                : table.tBodies[0].querySelectorAll('tr[data-connection="disconnected"]').length;
             tabs.forEach(function (tab) {
                 if (tab.getAttribute('data-filter') === connection) {
                     tab.textContent = (connection === 'connected' ? 'Connected' : 'Disconnected') + ' (' + count + ')';
