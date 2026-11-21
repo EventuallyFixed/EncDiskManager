@@ -110,9 +110,15 @@ try {
         'Read-only USB disk remains display-only');
     rmdir($usb . '/sdb1/slaves');
     $missingSlaves = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
-    check_discovery($missingSlaves['complete'] === false,
-        'Missing partition dependency directory makes inventory incomplete');
-    mkdir($usb . '/sdb1/slaves', 0700);
+    check_discovery($missingSlaves['complete'] === true
+        && count($missingSlaves['disks']) === 1
+        && $missingSlaves['disks'][0]['has_slaves'] === false,
+        'Missing partition slaves directory is normal on EX4100');
+    rmdir($usb . '/slaves');
+    $missingParentSlaves = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
+    check_discovery($missingParentSlaves['complete'] === false,
+        'Missing whole-disk slaves directory makes inventory incomplete');
+    mkdir($usb . '/slaves', 0700);
     file_put_contents($usb . '/ro', 'invalid');
     $result = edm_discover_whole_usb_disks($base . '/block', $base . '/mounts', $base . '/swaps', $base . '/mountinfo');
     check_discovery($result['complete'] === false,
@@ -133,7 +139,6 @@ try {
     unlink($usb . '/sdb1/dev');
     unlink($usb . '/sdb1/partition');
     rmdir($usb . '/sdb1/holders');
-    rmdir($usb . '/sdb1/slaves');
     rmdir($usb . '/sdb1');
     rmdir($usb . '/holders');
     rmdir($usb . '/slaves');
