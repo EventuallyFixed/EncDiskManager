@@ -270,6 +270,8 @@ try {
     .inventory-tab[aria-selected="true"] { background: #f3f7f9; border-color: #d9dfe2; color: #20272c; font-weight: bold; }
     .inventory-tab:focus-visible { outline: 2px solid #075f91; outline-offset: -2px; }
     #disk-inventory tr[hidden] { display: none; }
+    #disk-inventory tr[data-whole-disk] { background: #f3f7f9; font-weight: bold; }
+    #disk-inventory tr[data-parent-disk] td:first-child { padding-left: 28px; }
     .sort-heading { border: 0; background: transparent; font: inherit; font-weight: bold; cursor: pointer; padding: 0; text-align: left; }
     .sort-heading:focus-visible { outline: 2px solid #075f91; outline-offset: 3px; }
     .disk-actions { min-width: 220px; }
@@ -440,43 +442,6 @@ try {
             </tbody>
         </table>
         </div>
-        <?php endif; ?>
-    </section>
-    <section aria-labelledby="whole-usb-disks-title">
-        <h2 id="whole-usb-disks-title">Whole USB disks</h2>
-        <p class="muted">Encrypting a whole USB disk erases all existing partitions and data.</p>
-        <?php if (!$wholeDiskInventory['complete']): ?>
-            <p class="muted">Whole-disk discovery is temporarily unavailable.</p>
-        <?php elseif (!$wholeDiskInventory['disks']): ?>
-            <p class="muted">No whole USB disks detected.</p>
-        <?php else: ?>
-            <div class="table-wrap"><table>
-                <thead><tr><th>Disk</th><th>Size</th><th>Partitions</th><th>State</th><th>Action</th></tr></thead>
-                <tbody>
-                <?php foreach ($wholeDiskInventory['disks'] as $wholeDisk): ?>
-                    <?php $wholeDiskPreflight = edm_whole_usb_disk_stable_candidate($wholeDiskInventory, $wholeDiskSecondSnapshot, $wholeDisk['name']); ?>
-                    <tr>
-                        <td><?php echo h('/dev/' . $wholeDisk['name']); ?></td>
-                        <td><?php echo h(number_format($wholeDisk['size_bytes'] / 1073741824, 2) . ' GiB'); ?></td>
-                        <td><?php echo h(implode(', ', $wholeDisk['partitions'])); ?></td>
-                        <?php
-                        $diskBusy = $wholeDisk['mounted'] || $wholeDisk['has_holders'] || $wholeDisk['has_slaves'];
-                        $diskReady = !$diskBusy && !$wholeDisk['read_only'] && $wholeDiskPreflight !== false;
-                        $diskState = $wholeDisk['mounted'] ? 'Mounted / in use'
-                            : (($wholeDisk['has_holders'] || $wholeDisk['has_slaves']) ? 'In use by another device'
-                            : ($wholeDisk['read_only'] ? 'Read-only'
-                            : ($diskReady ? 'Available' : 'Disk checks incomplete')));
-                        $disabledReason = $diskBusy ? 'Disk is in use'
-                            : ($wholeDisk['read_only'] ? 'Disk is read-only'
-                            : (!$diskReady ? 'Disk checks incomplete'
-                            : 'Disk is ready for encryption'));
-                        ?>
-                        <td><?php echo h($diskState); ?></td>
-                        <td><button type="button" class="whole-disk-preview-button" data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>" <?php echo $diskReady ? '' : 'disabled'; ?> title="<?php echo h($disabledReason); ?>">Encrypt + ext4</button></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table></div>
         <?php endif; ?>
     </section>
     <dialog id="whole-disk-erase-preview" aria-labelledby="whole-disk-erase-title">
@@ -849,6 +814,12 @@ try {
         var body = table.tBodies[0];
         var rows = Array.prototype.slice.call(body.rows);
         rows.sort(function (a, b) {
+            // Keep each USB parent immediately above its partitions.
+            var groupA = a.dataset.wholeDisk || a.dataset.parentDisk || a.dataset.key || '';
+            var groupB = b.dataset.wholeDisk || b.dataset.parentDisk || b.dataset.key || '';
+            var groupOrder = groupA.localeCompare(groupB, undefined, {numeric: true});
+            if (groupOrder !== 0) return groupOrder;
+            if (!!a.dataset.wholeDisk !== !!b.dataset.wholeDisk) return a.dataset.wholeDisk ? -1 : 1;
             var x = a.cells[active].textContent.trim();
             var y = b.cells[active].textContent.trim();
             var cmp = x.localeCompare(y, undefined, {sensitivity: 'base', numeric: true});
