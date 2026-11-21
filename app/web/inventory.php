@@ -53,7 +53,10 @@ try {
         }
     }
     // Preserve the original row contract while identifying its parent disk.
+    require_once __DIR__ . '/../lib/unlock_key.php';
     foreach ($result as &$item) {
+        $item['stored_key_available'] = $item['registered'] && $item['store_unlock_key']
+            && edm_unlock_key_read(edm_auth_data_path(), $item['uuid']) !== null;
         $deviceName = $item['connection'] === 'connected'
             && strncmp($item['device'], '/dev/', 5) === 0
             ? substr($item['device'], 5) : '';
