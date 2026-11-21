@@ -495,6 +495,7 @@ try {
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
         <h2 id="disk-config-title">Disk configuration</h2>
         <p class="muted" id="config-preview-note">Configuration preview. Editing, key management and registration deletion are not yet enabled.</p>
+        <p id="registration-note" hidden>Registration does not change the current mount or disk contents. The configured directory is saved for future mount support.</p>
         <p><strong>LUKS UUID:</strong> <code id="config-uuid"></code></p>
         <p><strong>Connection:</strong> <span id="config-status"></span></p>
         <form method="post" id="disk-config-form">
@@ -678,11 +679,14 @@ try {
             document.querySelector('#disk-config-form [name=config_action]').value = registering ? 'register' : 'edit';
             document.querySelector('#disk-config-form button[type=submit]').textContent = registering ? 'Register' : 'Validate changes (no save)';
             document.getElementById('config-preview-note').hidden = registering;
+            document.getElementById('registration-note').hidden = !registering;
             document.getElementById('config-uuid').textContent = button.getAttribute('data-uuid');
             document.getElementById('config-form-uuid').value = button.getAttribute('data-uuid');
             document.getElementById('config-status').textContent = button.getAttribute('data-status');
             document.getElementById('config-name').value = button.getAttribute('data-name');
-            document.getElementById('config-folder').value = button.getAttribute('data-folder');
+            document.getElementById('config-folder').value = registering
+                ? 'edm_' + button.dataset.uuid.toLowerCase().replace(/-/g, '')
+                : button.getAttribute('data-folder');
             dialog.showModal();
         });
         document.getElementById('close-disk-config').addEventListener('click', function () { dialog.close(); });
