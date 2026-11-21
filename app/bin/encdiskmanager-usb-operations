@@ -4,7 +4,7 @@
 set -eu
 fail() { echo "ERROR: $*" >&2; exit 1; }
 [ "$(id -u)" = 0 ] || fail "Root privileges required."
-[ "$#" -eq 3 ] || fail "Usage: helper {unlock|mount|unmount|lock} /dev/sdXN mapper-name"
+{ [ "$#" -eq 3 ] || [ "$#" -eq 4 ]; } || fail "Usage: helper {unlock|mount|unmount|lock} /dev/sdXN mapper-name"
 action=$1
 device=$2
 mapper=$3
@@ -23,7 +23,13 @@ crypt=/usr/local/modules/usr/sbin/cryptsetup
 uuid=$("$crypt" luksUUID "$device" 2>/dev/null) || fail "Not a LUKS partition."
 [ -n "$uuid" ] || fail "LUKS identity missing."
 mapperdev=/dev/mapper/$mapper
-mountpoint=/mnt/$mapper
+folder=${4:-$mapper}
+if [ "$#" -eq 4 ]; then
+    [ "$action" = mount ] || fail "Unexpected mount folder."
+    case "$folder" in ''|[!a-zA-Z0-9]*|*[!a-zA-Z0-9_-]*) fail "Invalid mount folder." ;; esac
+    [ "${#folder}" -le 48 ] || fail "Mount folder is too long."
+fi
+mountpoint=/mnt/$folder
 # For existing mappings, verify the actual source is the selected partition.
 verify_open() {
     [ -b "$mapperdev" ] || fail "Mapping is not open."
