@@ -504,46 +504,6 @@ try {
         </div>
         </form>
     </dialog>
-    <section class="panel">
-        <h2>Open encrypted volumes linked to USB</h2>
-        <p class="muted">
-            Only device-mapper volumes that can be traced through sysfs
-            to a detected USB partition are shown here.
-        </p>
-        <p id="mapper-empty" <?php echo $mapperDevices ? 'hidden' : ''; ?>>No open device-mapper volumes linked to the detected USB partitions were found.</p>
-        <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>Mapped volume</th>
-                    <th>Underlying USB partition</th>
-                    <th>Filesystem / type</th>
-                    <th>UUID</th>
-                    <th>Mounted at</th>
-                </tr>
-            </thead>
-            <tbody id="usb-mapper-rows">
-            <?php foreach ($mapperDevices as $mapper): ?>
-                <tr>
-                    <td><code><?php echo h($mapper['path']); ?></code></td>
-                    <td>
-                        <?php
-                        $parentPaths = array();
-                        foreach ($mapper['parents'] as $parent) {
-                            $parentPaths[] = '/dev/' . $parent;
-                        }
-                        echo h(implode(', ', $parentPaths));
-                        ?>
-                    </td>
-                    <td><?php echo h($mapper['type'] ?: 'Unknown'); ?></td>
-                    <td><code><?php echo h($mapper['uuid'] ?: '—'); ?></code></td>
-                    <td><?php echo h($mapper['mount'] ?: 'Not mounted'); ?></td>
-                </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-        </div>
-    </section>
     <section class="panel safe-note">
         <strong>Status information:</strong> This page uses detected block-device,
         encryption, and mount information to estimate each USB partition’s state.
@@ -834,6 +794,11 @@ try {
             var groupOrder = groupA.localeCompare(groupB, undefined, {numeric: true});
             if (groupOrder !== 0) return ascending ? groupOrder : -groupOrder;
             if (!!a.dataset.wholeDisk !== !!b.dataset.wholeDisk) return a.dataset.wholeDisk ? -1 : 1;
+            // A mapper follows its source partition even when another column
+            // is selected for sorting.
+            if (a.dataset.mapperRow && a.dataset.mapperParent === b.dataset.device) return 1;
+            if (b.dataset.mapperRow && b.dataset.mapperParent === a.dataset.device) return -1;
+            if (!!a.dataset.mapperRow !== !!b.dataset.mapperRow) return a.dataset.mapperRow ? 1 : -1;
             var x = a.cells[active].textContent.trim();
             var y = b.cells[active].textContent.trim();
             var cmp = x.localeCompare(y, undefined, {sensitivity: 'base', numeric: true});
@@ -1007,33 +972,56 @@ try {
             pollInventory();
         });
     });
-    function updateMapperTable(mappers) {
+    // Show an open mapper directly beneath its USB partition, not in a
+    // separate table. These rows are informational, not action targets.
+    function updateMapperRows(mappers) {
         if (!Array.isArray(mappers)) throw new Error('Missing mapper inventory');
-        var body = document.getElementById('usb-mapper-rows');
-        var empty = document.getElementById('mapper-empty');
+        var body = table.tBodies[0];
         var seen = Object.create(null);
+        var parents = Object.create(null);
+        Array.prototype.forEach.call(body.rows, function (row) {
+            if (!row.dataset.wholeDisk && !row.dataset.mapperRow && row.dataset.device) {
+                parents[row.dataset.device] = row;
+            }
+        });
         mappers.forEach(function (mapper) {
             if (!mapper || typeof mapper.path !== 'string' ||
-                !/^\/dev\/mapper\/[a-zA-Z0-9._+-]+$/.test(mapper.path) ||
-                !Array.isArray(mapper.parents) || !mapper.parents.length ||
-                mapper.parents.some(function (p) { return typeof p !== 'string' || !/^[a-zA-Z0-9._+-]+$/.test(p); }) ||
+                !/^\\/dev\\/mapper\\/[a-zA-Z0-9._+-]+$/.test(mapper.path) ||
+                !Array.isArray(mapper.parents) || mapper.parents.length !== 1 ||
+                !/^[a-zA-Z0-9._+-]+$/.test(mapper.parents[0]) ||
                 ['type', 'uuid', 'mount'].some(function (key) { return typeof mapper[key] !== 'string'; }) ||
                 seen[mapper.path]) throw new Error('Invalid mapper inventory');
             seen[mapper.path] = true;
         });
-        body.replaceChildren();
-        mappers.forEach(function (mapper) {
-            var row = document.createElement('tr');
-            [mapper.path, mapper.parents.map(function (p) { return '/dev/' + p; }).join(', '),
-             mapper.type || 'Unknown', mapper.uuid || '—', mapper.mount || 'Not mounted'
-            ].forEach(function (value) {
-                var cell = document.createElement('td');
-                cell.textContent = value;
-                row.appendChild(cell);
-            });
-            body.appendChild(row);
+        Array.prototype.forEach.call(body.querySelectorAll('tr[data-mapper-row]'), function (row) {
+            if (!seen[row.dataset.mapperRow]) row.remove();
         });
-        empty.hidden = mappers.length > 0;
+        mappers.forEach(function (mapper) {
+            var parent = parents['/dev/' + mapper.parents[0]];
+            if (!parent || parent.dataset.connection !== 'connected') return;
+            var row = Array.prototype.filter.call(body.querySelectorAll('tr[data-mapper-row]'), function (item) {
+                return item.dataset.mapperRow === mapper.path;
+            })[0];
+            if (!row) {
+                row = document.createElement('tr');
+                row.dataset.mapperRow = mapper.path;
+                row.dataset.key = 'mapper:' + mapper.path;
+                for (var i = 0; i < 7; i++) row.appendChild(document.createElement('td'));
+                body.appendChild(row);
+            }
+            row.dataset.parentDisk = parent.dataset.parentDisk || '';
+            row.dataset.mapperParent = parent.dataset.device;
+            row.dataset.connection = 'connected';
+            var name = mapper.path.substring('/dev/mapper/'.length);
+            row.cells[0].textContent = '↳ ' + name;
+            row.cells[1].textContent = mapper.path;
+            row.cells[2].textContent = mapper.mount ? 'Mounted' : 'Unlocked';
+            row.cells[3].textContent = mapper.type || 'Unknown';
+            row.cells[4].textContent = mapper.uuid || '—';
+            row.cells[5].textContent = mapper.mount || '—';
+            row.cells[6].textContent = '';
+            row.cells[0].style.paddingLeft = '3rem';
+        });
     }
     var polling = false;
     function pollInventory() {
@@ -1050,7 +1038,7 @@ try {
                 var body = table.tBodies[0];
                 var existing = Object.create(null);
                 Array.prototype.forEach.call(body.rows, function (row) {
-                    if (!row.dataset.wholeDisk) existing[row.getAttribute('data-key')] = row;
+                    if (!row.dataset.wholeDisk && !row.dataset.mapperRow) existing[row.getAttribute('data-key')] = row;
                 });
                 var seen = Object.create(null);
                 // Reject malformed or duplicate keys rather than deleting valid rows.
@@ -1097,7 +1085,7 @@ try {
                     if (!seen[key]) existing[key].remove();
                 });
                 reconcileWholeDisks(snapshot);
-                updateMapperTable(snapshot.mappers);
+                updateMapperRows(snapshot.mappers);
                 sortRows();
                 updateCounts();
                 selectConnection(currentConnection(), false);
