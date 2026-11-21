@@ -434,7 +434,7 @@ try {
                 $mountFolder = $row['registered'] ? '/mnt/' . $row['mount_folder'] : '—';
             ?>
                 <tr data-key="<?php echo h($row['registered'] ? 'registered:' . strtolower($row['luks_uuid']) : 'device:' . $disk['name']); ?>" data-parent-disk="<?php echo h($disk !== null && isset($partitionParents[$disk['name']]) ? $partitionParents[$disk['name']] : ''); ?>" data-connection="<?php echo $disk === null ? 'disconnected' : 'connected'; ?>"<?php echo $disk === null ? ' hidden' : ''; ?>>
-                    <td><?php echo h($row['name']); ?><?php if (!$row['registered']): ?> <small>(unregistered)</small><?php endif; ?></td>
+                    <td><?php echo $disk !== null && isset($partitionParents[$disk['name']]) ? '↳ ' : ''; ?><?php echo h($row['name']); ?><?php if (!$row['registered']): ?> <small>(unregistered)</small><?php endif; ?></td>
                     <td><code><?php echo h($disk === null ? '—' : $disk['path']); ?></code></td>
                     <td><?php echo h($status); ?></td>
                     <td><?php echo h($disk === null ? '—' : ($disk['type'] ?: 'Unknown')); ?></td>
@@ -746,7 +746,7 @@ try {
         values.forEach(function (value, index) {
             var cell = row.cells[index];
             if (index === 0) {
-                var text = item.name + (item.registered ? '' : ' (unregistered)');
+                var text = (item.parent_disk ? '↳ ' : '') + item.name + (item.registered ? '' : ' (unregistered)');
                 if (cell.textContent !== text) cell.textContent = text;
             } else if (cell.textContent !== value) {
                 cell.textContent = value;
