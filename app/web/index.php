@@ -694,8 +694,9 @@ try {
         passphraseConfirm.value = '';
         return true;
     }
-    document.querySelectorAll('.whole-disk-preview-button').forEach(function (button) {
-        button.addEventListener('click', function () {
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('.whole-disk-preview-button');
+        if (!button || button.disabled || !document.getElementById('disk-inventory').contains(button)) return;
             selected.textContent = button.getAttribute('data-disk') || 'Unknown';
             acknowledgement.checked = false;
             phrase.value = '';
@@ -707,7 +708,6 @@ try {
             }
             refresh();
             dialog.showModal();
-        });
     });
 }());
 (function () {
@@ -846,6 +846,60 @@ try {
         });
         rows.forEach(function (row, index) {
             if (body.rows[index] !== row) body.insertBefore(row, body.rows[index] || null);
+        });
+    }
+    // Physical disks are displayed in this same table, above their partitions.
+    // Their erase controls use the existing confirmation dialog.
+    function reconcileWholeDisks(snapshot) {
+        if (!snapshot.whole_disks_complete || !Array.isArray(snapshot.whole_disks)) {
+            Array.prototype.forEach.call(table.querySelectorAll('tr[data-whole-disk]'), function (row) {
+                var button = row.querySelector('.whole-disk-preview-button');
+                if (button) button.disabled = true;
+            });
+            return;
+        }
+        var body = table.tBodies[0];
+        var present = Object.create(null);
+        snapshot.whole_disks.forEach(function (disk) {
+            if (!disk || typeof disk.name !== 'string' || !/^[a-zA-Z0-9._+-]+$/.test(disk.name)
+                || typeof disk.path !== 'string' || disk.path !== '/dev/' + disk.name
+                || !Array.isArray(disk.partitions) || typeof disk.can_encrypt !== 'boolean'
+                || typeof disk.size_bytes !== 'number') return;
+            present[disk.name] = true;
+            var row = Array.prototype.filter.call(body.rows, function (item) {
+                return item.dataset.wholeDisk === disk.name;
+            })[0];
+            if (!row) {
+                row = document.createElement('tr');
+                row.dataset.wholeDisk = disk.name;
+                row.dataset.key = 'whole:' + disk.name;
+                row.dataset.connection = 'connected';
+                for (var i = 0; i < 7; i++) row.appendChild(document.createElement('td'));
+                row.cells[6].className = 'disk-actions';
+                var button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'whole-disk-preview-button';
+                button.textContent = 'Encrypt + ext4';
+                row.cells[6].appendChild(button);
+                body.appendChild(row);
+            }
+            row.cells[0].textContent = 'USB disk ' + disk.name;
+            row.cells[1].textContent = disk.path;
+            row.cells[2].textContent = disk.mounted ? 'Mounted / in use'
+                : disk.busy ? 'In use' : disk.read_only ? 'Read-only'
+                : disk.can_encrypt ? 'Available' : 'Disk checks incomplete';
+            row.cells[3].textContent = (disk.size_bytes / 1073741824).toFixed(2) + ' GiB; '
+                + (disk.partitions.length ? disk.partitions.join(', ') : 'no partitions');
+            row.cells[4].textContent = '—';
+            row.cells[5].textContent = '—';
+            var action = row.querySelector('.whole-disk-preview-button');
+            action.dataset.disk = disk.path;
+            action.disabled = !disk.can_encrypt || operationBusy;
+            action.title = action.disabled ? 'Disk not eligible for whole-disk encryption'
+                : 'Erase and encrypt the entire USB disk';
+        });
+        Array.prototype.forEach.call(body.querySelectorAll('tr[data-whole-disk]'), function (row) {
+            if (!present[row.dataset.wholeDisk]) row.remove();
         });
     }
     var operationBusy = false;
@@ -1009,6 +1063,7 @@ try {
                 Object.keys(existing).forEach(function (key) {
                     if (!seen[key]) existing[key].remove();
                 });
+                reconcileWholeDisks(snapshot);
                 sortRows();
                 updateCounts();
                 selectConnection(currentConnection(), false);
@@ -1017,7 +1072,7 @@ try {
             .catch(function () {
                 pollNotice.textContent = 'Live inventory unavailable; displayed disk status may be stale.';
                 // Do not allow actions based on a stale disk state.
-                Array.prototype.forEach.call(table.querySelectorAll('button[data-operation]'), function (button) {
+                Array.prototype.forEach.call(table.querySelectorAll('button[data-operation], .whole-disk-preview-button'), function (button) {
                     button.disabled = true;
                     button.title = 'Disk state unavailable; wait for inventory to refresh';
                 });
