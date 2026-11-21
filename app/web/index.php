@@ -401,13 +401,13 @@ try {
         <div class="table-wrap" id="disk-inventory-panel" role="tabpanel" aria-labelledby="connected-tab">
         <table id="disk-inventory">
             <thead><tr>
-                <th><button type="button" class="sort-heading" data-column="0" aria-sort="ascending">Name ▲</button></th>
-                <th><button type="button" class="sort-heading" data-column="1">Device</button></th>
-                <th><button type="button" class="sort-heading" data-column="2">Status</button></th>
-                <th><button type="button" class="sort-heading" data-column="3">Filesystem / type</button></th>
-                <th><button type="button" class="sort-heading" data-column="4">LUKS UUID</button></th>
-                <th><button type="button" class="sort-heading" data-column="5">Mount directory</button></th>
                 <th>Actions</th>
+                <th><button type="button" class="sort-heading" data-column="1" aria-sort="ascending">Name ▲</button></th>
+                <th><button type="button" class="sort-heading" data-column="2">Device</button></th>
+                <th><button type="button" class="sort-heading" data-column="3">Status</button></th>
+                <th><button type="button" class="sort-heading" data-column="4">Filesystem / type</button></th>
+                <th><button type="button" class="sort-heading" data-column="5">LUKS UUID</button></th>
+                <th><button type="button" class="sort-heading" data-column="6">Mount directory</button></th>
             </tr></thead>
             <tbody>
             <?php if (!empty($wholeDiskInventory['complete'])): ?>
@@ -417,14 +417,15 @@ try {
                 $busy = $wholeDisk['mounted'] || $wholeDisk['has_holders'] || $wholeDisk['has_slaves'];
             ?>
                 <tr data-whole-disk="<?php echo h($wholeDisk['name']); ?>" data-key="whole:<?php echo h($wholeDisk['name']); ?>" data-connection="connected">
+                    <td class="disk-actions"><button type="button" class="whole-disk-preview-button"
+                        data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>"
+                        <?php echo $ready ? '' : 'disabled'; ?>>Encrypt + ext4</button></td>
                     <td><?php echo h('USB disk ' . $wholeDisk['name']); ?></td>
                     <td><code><?php echo h('/dev/' . $wholeDisk['name']); ?></code></td>
                     <td><?php echo h($busy ? 'In use' : ($wholeDisk['read_only'] ? 'Read-only' : ($ready ? 'Available' : 'Disk checks incomplete'))); ?></td>
                     <td><?php echo h(number_format($wholeDisk['size_bytes'] / 1073741824, 2) . ' GiB; ' . (count($wholeDisk['partitions']) ? implode(', ', $wholeDisk['partitions']) : 'no partitions')); ?></td>
                     <td>—</td><td>—</td>
-                    <td class="disk-actions"><button type="button" class="whole-disk-preview-button"
-                        data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>"
-                        <?php echo $ready ? '' : 'disabled'; ?>>Encrypt + ext4</button></td>
+
                 </tr>
             <?php endforeach; ?>
             <?php endif; ?>
@@ -434,12 +435,6 @@ try {
                 $mountFolder = $row['registered'] ? '/mnt/' . $row['mount_folder'] : '—';
             ?>
                 <tr data-key="<?php echo h($row['registered'] ? 'registered:' . strtolower($row['luks_uuid']) : 'device:' . $disk['name']); ?>" data-parent-disk="<?php echo h($disk !== null && isset($partitionParents[$disk['name']]) ? $partitionParents[$disk['name']] : ''); ?>" data-connection="<?php echo $disk === null ? 'disconnected' : 'connected'; ?>"<?php echo $disk === null ? ' hidden' : ''; ?>>
-                    <td><?php echo $disk !== null && isset($partitionParents[$disk['name']]) ? '↳ ' : ''; ?><?php echo h($row['name']); ?><?php if (!$row['registered']): ?> <small>(unregistered)</small><?php endif; ?></td>
-                    <td><code><?php echo h($disk === null ? '—' : $disk['path']); ?></code></td>
-                    <td><?php echo h($status); ?></td>
-                    <td><?php echo h($disk === null ? '—' : ($disk['type'] ?: 'Unknown')); ?></td>
-                    <td><code><?php echo h($row['luks_uuid'] ?: '—'); ?></code></td>
-                    <td><?php echo h($mountFolder); ?></td>
                     <td class="disk-actions">
                         <?php if ($row['registered']): ?>
                             <button type="button" class="configure-disk"
@@ -453,6 +448,13 @@ try {
                             <button type="button" disabled title="<?php echo h($action . ': not yet available in this development build'); ?>"><?php echo h($action); ?></button>
                         <?php endforeach; ?>
                     </td>
+                    <td><?php echo $disk !== null && isset($partitionParents[$disk['name']]) ? '↳ ' : ''; ?><?php echo h($row['name']); ?><?php if (!$row['registered']): ?> <small>(unregistered)</small><?php endif; ?></td>
+                    <td><code><?php echo h($disk === null ? '—' : $disk['path']); ?></code></td>
+                    <td><?php echo h($status); ?></td>
+                    <td><?php echo h($disk === null ? '—' : ($disk['type'] ?: 'Unknown')); ?></td>
+                    <td><code><?php echo h($row['luks_uuid'] ?: '—'); ?></code></td>
+                    <td><?php echo h($mountFolder); ?></td>
+
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -744,7 +746,7 @@ try {
         row.dataset.parentDisk = item.parent_disk || '';
         var values = [item.name, item.device, item.status, item.type, item.uuid, item.mount];
         values.forEach(function (value, index) {
-            var cell = row.cells[index];
+            var cell = row.cells[index + 1];
             if (index === 0) {
                 var text = (item.parent_disk ? '↳ ' : '') + item.name + (item.registered ? '' : ' (unregistered)');
                 if (cell.textContent !== text) cell.textContent = text;
@@ -752,7 +754,7 @@ try {
                 cell.textContent = value;
             }
         });
-        var actionCell = row.cells[6];
+        var actionCell = row.cells[0];
         // LUKS actions follow the current partition state. Whole-disk
         // encryption is controlled separately on the physical USB disk row.
         ['unlock', 'mount', 'unmount', 'lock', 'encrypt'].forEach(function (action, index) {
@@ -822,7 +824,7 @@ try {
                     button.disabled = true;
                     button.title = 'Physical disk discovery incomplete; encryption unavailable';
                 }
-                row.cells[2].textContent = 'Disk checks incomplete';
+                row.cells[3].textContent = 'Disk checks incomplete';
             });
             return;
         }
@@ -848,23 +850,23 @@ try {
                 row.dataset.key = 'whole:' + disk.name;
                 row.dataset.connection = 'connected';
                 for (var i = 0; i < 7; i++) row.appendChild(document.createElement('td'));
-                row.cells[6].className = 'disk-actions';
+                row.cells[0].className = 'disk-actions';
                 var button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'whole-disk-preview-button';
                 button.textContent = 'Encrypt + ext4';
-                row.cells[6].appendChild(button);
+                row.cells[0].appendChild(button);
                 body.appendChild(row);
             }
-            row.cells[0].textContent = 'USB disk ' + disk.name;
-            row.cells[1].textContent = disk.path;
-            row.cells[2].textContent = disk.mounted ? 'Mounted / in use'
+            row.cells[1].textContent = 'USB disk ' + disk.name;
+            row.cells[2].textContent = disk.path;
+            row.cells[3].textContent = disk.mounted ? 'Mounted / in use'
                 : disk.busy ? 'In use' : disk.read_only ? 'Read-only'
                 : disk.can_encrypt ? 'Available' : 'Disk checks incomplete';
-            row.cells[3].textContent = (disk.size_bytes / 1073741824).toFixed(2) + ' GiB; '
+            row.cells[4].textContent = (disk.size_bytes / 1073741824).toFixed(2) + ' GiB; '
                 + (disk.partitions.length ? disk.partitions.join(', ') : 'no partitions');
-            row.cells[4].textContent = '—';
             row.cells[5].textContent = '—';
+            row.cells[6].textContent = '—';
             var action = row.querySelector('.whole-disk-preview-button');
             action.dataset.disk = disk.path;
             action.disabled = !disk.can_encrypt || operationBusy;
@@ -1017,16 +1019,16 @@ try {
             row.dataset.mapperParent = parent.dataset.device;
             row.dataset.connection = 'connected';
             var name = mapper.path.substring('/dev/mapper/'.length);
-            row.cells[0].textContent = '↳ ' + name;
-            row.cells[1].textContent = mapper.path;
-            row.cells[2].textContent = mapper.mount ? 'Mounted' : 'Unlocked';
-            row.cells[3].textContent = mapper.type || 'Unknown';
-            row.cells[4].textContent = mapper.uuid || '—';
-            row.cells[5].textContent = mapper.mount || '—';
+            row.cells[1].textContent = '↳ ' + name;
+            row.cells[2].textContent = mapper.path;
+            row.cells[3].textContent = mapper.mount ? 'Mounted' : 'Unlocked';
+            row.cells[4].textContent = mapper.type || 'Unknown';
+            row.cells[5].textContent = mapper.uuid || '—';
+            row.cells[6].textContent = mapper.mount || '—';
             row.dataset.device = parent.dataset.device;
             row.dataset.mapper = mapper.path.substring('/dev/mapper/'.length);
             row.dataset.uuid = parent.dataset.uuid || '';
-            var actions = row.cells[6];
+            var actions = row.cells[0];
             ['mount', 'unmount'].forEach(function (action) {
                 var button = actions.querySelector('button[data-operation="' + action + '"]');
                 if (!button) {
@@ -1041,7 +1043,7 @@ try {
                 button.disabled = !source || source.disabled || operationBusy;
                 button.title = source ? source.title : 'Not available for this disk state';
             });
-            row.cells[0].style.paddingLeft = '3rem';
+            row.cells[1].style.paddingLeft = '3rem';
         });
     }
     var polling = false;
@@ -1088,7 +1090,7 @@ try {
                         row = document.createElement('tr');
                         row.setAttribute('data-key', item.key);
                         for (var i = 0; i < 7; i++) row.appendChild(document.createElement('td'));
-                        row.cells[6].className = 'disk-actions';
+                        row.cells[0].className = 'disk-actions';
                         ['Unlock', 'Mount', 'Unmount', 'Lock', 'Encrypt + ext4'].forEach(function (action) {
                             var button = document.createElement('button');
                             button.type = 'button';
@@ -1096,7 +1098,7 @@ try {
                             button.dataset.operation = action.toLowerCase().split(' ')[0];
                             button.title = action + ': not available for this disk state';
                             button.textContent = action;
-                            row.cells[6].appendChild(button);
+                            row.cells[0].appendChild(button);
                         });
                         body.appendChild(row);
                     }
@@ -1126,7 +1128,7 @@ try {
         if (!document.hidden) pollInventory();
     });
     window.setInterval(pollInventory, 3000);
-    var active = 0, ascending = true;
+    var active = 1, ascending = true;
     // Group server-rendered physical disks with their partitions immediately.
     sortRows();
     // Refresh immediately: the server-rendered snapshot may already be stale.
