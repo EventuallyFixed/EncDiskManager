@@ -1014,7 +1014,7 @@ try {
         var seen = Object.create(null);
         mappers.forEach(function (mapper) {
             if (!mapper || typeof mapper.path !== 'string' ||
-                !/^\\/dev\\/mapper\\/[a-zA-Z0-9._+-]+$/.test(mapper.path) ||
+                !/^\/dev\/mapper\/[a-zA-Z0-9._+-]+$/.test(mapper.path) ||
                 !Array.isArray(mapper.parents) || !mapper.parents.length ||
                 mapper.parents.some(function (p) { return typeof p !== 'string' || !/^[a-zA-Z0-9._+-]+$/.test(p); }) ||
                 ['type', 'uuid', 'mount'].some(function (key) { return typeof mapper[key] !== 'string'; }) ||
