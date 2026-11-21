@@ -95,6 +95,23 @@ case "$parent" in
 esac
 [ "$(cat "$partition_sys/partition")" = 1 ] ||
     fail "Expected first partition was not created."
+# Verify gdisk's default 2048-sector alignment and full usable GPT span.
+# The backup GPT reserves one header sector plus 16 KiB of entries at
+# the end of the disk. Read the kernel's partition geometry, not blkid's
+# potentially stale filesystem signature, before formatting anything.
+logical=$(cat "$disk_sys/queue/logical_block_size") ||
+    fail "Cannot read disk logical sector size."
+case "$logical" in 512|1024|2048|4096) ;; *) fail "Unexpected logical sector size." ;; esac
+case "$4" in ''|*[!0-9]*) fail "Invalid confirmed disk sector count." ;; esac
+[ "$4" -gt 4096 ] || fail "Disk is too small for the expected layout."
+[ "$(cat "$disk_sys/size")" = "$4" ] ||
+    fail "Disk capacity changed after repartitioning."
+expected_end=$(( $4 - (16384 + logical - 1) / logical - 2 ))
+expected_size=$(( expected_end - 2048 + 1 ))
+[ "$(cat "$partition_sys/start")" = 2048 ] ||
+    fail "Unexpected partition starting sector."
+[ "$(cat "$partition_sys/size")" = "$expected_size" ] ||
+    fail "Unexpected partition size after GPT creation."
 "$crypt" luksFormat --type luks2 --batch-mode --key-file "$key" "$partition" ||
     fail "LUKS2 format failed."
 uuid=$("$crypt" luksUUID "$partition") || fail "LUKS UUID unavailable."
