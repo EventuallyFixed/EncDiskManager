@@ -386,12 +386,10 @@ try {
             $connectedCount = 0;
             $disconnectedCount = 0;
             foreach ($inventoryRows as $inventoryRow) {
-                if ($inventoryRow['device'] === null) {
-                    $disconnectedCount++;
-                } else {
-                    $connectedCount++;
-                }
+                if ($inventoryRow['device'] === null) $disconnectedCount++;
             }
+            $connectedCount = !empty($wholeDiskInventory['complete'])
+                ? count($wholeDiskInventory['disks']) : 0;
         ?>
         <div class="inventory-tabs" role="tablist" aria-label="Disk connection status">
             <button type="button" class="inventory-tab" id="connected-tab" role="tab"
@@ -412,6 +410,24 @@ try {
                 <th>Actions</th>
             </tr></thead>
             <tbody>
+            <?php if (!empty($wholeDiskInventory['complete'])): ?>
+            <?php foreach ($wholeDiskInventory['disks'] as $wholeDisk):
+                $candidate = edm_whole_usb_disk_stable_candidate($wholeDiskInventory, $wholeDiskSecondSnapshot, $wholeDisk['name']);
+                $ready = $candidate !== false;
+                $busy = $wholeDisk['mounted'] || $wholeDisk['has_holders'] || $wholeDisk['has_slaves'];
+            ?>
+                <tr data-whole-disk="<?php echo h($wholeDisk['name']); ?>" data-key="whole:<?php echo h($wholeDisk['name']); ?>" data-connection="connected">
+                    <td><?php echo h('USB disk ' . $wholeDisk['name']); ?></td>
+                    <td><code><?php echo h('/dev/' . $wholeDisk['name']); ?></code></td>
+                    <td><?php echo h($busy ? 'In use' : ($wholeDisk['read_only'] ? 'Read-only' : ($ready ? 'Available' : 'Disk checks incomplete'))); ?></td>
+                    <td><?php echo h(number_format($wholeDisk['size_bytes'] / 1073741824, 2) . ' GiB; ' . (count($wholeDisk['partitions']) ? implode(', ', $wholeDisk['partitions']) : 'no partitions')); ?></td>
+                    <td>—</td><td>—</td>
+                    <td class="disk-actions"><button type="button" class="whole-disk-preview-button"
+                        data-disk="<?php echo h('/dev/' . $wholeDisk['name']); ?>"
+                        <?php echo $ready ? '' : 'disabled'; ?>>Encrypt + ext4</button></td>
+                </tr>
+            <?php endforeach; ?>
+            <?php endif; ?>
             <?php foreach ($inventoryRows as $row):
                 $disk = $row['device'];
                 $status = $row['status'];
