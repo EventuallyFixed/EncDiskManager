@@ -257,7 +257,7 @@ function edm_registry_load($registryPath)
  * Save using an exclusive lock and same-directory atomic rename.
  * The containing data directory must already exist and be secured by init.sh.
  */
-function edm_registry_save($registryPath, $registry)
+function edm_registry_save($registryPath, $registry, $modify = null)
 {
     if (!is_string($registryPath) || $registryPath === '' || $registryPath[0] !== '/') {
         throw new RuntimeException('Registry path must be an absolute path.');
@@ -275,7 +275,6 @@ function edm_registry_save($registryPath, $registry)
         edm_registry_assert_file($registryPath, 'Registry file');
     }
 
-    $json = edm_registry_encode($registry);
     $lockPath = $registryPath . '.lock';
     if (is_link($lockPath)) {
         throw new RuntimeException('Registry lock file must not be a symbolic link.');
@@ -306,6 +305,10 @@ function edm_registry_save($registryPath, $registry)
             throw new RuntimeException('Registry could not be locked.');
         }
 
+        if ($modify !== null) {
+            $registry = $modify(edm_registry_load($registryPath));
+        }
+        $json = edm_registry_encode($registry);
         $temporaryPath = tempnam($directory, '.encdiskmanager-registry-');
         if ($temporaryPath === false) {
             throw new RuntimeException('Temporary registry file could not be created.');
@@ -333,4 +336,34 @@ function edm_registry_save($registryPath, $registry)
         flock($lock, LOCK_UN);
         fclose($lock);
     }
+}
+
+/** Register one detected LUKS partition without changing disk contents. */
+function edm_registry_register($registryPath, $uuid, $name, $folder, $devices)
+{
+    if (!is_string($uuid)
+        || !preg_match('/^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$/', $uuid)) {
+        throw new RuntimeException('Invalid LUKS UUID.');
+    }
+    $uuid = strtolower($uuid);
+    $matches = 0;
+    foreach ($devices as $device) {
+        if (!empty($device['luks']) && isset($device['uuid'])
+            && strcasecmp($device['uuid'], $uuid) === 0) {
+            $matches++;
+        }
+    }
+    if ($matches !== 1) {
+        throw new RuntimeException('Select one uniquely identified connected USB LUKS partition.');
+    }
+    edm_registry_save($registryPath, null, function ($registry) use ($uuid, $name, $folder) {
+        $registry['disks'][] = array(
+            'luks_uuid' => $uuid,
+            'name' => $name,
+            'mount_folder' => $folder,
+            'mapper_name' => edm_registry_mapper_name($uuid),
+            'enabled' => true
+        );
+        return edm_registry_validate($registry);
+    });
 }
