@@ -69,7 +69,18 @@ try {
     $process = proc_open($command, $descriptors, $pipes);
     if (!is_resource($process)) throw new RuntimeException('Could not start operation.');
     try {
-        if ($action === 'unlock') fwrite($pipes[0], $passphrase);
+        if ($action === 'unlock') {
+            // A pipe write can be short; cryptsetup must receive the entire key.
+            $length = strlen($passphrase);
+            $written = 0;
+            while ($written < $length) {
+                $count = fwrite($pipes[0], substr($passphrase, $written));
+                if ($count === false || $count === 0) {
+                    throw new RuntimeException('Could not send unlock passphrase.');
+                }
+                $written += $count;
+            }
+        }
         fclose($pipes[0]);
         stream_get_contents($pipes[1]);
         fclose($pipes[1]);
