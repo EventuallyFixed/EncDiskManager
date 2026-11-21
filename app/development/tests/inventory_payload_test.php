@@ -35,8 +35,9 @@ check_payload($connected[0]['actions']['unlock'] === true
     'Locked registered disk has advisory unlock eligibility');
 check_payload(!array_filter($disconnected[0]['actions']),
     'Disconnected registration has no advisory actions');
-check_payload(!array_filter($unregistered[0]['actions']),
-    'Unregistered disk has no advisory actions');
+check_payload($unregistered[0]['actions']['unlock'] === true
+    && $unregistered[0]['actions']['encrypt'] === false,
+    'Unregistered LUKS disk previews Unlock but never partition encryption');
 $ambiguousRow = edm_inventory_rows(array($registration), array($device, $device));
 $ambiguousPayload = edm_inventory_payload($ambiguousRow);
 check_payload(!array_filter($ambiguousPayload[0]['actions']),
