@@ -87,7 +87,7 @@ function edm_enrol_disk_key($directory, $helper, $device, $entry, $passphrase)
     return edm_unlock_key_read($directory, $uuid);
 }
 
-function edm_composite_operation($helper, $action, $device, $uuid, $passphrase)
+function edm_mount_with_stored_key($helper, $device, $uuid, $passphrase)
 {
     require_once __DIR__ . '/../lib/unlock_key.php';
     $directory = edm_auth_data_path();
@@ -108,14 +108,6 @@ function edm_composite_operation($helper, $action, $device, $uuid, $passphrase)
         throw new RuntimeException('Disk state is ambiguous.');
     }
     $mapper = count($mappers) === 1 ? $mappers[0] : $entry['mapper_name'];
-    if ($action === 'disconnect') {
-        if (count($mappers) !== 1 || count($mounts) !== 1) {
-            throw new RuntimeException('Disk is not mounted.');
-        }
-        edm_composite_step($helper, 'unmount', $device, $uuid, $mapper);
-        edm_composite_step($helper, 'lock', $device, $uuid, $mapper);
-        return;
-    }
     if (count($mounts) !== 0) throw new RuntimeException('Disk is already mounted.');
     $secret = $passphrase;
     if (!empty($entry['store_unlock_key'])) {
@@ -206,12 +198,12 @@ try {
             if ($action === 'unlock') {
                 throw new RuntimeException('Use Mount when stored key support is enabled.');
             }
-            if ($action === 'mount' || $action === 'unmount') {
+            // A saved key simplifies Mount only. Unmount and Lock stay separate.
+            if ($action === 'mount') {
                 if (!is_string($postedUuid) || strcasecmp($postedUuid, $entry['luks_uuid']) !== 0) {
                     throw new RuntimeException('Registered disk identity changed.');
                 }
-                edm_composite_operation($helper, $action === 'mount' ? 'connect' : 'disconnect',
-                    $device, $entry['luks_uuid'], $passphrase);
+                edm_mount_with_stored_key($helper, $device, $entry['luks_uuid'], $passphrase);
                 return;
             }
         }
