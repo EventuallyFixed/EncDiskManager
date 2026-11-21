@@ -61,10 +61,12 @@ try {
     $command = '/bin/sh ' . escapeshellarg($helper) . ' '
         . escapeshellarg($action) . ' ' . escapeshellarg($device)
         . ' ' . escapeshellarg($mapper);
+    // The endpoint does not return helper output. Discard it instead of
+    // risking a blocked child while PHP waits on the other output pipe.
     $descriptors = array(
         0 => array('pipe', 'r'),
-        1 => array('pipe', 'w'),
-        2 => array('pipe', 'w')
+        1 => array('file', '/dev/null', 'w'),
+        2 => array('file', '/dev/null', 'w')
     );
     $process = proc_open($command, $descriptors, $pipes);
     if (!is_resource($process)) throw new RuntimeException('Could not start operation.');
@@ -82,13 +84,11 @@ try {
             }
         }
         fclose($pipes[0]);
-        stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-        stream_get_contents($pipes[2]);
-        fclose($pipes[2]);
         $exit = proc_close($process);
     } finally {
         unset($passphrase);
+        if (is_resource($pipes[0])) fclose($pipes[0]);
+        if (is_resource($process)) proc_close($process);
     }
     if ($exit !== 0) {
         http_response_code(409);
