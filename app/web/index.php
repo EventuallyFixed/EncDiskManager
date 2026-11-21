@@ -180,17 +180,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
                 $request['confirmation'] = isset($_POST['confirmation']) ? $_POST['confirmation'] : null;
             }
             if ($request['action'] === 'key_preference') {
-                if (isset($_POST['store_unlock_key']) && $_POST['store_unlock_key'] !== '1') {
-                    throw new RuntimeException('Invalid unlock key preference.');
+                // Configuration can remove a saved key, but enrolling a new
+                // one requires the explicit checkbox in the Unlock dialogue.
+                if (isset($_POST['remove_unlock_key'])) {
+                    if ($_POST['remove_unlock_key'] !== '1') {
+                        throw new RuntimeException('Invalid unlock key preference.');
+                    }
+                    require_once __DIR__ . '/../lib/unlock_key.php';
+                    $directory = edm_auth_data_path();
+                    $uuid = $request['luks_uuid'];
+                    edm_unlock_key_with_lock($directory, function () use ($directory, $uuid) {
+                        edm_registry_set_key_preference($directory . '/disks.json', $uuid, false);
+                        edm_unlock_key_remove($directory, $uuid);
+                    });
                 }
-                require_once __DIR__ . '/../lib/unlock_key.php';
-                $directory = edm_auth_data_path();
-                $uuid = $request['luks_uuid'];
-                $enabled = isset($_POST['store_unlock_key']);
-                edm_unlock_key_with_lock($directory, function () use ($directory, $uuid, $enabled) {
-                    edm_registry_set_key_preference($directory . '/disks.json', $uuid, $enabled);
-                    if (!$enabled) edm_unlock_key_remove($directory, $uuid);
-                });
                 header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
                 exit;
             }
@@ -519,8 +522,9 @@ try {
         <label for="config-folder">Unique mount directory under /mnt</label>
         <input id="config-folder" name="mount_folder" type="text" maxlength="48" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,47}" required>
         <div id="config-key-options">
-            <label><input type="checkbox" id="config-store-key" name="store_unlock_key" value="1"> Store an unlock key on this NAS to automatically unlock the disk when Mount is clicked</label>
-            <p class="muted">When enabled, Mount also unlocks the disk and Unmount also locks it. The first Mount requires the LUKS passphrase to enrol a key. Unchecking removes the local key, not its LUKS keyslot.</p>
+            <label><input type="checkbox" id="config-remove-key" name="remove_unlock_key" value="1"> Remove stored unlock key</label>
+            <p class="muted" id="config-key-status"></p>
+            <p class="muted">Save a key in the Unlock dialogue. Removing a key here removes the local copy, not its LUKS keyslot.</p>
         </div>
         <div class="dialog-actions">
             <button type="submit">Validate changes (no save)</button>
@@ -716,8 +720,12 @@ try {
             document.getElementById('config-preview-note').hidden = registering;
             document.getElementById('registration-note').hidden = !registering;
             document.getElementById('config-key-options').hidden = registering;
-            document.getElementById('config-store-key').disabled = registering;
-            document.getElementById('config-store-key').checked = !registering && button.dataset.storeKey === '1';
+            document.getElementById('config-remove-key').disabled = registering || button.dataset.storeKey !== '1';
+            document.getElementById('config-remove-key').checked = false;
+            document.getElementById('config-key-status').textContent = button.dataset.keyAvailable === '1'
+                ? 'A stored key is available on this NAS.'
+                : button.dataset.storeKey === '1' ? 'Key storage is enabled, but no key is saved yet.'
+                : 'No stored unlock key.';
             document.getElementById('config-name').readOnly = !registering;
             document.getElementById('config-folder').readOnly = !registering;
             document.getElementById('config-uuid').textContent = button.getAttribute('data-uuid');
@@ -800,6 +808,7 @@ try {
         row.dataset.device = item.device;
         row.dataset.mapper = item.mapper;
         row.dataset.uuid = item.uuid;
+        row.dataset.registered = item.registered ? '1' : '0';
         row.dataset.storeKey = item.store_unlock_key ? '1' : '0';
         row.dataset.keyAvailable = item.stored_key_available ? '1' : '0';
         row.dataset.parentDisk = item.parent_disk || '';
@@ -851,6 +860,7 @@ try {
             button.dataset.name = item.name;
             button.dataset.folder = item.folder;
             button.dataset.storeKey = item.store_unlock_key === true ? '1' : '0';
+            button.dataset.keyAvailable = item.stored_key_available ? '1' : '0';
             button.dataset.status = item.status;
         });
 
@@ -945,7 +955,7 @@ try {
         });
     }
     var operationBusy = false;
-    function requestUnlockPassphrase(device) {
+    function requestUnlockPassphrase(device, action, canSave) {
         return new Promise(function (resolve) {
             var dialog = document.createElement('dialog');
             var form = document.createElement('form');
@@ -959,12 +969,25 @@ try {
             password.maxLength = 4096;
             label.appendChild(password);
             form.appendChild(label);
+            var save = document.createElement('input');
+            save.type = 'checkbox';
+            save.checked = false;
+            if (canSave) {
+                var saveLabel = document.createElement('label');
+                saveLabel.appendChild(save);
+                saveLabel.appendChild(document.createTextNode(' Securely save the key'));
+                form.appendChild(saveLabel);
+                var note = document.createElement('p');
+                note.className = 'muted';
+                note.textContent = 'Store a generated unlock key on this NAS for future mounts. Your original passphrase is not saved.';
+                form.appendChild(note);
+            }
             var cancel = document.createElement('button');
             cancel.type = 'button';
             cancel.textContent = 'Cancel';
             var submit = document.createElement('button');
             submit.type = 'submit';
-            submit.textContent = 'Unlock';
+            submit.textContent = action === 'mount' ? 'Mount' : 'Unlock';
             form.appendChild(cancel);
             form.appendChild(submit);
             dialog.appendChild(form);
@@ -985,7 +1008,7 @@ try {
             });
             form.addEventListener('submit', function (event) {
                 event.preventDefault();
-                finish(password.value || null);
+                finish(password.value ? {passphrase: password.value, saveKey: canSave && save.checked} : null);
             });
             dialog.showModal();
             password.focus();
@@ -999,6 +1022,7 @@ try {
         if (!row || !['unlock', 'mount', 'unmount', 'lock'].includes(action)) return;
         var device = row.dataset.device;
         var mapper = row.dataset.mapper;
+        var uuid = row.dataset.uuid;
         if (action === 'unlock') {
             // Derive a deterministic, app-owned mapper name from the LUKS UUID.
             // Never reuse the legacy backupdisk mapping.
@@ -1008,11 +1032,12 @@ try {
             }
             mapper = 'edm_' + row.dataset.uuid.replace(/-/g, '').toLowerCase();
         }
-        var secret = null;
+        var credentials = null;
         if (action === 'unlock' || (action === 'mount' && row.dataset.storeKey === '1' &&
             row.dataset.keyAvailable !== '1')) {
-            secret = await requestUnlockPassphrase(device);
-            if (secret === null || secret === '') return;
+            credentials = await requestUnlockPassphrase(device, action,
+                action === 'unlock' && row.dataset.registered === '1' && row.dataset.storeKey !== '1');
+            if (credentials === null) return;
         } else if (!window.confirm('Perform ' + action + ' on ' + device + '?')) {
             return;
         }
@@ -1023,9 +1048,12 @@ try {
         body.set('action', action);
         body.set('device', device);
         body.set('mapper', mapper);
-        body.set('luks_uuid', row.dataset.uuid);
-        if (secret !== null) body.set('passphrase', secret);
-        secret = null;
+        body.set('luks_uuid', uuid);
+        if (credentials !== null) {
+            body.set('passphrase', credentials.passphrase);
+            if (credentials.saveKey) body.set('save_unlock_key', '1');
+        }
+        credentials = null;
         operationBusy = true;
         Array.prototype.forEach.call(table.querySelectorAll('button[data-operation]'), function (item) {
             item.disabled = true;
