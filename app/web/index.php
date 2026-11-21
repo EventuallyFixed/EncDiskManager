@@ -863,14 +863,21 @@ try {
         }
         var body = table.tBodies[0];
         var present = Object.create(null);
-        // Validate the complete snapshot before changing any disk controls.
+        // Validate every parent before modifying any live table rows.
+        snapshot.whole_disks.forEach(function (disk) {
+            if (!disk || typeof disk.name !== 'string' || !/^[a-zA-Z0-9._+-]+$/.test(disk.name)
+                || typeof disk.path !== 'string' || disk.path !== '/dev/' + disk.name
+                || !Array.isArray(disk.partitions) || typeof disk.can_encrypt !== 'boolean'
+                || typeof disk.size_bytes !== 'number' || present[disk.name]) {
+                throw new Error('Invalid or duplicate physical USB disk');
+            }
+            present[disk.name] = true;
+        });
         snapshot.whole_disks.forEach(function (disk) {
             if (!disk || typeof disk.name !== 'string' || !/^[a-zA-Z0-9._+-]+$/.test(disk.name)
                 || typeof disk.path !== 'string' || disk.path !== '/dev/' + disk.name
                 || !Array.isArray(disk.partitions) || typeof disk.can_encrypt !== 'boolean'
                 || typeof disk.size_bytes !== 'number') throw new Error('Invalid physical disk inventory');
-            if (present[disk.name]) throw new Error('Duplicate physical USB disk');
-            present[disk.name] = true;
             var row = Array.prototype.filter.call(body.rows, function (item) {
                 return item.dataset.wholeDisk === disk.name;
             })[0];
