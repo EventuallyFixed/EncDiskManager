@@ -845,36 +845,6 @@ try {
             configure.setAttribute('data-status', item.status);
         }
     }
-    function reconcileWholeDisks(snapshot) {
-        var body = table.tBodies[0];
-        body.querySelectorAll('tr[data-whole-disk]').forEach(function (row) { row.remove(); });
-        if (snapshot.whole_disks_complete !== true || !Array.isArray(snapshot.whole_disks)) return;
-        snapshot.whole_disks.forEach(function (disk) {
-            if (!disk || !/^sd[a-z]+$/.test(disk.name) || disk.path !== '/dev/' + disk.name
-                || !Array.isArray(disk.partitions) || typeof disk.size_bytes !== 'number'
-                || typeof disk.can_encrypt !== 'boolean') return;
-            var row = document.createElement('tr');
-            row.dataset.wholeDisk = disk.name;
-            row.dataset.key = 'whole:' + disk.name;
-            row.dataset.connection = 'connected';
-            for (var i = 0; i < 7; i++) row.appendChild(document.createElement('td'));
-            row.cells[0].textContent = disk.name + ' (USB disk)';
-            row.cells[1].textContent = disk.path;
-            row.cells[2].textContent = disk.busy ? 'In use' : disk.read_only ? 'Read-only' : 'Detected';
-            row.cells[3].textContent = (disk.size_bytes / 1073741824).toFixed(2) + ' GiB; ' + disk.partitions.join(', ');
-            row.cells[4].textContent = '—';
-            row.cells[5].textContent = '—';
-            row.cells[6].className = 'disk-actions';
-            var button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'whole-disk-preview-button';
-            button.dataset.disk = disk.path;
-            button.textContent = 'Encrypt + ext4';
-            button.disabled = !disk.can_encrypt;
-            row.cells[6].appendChild(button);
-            body.appendChild(row);
-        });
-    }
     function sortRows() {
         var body = table.tBodies[0];
         var rows = Array.prototype.slice.call(body.rows);
@@ -1058,7 +1028,7 @@ try {
                 var body = table.tBodies[0];
                 var existing = Object.create(null);
                 Array.prototype.forEach.call(body.rows, function (row) {
-                    existing[row.getAttribute('data-key')] = row;
+                    if (!row.dataset.wholeDisk) existing[row.getAttribute('data-key')] = row;
                 });
                 var seen = Object.create(null);
                 // Reject malformed or duplicate keys rather than deleting valid rows.
@@ -1104,7 +1074,6 @@ try {
                 Object.keys(existing).forEach(function (key) {
                     if (!seen[key]) existing[key].remove();
                 });
-                reconcileWholeDisks(snapshot);
                 reconcileWholeDisks(snapshot);
                 sortRows();
                 updateCounts();
