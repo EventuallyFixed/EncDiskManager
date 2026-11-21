@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../lib/auth.php';
+require_once __DIR__ . '/../lib/app_version.php';
 require_once __DIR__ . '/../lib/registry.php';
 require_once __DIR__ . '/../lib/inventory.php';
 require_once __DIR__ . '/../lib/configuration_request.php';
@@ -94,7 +95,7 @@ try {
         .error{padding:10px;background:#fff0ed;border-left:4px solid #b23b2b;color:#842719}.notice{padding:10px;background:#eaf4f8;border-left:4px solid #075f91;color:#17465e}
         .warning{padding:10px;background:#fff8e7;border-left:4px solid #b7791f;color:#704b0b}
         </style></head><body><main>
-        <h1>Encrypted Disk Manager</h1><p><?php echo $setupMode ? 'Enter the one-time setup code from the NAS, then create the administrator password.' : 'Sign in to manage encrypted disks.'; ?></p>
+        <h1>Encrypted Disk Manager<?php if (edm_app_version() !== ''): ?> · v<?php echo htmlspecialchars(edm_app_version(), ENT_QUOTES, 'UTF-8'); ?><?php endif; ?></h1><p><?php echo $setupMode ? 'Enter the one-time setup code from the NAS, then create the administrator password.' : 'Sign in to manage encrypted disks.'; ?></p>
         <?php echo $noticeHtml; ?>
         <?php echo $errorHtml; ?>
         <?php if (!$httpsConnection): ?>
@@ -333,7 +334,7 @@ try {
 <header>
     <img src="logo.svg" alt="">
     <div>
-        <h1>Encrypted Disk Manager</h1>
+        <h1>Encrypted Disk Manager<?php if (edm_app_version() !== ''): ?> · v<?php echo h(edm_app_version()); ?><?php endif; ?></h1>
         <div class="muted">USB storage · LUKS inventory</div>
     </div>
     <div class="header-actions">
