@@ -120,7 +120,14 @@ function edm_registry_validate($registry)
         $required = array('luks_uuid', 'name', 'mount_folder', 'mapper_name', 'enabled');
         $keys = array_keys($disk);
         sort($keys);
+        // Optional preference: existing version-1 registrations default to off.
         $expected = $required;
+        if (array_key_exists('store_unlock_key', $disk)) {
+            if (!is_bool($disk['store_unlock_key'])) {
+                throw new RuntimeException('Invalid stored unlock key preference.');
+            }
+            $expected[] = 'store_unlock_key';
+        }
         sort($expected);
         if ($keys !== $expected) {
             throw new RuntimeException('Registry disk entry ' . $index . ' has missing or unexpected fields.');
@@ -365,5 +372,31 @@ function edm_registry_register($registryPath, $uuid, $name, $folder, $devices)
             'enabled' => true
         );
         return edm_registry_validate($registry);
+    });
+}
+
+/** Save a preference for a registered UUID, independently of USB discovery.
+ * No LUKS changes or key material are written by this metadata operation.
+ */
+function edm_registry_set_key_preference($registryPath, $uuid, $enabled)
+{
+    if (!is_string($uuid)
+        || !preg_match('/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iD', $uuid)
+        || !is_bool($enabled)) {
+        throw new RuntimeException('Invalid stored unlock key preference.');
+    }
+    edm_registry_save($registryPath, null, function ($registry) use ($uuid, $enabled) {
+        foreach ($registry['disks'] as &$disk) {
+            if (strcasecmp($disk['luks_uuid'], $uuid) !== 0) continue;
+            if ($enabled) {
+                $disk['store_unlock_key'] = true;
+            } else {
+                unset($disk['store_unlock_key']);
+            }
+            unset($disk);
+            return $registry;
+        }
+        unset($disk);
+        throw new RuntimeException('Disk is not registered.');
     });
 }
