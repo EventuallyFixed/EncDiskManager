@@ -366,7 +366,7 @@ try {
         <h2>Disk inventory</h2>
         <?php if ($configValidationNotice !== ''): ?><p role="status"><?php echo h($configValidationNotice); ?></p><?php endif; ?>
         <?php if ($configValidationError !== ''): ?><p role="alert"><?php echo h($configValidationError); ?></p><?php endif; ?>
-        <p class="muted">Registered disks remain listed when disconnected. Disk actions are disabled until the privileged operations are implemented and verified.</p>
+        <p class="muted">Registered disks remain listed when disconnected. Available disk actions depend on the disk's encryption and mount state. Whole-disk encryption is currently disabled in this development version.</p>
         <?php if ($inventoryError !== ''): ?>
             <p class="error"><?php echo h($inventoryError); ?></p>
         <?php endif; ?>
