@@ -41,3 +41,21 @@ function edm_configuration_registration_preflight($request, $registry)
     }
     return $target;
 }
+
+/** Registration deletion is a metadata change, allowed only when unmounted. */
+function edm_registration_can_delete($uuid, $devices)
+{
+    if (!is_string($uuid) || !is_array($devices)) return false;
+    $matches = 0;
+    foreach ($devices as $device) {
+        if (empty($device['luks']) || !isset($device['uuid'])
+            || strcasecmp($device['uuid'], $uuid) !== 0) continue;
+        $matches++;
+        if ($matches > 1 || !isset($device['mount'], $device['mapper_mounts'], $device['mapper_names'])
+            || $device['mount'] !== '' || !is_array($device['mapper_mounts'])
+            || count($device['mapper_mounts']) !== 0 || !is_array($device['mapper_names'])
+            || count($device['mapper_names']) > 1) return false;
+    }
+    // No matching device means the registration is disconnected.
+    return true;
+}
