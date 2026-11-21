@@ -98,10 +98,10 @@ function edm_composite_operation($helper, $action, $device, $uuid, $passphrase)
     }
     $mapper = count($mappers) === 1 ? $mappers[0] : $entry['mapper_name'];
     if ($action === 'disconnect') {
-        if (count($mappers) !== 1) throw new RuntimeException('Disk is already locked.');
-        if (count($mounts) === 1) {
-            edm_composite_step($helper, 'unmount', $device, $uuid, $mapper);
+        if (count($mappers) !== 1 || count($mounts) !== 1) {
+            throw new RuntimeException('Disk is not mounted.');
         }
+        edm_composite_step($helper, 'unmount', $device, $uuid, $mapper);
         edm_composite_step($helper, 'lock', $device, $uuid, $mapper);
         return;
     }
@@ -117,8 +117,8 @@ function edm_composite_operation($helper, $action, $device, $uuid, $passphrase)
             });
             $stored = edm_unlock_key_read($directory, $uuid);
         }
-        // An explicitly entered passphrase can also recover access if a stored key is stale.
-        $secret = $passphrase !== null ? $passphrase : $stored;
+        // Use the generated key even on the first Mount, verifying enrolment.
+        $secret = $stored;
     }
     if (count($mappers) === 0) {
         if ($secret === null) throw new RuntimeException('Passphrase required.');
