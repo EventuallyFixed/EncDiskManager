@@ -25,7 +25,7 @@ find_executable() {
     done
     return 1
 }
-sfdisk=$(find_executable sfdisk) || fail "sfdisk unavailable."
+gdisk=$(find_executable gdisk) || fail "gdisk unavailable."
 mkfs=$(find_executable mkfs.ext4 || find_executable mke2fs) ||
     fail "ext4 formatter unavailable."
 [ -x /usr/bin/blockdev ] || fail "blockdev unavailable."
@@ -53,7 +53,12 @@ sh "$check" check "$disk" "$2" "$3" "$4" "$5" >/dev/null ||
     fail "USB disk changed while awaiting passphrase."
 # Replace the partition table with one GPT Linux partition spanning the disk.
 # All existing partitions must disappear before any LUKS operation begins.
-printf 'label: gpt\n, , L\n' | "$sfdisk" --wipe always "$disk" ||
+# gdisk is supplied with WD My Cloud OS5; sfdisk is not. Feed the same
+# prompts tested interactively on the EX4100. A failed gdisk exit stops
+# before any LUKS operation; subsequent checks verify the new partition.
+# o: new GPT, y: confirm, n: partition 1, default start/end, 8300: Linux,
+# w: write, y: final confirmation.
+printf 'o\\ny\\nn\\n1\\n\\n\\n8300\\nw\\ny\\n' | "$gdisk" "$disk" >/dev/null ||
     fail "Partition table creation failed."
 /usr/bin/blockdev --rereadpt "$disk" || fail "Kernel partition refresh failed."
 partition="${disk}1"
