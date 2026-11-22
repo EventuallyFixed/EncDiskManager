@@ -134,12 +134,17 @@ if sh "$dependencies" "$tmpdir/disk"; then
     echo 'FAIL: whole-disk slave ignored' >&2; exit 1
 fi
 rm "$tmpdir/disk/slaves/dm-0"
+# Ordinary Linux partitions may omit the slaves directory; holders must exist.
 rmdir "$tmpdir/disk/sdd1/slaves"
+if ! sh "$dependencies" "$tmpdir/disk"; then
+    echo 'FAIL: idle partition without optional slaves directory rejected' >&2; exit 1
+fi
+rmdir "$tmpdir/disk/sdd1/holders"
 if sh "$dependencies" "$tmpdir/disk"; then
-    echo 'FAIL: missing dependency directory accepted' >&2; exit 1
+    echo 'FAIL: missing holders directory accepted' >&2; exit 1
 fi
 # Cover both dependency types at both levels, including sysfs-style links.
-mkdir "$tmpdir/disk/sdd1/slaves"
+mkdir "$tmpdir/disk/sdd1/holders" "$tmpdir/disk/sdd1/slaves"
 : > "$tmpdir/disk/holders/dm-1"
 if sh "$dependencies" "$tmpdir/disk"; then
     echo 'FAIL: whole-disk holder ignored' >&2; exit 1
