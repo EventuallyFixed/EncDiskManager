@@ -41,6 +41,10 @@ jobs:
           php development/tests/whole-disk-format-request.php
           php development/tests/usb-operation-request.php
           php development/tests/disk-action-availability.php
+      - name: Run stored-key action browser regression
+        run: |
+          npm install --no-save --no-package-lock jsdom@26
+          node app/development/tests/stored_key_actions_browser_test.cjs
       - name: Run legacy read-only PHP fixtures
         run: |
           set -eu

@@ -87,43 +87,36 @@ function edm_enrol_disk_key($directory, $helper, $device, $entry, $passphrase)
     return edm_unlock_key_read($directory, $uuid);
 }
 
-function edm_mount_with_stored_key($helper, $device, $uuid, $passphrase)
+function edm_unlock_with_stored_key($helper, $device, $uuid, $mapper, $passphrase)
 {
     require_once __DIR__ . '/../lib/unlock_key.php';
     $directory = edm_auth_data_path();
-    // Validate the UUID before using it as a key identity.
+    // The stored credential belongs to a registered, uniquely identified UUID.
     edm_unlock_key_path($directory, $uuid);
     $registry = edm_registry_load($directory . '/disks.json');
     $entry = null;
     foreach ($registry['disks'] as $candidate) {
         if (strcasecmp($candidate['luks_uuid'], $uuid) === 0) $entry = $candidate;
     }
-    if ($entry === null || empty($entry['store_unlock_key'])) {
+    if ($entry === null || empty($entry['store_unlock_key'])
+        || $mapper !== $entry['mapper_name']) {
         throw new RuntimeException('Stored unlock key is not enabled for this disk.');
     }
     list($inventory, $disk) = edm_composite_device($device, $uuid);
-    $mappers = $disk['mapper_names'];
-    $mounts = $disk['mapper_mounts'];
-    if (count($mappers) > 1 || count($mounts) > 1 || !empty($disk['mount'])) {
-        throw new RuntimeException('Disk state is ambiguous.');
+    if (count($disk['mapper_names']) !== 0
+        || count($disk['mapper_mounts']) !== 0 || !empty($disk['mount'])) {
+        throw new RuntimeException('Disk must be locked and unmounted.');
     }
-    $mapper = count($mappers) === 1 ? $mappers[0] : $entry['mapper_name'];
-    if (count($mounts) !== 0) throw new RuntimeException('Disk is already mounted.');
-    $secret = $passphrase;
-    if (!empty($entry['store_unlock_key'])) {
-        $stored = edm_unlock_key_read($directory, $uuid);
-        if ($stored === null) {
-            if ($passphrase === null) throw new RuntimeException('Recovery passphrase required.');
-            $stored = edm_enrol_disk_key($directory, $helper, $device, $entry, $passphrase);
-        }
-        // Use the generated key even on the first Mount, verifying enrolment.
-        $secret = $stored;
+    $stored = edm_unlock_key_read($directory, $uuid);
+    if ($stored === null) {
+        if ($passphrase === null) throw new RuntimeException('Recovery passphrase required.');
+        // Restore a missing stored key only after verifying the recovery key.
+        $stored = edm_enrol_disk_key($directory, $helper, $device, $entry, $passphrase);
+    } elseif ($passphrase !== null) {
+        throw new RuntimeException('Unexpected passphrase.');
     }
-    if (count($mappers) === 0) {
-        if ($secret === null) throw new RuntimeException('Passphrase required.');
-        edm_composite_step($helper, 'unlock', $device, $uuid, $mapper, $secret);
-    }
-    edm_composite_step($helper, 'mount', $device, $uuid, $mapper, null, $entry['mount_folder']);
+    // Unlock only: mounting remains a separate explicit user action.
+    edm_composite_step($helper, 'unlock', $device, $uuid, $mapper, $stored);
 }
 
 try {
@@ -152,7 +145,7 @@ try {
         exit;
     }
     $passphrase = isset($_POST['passphrase']) ? $_POST['passphrase'] : null;
-    if (($action === 'unlock' || $passphrase !== null) && (!is_string($passphrase)
+    if ($passphrase !== null && (!is_string($passphrase)
         || $passphrase === '' || strlen($passphrase) > 4096)) {
         http_response_code(400);
         echo json_encode(array('ok' => false, 'error' => 'Passphrase is required.'));
@@ -194,24 +187,22 @@ try {
             if (!is_string($postedUuid)) throw new RuntimeException('Invalid disk identity.');
             edm_composite_device($device, $postedUuid);
         }
-        if ($entry !== null && !empty($entry['store_unlock_key'])) {
-            if ($action === 'unlock') {
-                throw new RuntimeException('Use Mount when stored key support is enabled.');
+        if ($entry !== null && !empty($entry['store_unlock_key']) && $action === 'unlock') {
+            if ($saveKey || !is_string($postedUuid)
+                || strcasecmp($postedUuid, $entry['luks_uuid']) !== 0) {
+                throw new RuntimeException('Registered disk identity changed.');
             }
-            // A saved key simplifies Mount only. Unmount and Lock stay separate.
-            if ($action === 'mount') {
-                if (!is_string($postedUuid) || strcasecmp($postedUuid, $entry['luks_uuid']) !== 0) {
-                    throw new RuntimeException('Registered disk identity changed.');
-                }
-                edm_mount_with_stored_key($helper, $device, $entry['luks_uuid'], $passphrase);
-                return;
-            }
+            edm_unlock_with_stored_key($helper, $device, $entry['luks_uuid'], $mapper, $passphrase);
+            return;
         }
         if ($action !== 'unlock' && $passphrase !== null) {
             throw new RuntimeException('Unexpected passphrase.');
         }
         if (!edm_usb_operation_request($action, $device, $mapper, $inventory)) {
             throw new RuntimeException('Disk state or selection is invalid.');
+        }
+        if ($action === 'unlock' && $passphrase === null) {
+            throw new RuntimeException('Passphrase required.');
         }
         if ($saveKey) {
             if ($entry === null || !is_string($postedUuid)

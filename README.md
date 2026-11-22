@@ -4,7 +4,7 @@
 
 It discovers attached USB disks, lets you unlock and mount encrypted volumes, and provides a controlled way to encrypt a whole USB disk with an ext4 filesystem.
 
-**Current version:** 0.8.6 — developed and tested on the WD My Cloud EX4100.
+**Current version:** 0.8.7 — developed and tested on the WD My Cloud EX4100.
 
 > [!WARNING]
 > **Encrypt + ext4 permanently erases and repartitions the entire selected USB disk.** All existing partitions and data on that disk will be lost. Back up anything important and check the selected device carefully before confirming.
@@ -15,7 +15,7 @@ It discovers attached USB disks, lets you unlock and mount encrypted volumes, an
 - **Whole-disk encryption:** creates a GPT partition table, a LUKS2-encrypted partition and an ext4 filesystem, then mounts the new volume.
 - **Disk operations:** Unlock, Mount, Unmount and Lock are offered according to the current disk state.
 - **Disk registration:** save a display name and mount directory for an encrypted volume, identified by its LUKS UUID. Registered disks remain listed when disconnected.
-- **Optional stored unlock key:** save a newly generated key on the NAS for convenient future mounting, without saving your original passphrase.
+- **Optional stored unlock key:** save a newly generated key on the NAS for convenient future unlocking, without saving your original passphrase.
 - **Removal guidance:** displays **Safe to unplug** or **Do not unplug** beneath each physical USB disk's encryption button, based on its detected activity and dependencies.
 - **Administration:** HTTPS-protected administrator login and configuration backup, restore and deletion.
 
@@ -28,11 +28,11 @@ The interface refreshes disk information automatically. Disk operations also rec
 - **Developed and tested on:** WD My Cloud EX4100 (ARMHF)
 - **Storage:** externally attached USB disks; the application is not intended to manage the NAS's internal system disks.
 
-Installable packages for several other WD My Cloud models are included in the [release files](releases/0.8.6/). Those models have not all been independently validated on physical hardware.
+Installable packages for several other WD My Cloud models are available in the [GitHub release](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v0.8.7). Those models have not all been independently validated on physical hardware.
 
 ## Installation
 
-1. Download the `.bin` package matching your NAS model from [releases/0.8.6](releases/0.8.6/).
+1. Download the `.bin` package matching your NAS model from the [v0.8.7 GitHub release](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v0.8.7).
 2. On the NAS, open the WD My Cloud dashboard and use the Apps page's manual installation option to install the package.
 3. Launch **Encrypted Disk Manager** from the NAS dashboard, using **HTTPS**.
 4. On first use, retrieve the one-time administrator setup code over SSH, then use it to create an administrator password.
@@ -48,7 +48,7 @@ Run this in an appropriately privileged SSH session on your NAS. Keep the code p
 The EX4100 installer is named:
 
 ```text
-EncDiskManager_0.8.6_WDMyCloudEX4100.bin
+EncDiskManager_0.8.7_WDMyCloudEX4100.bin
 ```
 
 **Do not install an archive or package intended for a different NAS model.**
@@ -72,7 +72,7 @@ When unlocking a registered disk, select **Securely save the key** if you want s
 
 EncDiskManager generates a separate random unlock key, enrols it in a LUKS keyslot and keeps its local copy in the NAS's private application-data directory. **Your original passphrase is not saved.**
 
-With a stored key, **Mount** can unlock and mount a locked registered disk in one action. **Unmount** still leaves the encrypted mapping open: click **Lock** separately before unplugging.
+With a stored key, **Unlock** opens the locked LUKS volume without asking for the recovery passphrase again. **Mount** is a separate action, available only after unlocking. **Unmount** still leaves the encrypted mapping open: click **Lock** separately before unplugging.
 
 The stored key can be removed from **Configure**. Removing its local file does **not** revoke the corresponding LUKS keyslot. Keep your original recovery passphrase somewhere safe.
 
@@ -146,5 +146,5 @@ The GitHub Actions workflows run additional syntax and fixture checks. Tests do 
 ## Project links
 
 - [Source code](https://github.com/EventuallyFixed/EncDiskManager)
-- [Version 0.8.6 installation packages](releases/0.8.6/)
+- [Version 0.8.7 installation packages](releases/0.8.7/)
 - [Issues and suggestions](https://github.com/EventuallyFixed/EncDiskManager/issues)

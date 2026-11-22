@@ -893,16 +893,13 @@ function edmMarkUnplugUnsafe() {
             })[index];
             if (!button) return;
             button.dataset.operation = action;
-            // A locked disk with key storage enabled can mount directly.
-            // Once a mapper exists, Mount and Unmount stay on that child row.
-            var combined = item.registered && item.store_unlock_key;
-            var directMount = combined && item.actions.unlock;
-            button.hidden = action === 'unmount' || (action === 'mount' && !directMount);
-            var available = action === 'unlock' && combined ? false :
-                action === 'mount' && directMount ? true : item.actions[action];
+            // The same four actions are shown for every LUKS partition.
+            // Stored keys change only how Unlock authenticates, not which
+            // action is appropriate for the current live disk state.
+            button.hidden = false;
+            var available = item.actions[action] === true;
             button.disabled = !available || operationBusy;
             button.title = !available ? 'Not available for this disk state' :
-                directMount && action === 'mount' ? 'Unlock and mount' :
                 action === 'unmount' ? 'Unmount filesystem (then Lock before unplugging)' :
                 action === 'lock' ? 'Lock encrypted disk before unplugging' : 'Perform ' + action;
         });
@@ -1099,10 +1096,12 @@ function edmMarkUnplugUnsafe() {
             mapper = 'edm_' + row.dataset.uuid.replace(/-/g, '').toLowerCase();
         }
         var credentials = null;
-        if (action === 'unlock' || (action === 'mount' && row.dataset.storeKey === '1' &&
-            row.dataset.keyAvailable !== '1')) {
+        // A valid stored key lets Unlock proceed without asking for the
+        // recovery passphrase. If the key is missing, ask for recovery.
+        if (action === 'unlock' &&
+            !(row.dataset.storeKey === '1' && row.dataset.keyAvailable === '1')) {
             credentials = await requestUnlockPassphrase(device, action,
-                action === 'unlock' && row.dataset.registered === '1' && row.dataset.storeKey !== '1');
+                row.dataset.registered === '1' && row.dataset.storeKey !== '1');
             if (credentials === null) return;
         } else if (!window.confirm('Perform ' + action + ' on ' + device + '?')) {
             return;
@@ -1194,26 +1193,9 @@ function edmMarkUnplugUnsafe() {
             row.dataset.uuid = parent.dataset.uuid || '';
             row.dataset.storeKey = parent.dataset.storeKey;
             row.dataset.keyAvailable = parent.dataset.keyAvailable;
-            var actions = row.cells[0];
-            ['mount', 'unmount'].forEach(function (action) {
-                var button = actions.querySelector('button[data-operation="' + action + '"]');
-                // A mounted mapper needs only Unmount; do not show a redundant Mount button.
-                if (action === 'mount' && mapper.mount) {
-                    if (button) button.remove();
-                    return;
-                }
-                if (!button) {
-                    button = document.createElement('button');
-                    button.type = 'button';
-                    button.dataset.operation = action;
-                    button.textContent = action === 'mount' ? 'Mount' : 'Unmount';
-                    actions.appendChild(button);
-                }
-                // Reuse the parent partition's existing state policy.
-                var source = parent.querySelector('button[data-operation="' + action + '"]');
-                button.disabled = !source || source.disabled || operationBusy;
-                button.title = source ? source.title : 'Not available for this disk state';
-            });
+            // Mapper rows are informational. Operations stay on the LUKS
+            // partition row, so there is one consistent set of controls.
+            row.cells[0].replaceChildren();
             row.cells[1].style.paddingLeft = '3rem';
         });
     }
