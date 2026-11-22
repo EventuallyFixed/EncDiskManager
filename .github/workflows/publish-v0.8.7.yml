@@ -1,0 +1,133 @@
+name: Publish EncDiskManager v0.8.7
+
+on:
+  push:
+    branches:
+      - release/v0.8.7
+
+permissions:
+  contents: write
+
+jobs:
+  package-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout reviewed release source
+        uses: actions/checkout@v4
+        with:
+          ref: 8d6284a5c95312b817a25375badf4bfea7832d2e
+
+      - name: Verify release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^Version: //p' app/apkg.rc)" = "0.8.7"
+          test "$(git rev-parse HEAD)" = "8d6284a5c95312b817a25375badf4bfea7832d2e"
+          git fetch --tags origin
+          if git show-ref --verify --quiet refs/tags/v0.8.7; then
+            echo "Release tag already exists; refusing to overwrite"
+            exit 1
+          fi
+
+      - name: Validate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          find app -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php development/tests/usb-operation-request.php
+          php development/tests/disk-action-availability.php
+
+      - name: Validate stored-key browser actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock jsdom@26
+          node app/development/tests/stored_key_actions_browser_test.cjs
+
+      - name: Fetch pinned WD NAS app builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/paul-norman/WD-NAS-App-Builder.git "$RUNNER_TEMP/wd-builder"
+          git -C "$RUNNER_TEMP/wd-builder" checkout --detach 68b51bc0a9e25d6f0c41e6facd7b4dc4c8c27e61
+
+      - name: Stage production application
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/wd-builder/apps/EncDiskManager"
+          mkdir -p "$target"
+          cp -a app/. "$target/"
+          rm -rf "$target/development"
+          test -f "$target/web/usb-operation.php"
+          test "$(sed -n 's/^Version: //p' "$target/apkg.rc")" = "0.8.7"
+
+      - name: Build packages for all supported NAS models
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wd-builder"
+          ./build.sh EncDiskManager
+
+      - name: Verify release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/wd-builder/packages/EncDiskManager/0.8.7"
+          test -s "$out/EncDiskManager_0.8.7_WDMyCloudEX4100.bin"
+          test -s "$out/EncDiskManager_0.8.7_armhf.tar.gz"
+          test -s "$out/EncDiskManager_0.8.7_amd64.tar.gz"
+          test "$(find "$out" -maxdepth 1 -name 'EncDiskManager_0.8.7_*.bin' | wc -l)" -eq 10
+          test "$(find "$out" -maxdepth 1 -name 'EncDiskManager_0.8.7_*.tar.gz' | wc -l)" -eq 2
+          for archive in "$out"/*.tar.gz; do
+            gzip -t "$archive"
+            tar -tzf "$archive" | grep -q 'web/usb-operation.php'
+          done
+          python3 - "$out" <<'PY'
+          import io
+          import pathlib
+          import sys
+          import tarfile
+
+          out = pathlib.Path(sys.argv[1])
+          for path in sorted(out.glob('*.bin')):
+              raw = path.read_bytes()
+              offset = raw.find(b'\x1f\x8b\x08')
+              if offset < 0:
+                  raise SystemExit(f'No gzip payload in {path.name}')
+              with tarfile.open(fileobj=io.BytesIO(raw[offset:]), mode='r:gz') as archive:
+                  names = archive.getnames()
+                  if not any(name.endswith('/web/usb-operation.php') for name in names):
+                      raise SystemExit(f'Missing updated endpoint in {path.name}')
+              print(f'PASS: {path.name} has a valid app payload')
+          PY
+          (cd "$out" && sha256sum ./*)
+
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/wd-builder/packages/EncDiskManager/0.8.7"
+          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
+          ## EncDiskManager 0.8.7
+
+          - Locked LUKS disks consistently offer **Unlock**, whether or not a saved key is configured.
+          - Unlock automatically uses a valid saved key, without requesting the recovery passphrase again.
+          - Mount is a separate action, available only after unlocking.
+          - All four disk controls remain visible and are disabled when inapplicable.
+          - Mapper rows remain informational; operations are on the encrypted partition row.
+          - Existing registration, stored keys and encrypted disk data are preserved.
+
+          **Upgrade:** Download the .bin file for your NAS model. The WD My Cloud EX4100 package is
+          `EncDiskManager_0.8.7_WDMyCloudEX4100.bin`.
+
+          No packages from releases older than 0.8.7 are attached to this release.
+          NOTES
+          gh release create v0.8.7 "$out"/*.bin "$out"/*.tar.gz \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "8d6284a5c95312b817a25375badf4bfea7832d2e" \
+            --title "EncDiskManager 0.8.7 — Consistent Unlock/Mount actions" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
