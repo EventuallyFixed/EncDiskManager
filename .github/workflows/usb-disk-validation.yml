@@ -1,0 +1,50 @@
+name: USB disk encryption validation
+
+on:
+  push:
+    branches:
+      - feature/usb-disk-encryption
+      - feature/working-disk-operations
+  pull_request:
+    paths:
+      - 'app/bin/**'
+      - 'app/lib/**'
+      - 'app/development/tests/**'
+      - 'development/tests/**'
+      - 'app/web/**'
+      - '.github/workflows/usb-disk-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax
+        run: |
+          sh -n app/bin/encdiskmanager-whole-disk-format
+          sh -n app/bin/encdiskmanager-usb-operations
+          sh -n app/bin/whole-disk-identity-check.sh
+          sh -n app/bin/encdiskmanager-whole-disk-helper
+          sh -n app/bin/whole-disk-identity-check.sh
+          sh -n app/bin/whole-disk-dependencies.sh
+          sh -n app/development/tests/whole_disk_helper_interface_test.sh
+      - name: Run read-only helper fixture tests
+        run: sh app/development/tests/whole_disk_helper_interface_test.sh
+      - name: Check PHP syntax and new operation request tests
+        run: |
+          set -eu
+          find app/lib app/web -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php development/tests/whole-disk-format-request.php
+          php development/tests/usb-operation-request.php
+          php development/tests/disk-action-availability.php
+      - name: Run legacy read-only PHP fixtures
+        run: |
+          set -eu
+          for test in app/development/tests/whole_disk_*_test.php; do
+            php -l "$test"
+            php "$test"
+          done

@@ -1,0 +1,96 @@
+<?php
+/**
+ * Cross-check complete USB and mapper snapshots before registration policy.
+ * This is read-only evidence, not authorization for a disk operation.
+ */
+function edm_registration_snapshots_consistent($devices, $mappers)
+{
+    if (!is_array($devices) || !is_array($mappers)) return false;
+    $names = array();
+    $uuids = array();
+    foreach ($devices as $device) {
+        if (!is_array($device) || !isset($device['name'], $device['uuid'], $device['luks'])
+            || !is_string($device['name']) || !is_string($device['uuid'])
+            || !is_bool($device['luks'])
+            || !preg_match('/^[a-zA-Z0-9._+-]+$/D', $device['name'])
+            || isset($names[$device['name']])) return false;
+        $names[$device['name']] = true;
+        if ($device['luks']) {
+            if (!preg_match('/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iD', $device['uuid'])) return false;
+            $key = strtolower($device['uuid']);
+            if (isset($uuids[$key])) return false;
+            $uuids[$key] = $device['name'];
+        }
+    }
+    $mapperNames = array();
+    $mapperDevices = array();
+    $mapperEdges = array();
+    $mapperSources = array();
+    $mappedUsbParents = array();
+    foreach ($mappers as $mapper) {
+        if (!is_array($mapper) || !isset($mapper['name'], $mapper['source_uuid'], $mapper['parents'])
+            || !is_string($mapper['name']) || !is_string($mapper['source_uuid'])
+            || !is_array($mapper['parents']) || !$mapper['parents']
+            || isset($mapperNames[$mapper['name']])) return false;
+        $mapperNames[$mapper['name']] = true;
+        if (!isset($mapper['device']) || !is_string($mapper['device'])
+            || !preg_match('/^dm-[0-9]+$/D', $mapper['device'])
+            || isset($mapperDevices[$mapper['device']])) return false;
+        $mapperDevices[$mapper['device']] = true;
+        $mapperEdges[$mapper['device']] = $mapper['parents'];
+        $source = strtolower($mapper['source_uuid']);
+        if (isset($mapperSources[$source])) return false;
+        $mapperSources[$source] = true;
+        if (!preg_match('/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iD', $source)) return false;
+        $parents = array();
+        foreach ($mapper['parents'] as $parent) {
+            if (!is_string($parent) || !preg_match('/^[a-zA-Z0-9._+-]+$/D', $parent)
+                || isset($parents[$parent])) return false;
+            $parents[$parent] = true;
+            if (isset($names[$parent])) {
+                if (isset($mappedUsbParents[$parent])) return false;
+                $mappedUsbParents[$parent] = true;
+            }
+        }
+        // For a USB LUKS partition we identified, a mapper claiming its UUID
+        // must actually have that partition among its kernel slave devices.
+        if (isset($uuids[$source]) && !isset($parents[$uuids[$source]])) return false;
+        // Conversely, a mapper whose slave is a known USB LUKS partition
+        // must identify that partition's LUKS UUID.
+        foreach ($uuids as $uuid => $name) {
+            if (isset($parents[$name]) && $uuid !== $source) return false;
+        }
+    }
+    // Follow the full dm graph. A global visited set alone cannot detect
+    // cycles: distinguish nodes on the current path from completed nodes.
+    foreach ($mapperEdges as $device => $parents) {
+        $completed = array();
+        $stack = array(array('node' => $device, 'exit' => false, 'depth' => 0));
+        $active = array();
+        while ($stack) {
+            $frame = array_pop($stack);
+            $node = $frame['node'];
+            if ($frame['exit']) {
+                unset($active[$node]);
+                $completed[$node] = true;
+                continue;
+            }
+            if (isset($active[$node])) return false; // ancestry cycle
+            if (isset($completed[$node])) continue;
+            $active[$node] = true;
+            $stack[] = array('node' => $node, 'exit' => true, 'depth' => $frame['depth']);
+            foreach ($mapperEdges[$node] as $parent) {
+                if (in_array($parent, $uuids, true) && $frame['depth'] > 0) {
+                    return false; // nested mapper reaches managed USB LUKS partition
+                }
+                if (isset($mapperEdges[$parent])) {
+                    $stack[] = array('node' => $parent, 'exit' => false,
+                        'depth' => $frame['depth'] + 1);
+                } elseif (preg_match('/^dm-[0-9]+$/D', $parent)) {
+                    return false; // missing intermediate mapper
+                }
+            }
+        }
+    }
+    return true;
+}

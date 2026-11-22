@@ -1,0 +1,143 @@
+#!/bin/sh
+# General-purpose USB LUKS operations. No fixed disk, keyfile or mapper.
+# Call only after authenticated web authorization; validate live state here too.
+set -eu
+fail() { echo "ERROR: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || fail "Root privileges required."
+{ [ "$#" -eq 3 ] || [ "$#" -eq 4 ]; } || fail "Usage: helper {unlock|mount|unmount|lock|enrol} /dev/sdXN mapper-name [mount-folder|new-keyfile]"
+action=$1
+device=$2
+mapper=$3
+case "$action" in unlock|mount|unmount|lock|enrol) ;; *) fail "Unknown action." ;; esac
+case "$device" in /dev/sd*) suffix=${device#/dev/sd} ;; *) fail "Invalid device." ;; esac
+case "$suffix" in *[!a-z0-9]*|'') fail "Invalid partition name." ;; esac
+case "$suffix" in *[0-9]) ;; *) fail "A partition is required." ;; esac
+case "$mapper" in *[!a-zA-Z0-9_-]*|'') fail "Invalid mapper name." ;; esac
+# Newly created mappings use the edm_ prefix; existing mappings may have any safe name.
+sys=/sys/class/block/${device#/dev/}
+[ -b "$device" ] && [ -f "$sys/partition" ] || fail "Partition is unavailable."
+resolved=$(/usr/bin/readlink -f "$sys") || fail "Cannot resolve partition."
+case "$resolved" in */usb[0-9]*/*) ;; *) fail "Partition is not USB-backed." ;; esac
+crypt=/usr/local/modules/usr/sbin/cryptsetup
+[ -x "$crypt" ] || fail "cryptsetup unavailable."
+uuid=$("$crypt" luksUUID "$device" 2>/dev/null) || fail "Not a LUKS partition."
+[ -n "$uuid" ] || fail "LUKS identity missing."
+mapperdev=/dev/mapper/$mapper
+folder=${4:-$mapper}
+if [ "$action" = enrol ]; then
+    [ "$#" -eq 4 ] || fail "New keyfile required."
+    [ "$mapper" = "edm_$(printf '%s' "$uuid" | tr -d '-' | tr 'A-F' 'a-f')" ] || fail "LUKS identity changed."
+    [ -f "$4" ] && [ ! -L "$4" ] || fail "New keyfile unavailable."
+    [ "$(stat -c '%u:%a:%s' "$4")" = "0:600:32" ] || fail "New keyfile permissions or size invalid."
+elif [ "$#" -eq 4 ]; then
+    [ "$action" = mount ] || fail "Unexpected mount folder."
+    case "$folder" in ''|[!a-zA-Z0-9]*|*[!a-zA-Z0-9_-]*) fail "Invalid mount folder." ;; esac
+    [ "${#folder}" -le 48 ] || fail "Mount folder is too long."
+fi
+mountpoint=/mnt/$folder
+# For existing mappings, verify the actual source is the selected partition.
+verify_open() {
+    [ -b "$mapperdev" ] || fail "Mapping is not open."
+    source=$("$crypt" status "$mapper" 2>/dev/null |
+        sed -n 's/^[[:space:]]*device:[[:space:]]*//p' | head -n 1)
+    [ -n "$source" ] && [ -b "$source" ] || fail "Mapping source unavailable."
+    [ "$(/usr/bin/readlink -f "$source")" = "$(/usr/bin/readlink -f "$device")" ] ||
+        fail "Mapping belongs to another partition."
+}
+# WD OS5 may create native block nodes instead of symlinks to /dev/dm-N.
+# Resolve the device number independently of the node's pathname.
+mapper_sys_path() {
+    numbers=$(stat -L -c '%t:%T' "$mapperdev") || fail "Cannot identify mapper."
+    major=${numbers%:*}
+    minor=${numbers#*:}
+    case "$major" in ''|*[!0-9a-fA-F]*) fail "Invalid mapper major number." ;; esac
+    case "$minor" in ''|*[!0-9a-fA-F]*) fail "Invalid mapper minor number." ;; esac
+    id=$(printf '%d:%d' "0x$major" "0x$minor") || fail "Cannot identify mapper."
+    path=/sys/dev/block/$id
+    [ -r "$path/dev" ] || fail "Mapper kernel device unavailable."
+    printf '%s\n' "$path"
+}
+# mountinfo is checked by source major:minor for safety across device aliases.
+mounted_id() {
+    id=$(cat "$1/dev") || fail "Cannot identify block device."
+    awk -v id="$id" '$3 == id { found=1 } END { exit !found }' /proc/self/mountinfo
+}
+case "$action" in
+    enrol)
+        # Add a new keyslot; never replace or remove the recovery passphrase.
+        "$crypt" luksAddKey --batch-mode --key-file - "$device" "$4"
+        ;;
+    unlock)
+        case "$mapper" in edm_*) ;; *) fail "New mappings must use edm_ prefix." ;; esac
+        [ ! -e "$mapperdev" ] || fail "Mapping already exists."
+        # Do not open a second mapping for a partition already used by dm,
+        # RAID or another kernel block-device holder.
+        for holder in "$sys"/holders/*; do
+            [ ! -e "$holder" ] || fail "Partition is already in use."
+        done
+        mounted_id "$sys" && fail "Encrypted partition is mounted."
+        # Passphrase is read from stdin, never command-line arguments.
+        "$crypt" open --type luks --key-file - "$device" "$mapper"
+        ;;
+    mount)
+        verify_open
+        mapper_sys=$(mapper_sys_path) || exit 1
+        mounted_id "$mapper_sys" && fail "Mapping already mounted."
+        # Do not mount over an existing directory or unrelated filesystem.
+        [ ! -e "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
+            fail "Mountpoint already exists; refusing to reuse it."
+        mkdir "$mountpoint"
+        # Refuse non-ext4 payloads, including arbitrary data on a LUKS mapping.
+        fs_type=$(/usr/bin/blkid -o value -s TYPE "$mapperdev" 2>/dev/null) ||
+            fs_type=''
+        if [ "$fs_type" != ext4 ]; then
+            rmdir "$mountpoint" 2>/dev/null || true
+            fail "Unlocked container does not contain ext4."
+        fi
+        if ! /bin/mount -t ext4 "$mapperdev" "$mountpoint"; then
+            rmdir "$mountpoint" 2>/dev/null || true
+            fail "Mount failed."
+        fi
+        ;;
+    unmount)
+        verify_open
+        mapper_sys=$(mapper_sys_path) || exit 1
+        mounted_id "$mapper_sys" || fail "Mapping is not mounted."
+        # Discover the real mountpoint by the mapping's kernel device ID.
+        # Refuse multiple mounts or anything outside /mnt.
+        id=$(cat "$mapper_sys/dev") ||
+            fail "Cannot identify mapper."
+        mountpoint=$(awk -v id="$id" '
+            $3 == id { count++; target=$5 }
+            END {
+                if (count != 1 || substr(target, 1, 5) != "/mnt/") exit 1
+                print target
+            }
+        ' /proc/self/mountinfo) || fail "Expected one mapper mount below /mnt."
+        # User-configured mount directory names cannot contain spaces.
+        # Refuse mountinfo-escaped paths rather than interpreting escape data
+        # as shell input or operating on an unexpected directory.
+        case "$mountpoint" in
+            *\\*|*[!a-zA-Z0-9_./-]*)
+                fail "Mountpoint contains unsupported characters." ;;
+            /mnt/*) ;;
+            *) fail "Invalid USB mountpoint." ;;
+        esac
+        case "$mountpoint" in
+            */../*|*/./*|*/..|*/.) fail "Invalid USB mountpoint." ;;
+        esac
+        [ -d "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
+            fail "Mountpoint is unavailable."
+        /bin/umount "$mountpoint"
+        # Unmount has succeeded. Remove an empty mountpoint if possible,
+        # but do not report a disk-operation failure just because the
+        # directory cannot be removed.
+        rmdir "$mountpoint" 2>/dev/null || true
+        ;;
+    lock)
+        verify_open
+        mapper_sys=$(mapper_sys_path) || exit 1
+        mounted_id "$mapper_sys" && fail "Mapping is still mounted."
+        "$crypt" close "$mapper"
+        ;;
+esac

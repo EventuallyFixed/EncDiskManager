@@ -709,7 +709,15 @@ function edm_backup_restore_archive($compressed, $replaceExisting)
 
 function edm_backup_delete_configuration()
 {
+    require_once __DIR__ . '/unlock_key.php';
     $dataPath = edm_auth_data_path();
+    edm_unlock_key_with_lock($dataPath, function () use ($dataPath) {
+        edm_backup_delete_configuration_locked($dataPath);
+    });
+}
+
+function edm_backup_delete_configuration_locked($dataPath)
+{
 
     // Use the same lock order as restore: restore.lock, then admin.lock.
     // This serializes deletion with restore, login and initial setup.
@@ -767,6 +775,7 @@ function edm_backup_delete_configuration()
             'admin.json', 'disks.json', 'setup-token', 'login-attempts.json',
             'disks.json.lock'
         );
+        $known = array_merge(edm_unlock_key_filenames($dataPath), $known);
 
         // Validate every known entry before deleting any of them, so an unsafe
         // file cannot cause an avoidable partial wipe.

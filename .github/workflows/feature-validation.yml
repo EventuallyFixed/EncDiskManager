@@ -1,0 +1,134 @@
+name: Feature branch validation
+
+on:
+  push:
+    branches:
+      - feature/usb-disk-encryption
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  php-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: PHP syntax checks
+        run: |
+          find app -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Run read-only regression tests
+        run: |
+          set -eu
+          for test in app/development/tests/*_test.php; do
+            echo "Running $test"
+            php "$test"
+          done
+
+  native-helper-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disabled whole-disk helper interface regression
+        run: sh app/development/tests/whole_disk_helper_interface_test.sh
+      - name: Compile-only native recovery helper check
+        run: sh app/development/tests/native_recovery_marker_compile_test.sh
+      - name: Isolated native recovery helper runtime test
+        run: sudo sh app/development/tests/native_recovery_marker_isolated_test.sh
+      - name: Isolated native inherited FD identity regression
+        run: python3 app/development/tests/lock_fd_probe_isolated_test.py
+      - name: Isolated inherited flock ownership semantics
+        run: python3 app/development/tests/lock_fd_ownership_isolated_test.py
+      - name: Isolated surviving child restart gate
+        run: python3 app/development/tests/lock_surviving_child_isolated_test.py
+      - name: Isolated abrupt coordinator exit restart gate
+        run: python3 app/development/tests/lock_pending_abrupt_exit_isolated_test.py
+      - name: Isolated pending-record restart gate
+        run: python3 app/development/tests/lock_pending_restart_isolated_test.py
+      - name: Isolated pending-record failure injection
+        run: python3 app/development/tests/lock_pending_failure_isolated_test.py
+      - name: Isolated coordinator child handoff
+        run: python3 app/development/tests/lock_coordinator_handoff_isolated_test.py
+      - name: Isolated Linux flock inheritance experiment
+        run: python3 app/development/tests/lock_inheritance_isolated_test.py
+      - name: Isolated parent crash lock-lifetime experiment
+        run: python3 app/development/tests/lock_parent_crash_isolated_test.py
+
+  native-helper-armhf-cross-compile:
+    runs-on: ubuntu-latest
+    container: debian:bullseye
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM hard-float cross-compiler
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends gcc-arm-linux-gnueabihf libc6-dev-armhf-cross file binutils
+      - name: Cross-compile only (no execution or artifact upload)
+        run: |
+          set -eu
+          arm-linux-gnueabihf-gcc -std=c11 -Wall -Wextra -Werror -pedantic \
+            -O2 app/development/native/disk_recovery_marker.c \
+            -o /tmp/edm-recovery-marker-armhf
+          file /tmp/edm-recovery-marker-armhf
+          readelf -h /tmp/edm-recovery-marker-armhf | grep -E 'Class:|Machine:|Flags:'
+          readelf -h /tmp/edm-recovery-marker-armhf | grep -q 'Machine:.*ARM'
+          readelf -h /tmp/edm-recovery-marker-armhf | grep -q 'hard-float ABI'
+          echo '=== ARM ELF interpreter and shared libraries ==='
+          readelf -l /tmp/edm-recovery-marker-armhf | grep 'Requesting program interpreter' || true
+          readelf -d /tmp/edm-recovery-marker-armhf | grep -E 'NEEDED|RUNPATH|RPATH' || true
+          echo '=== Required GLIBC symbol versions ==='
+          readelf --version-info /tmp/edm-recovery-marker-armhf | grep 'Name: GLIBC_' || true
+          if ! readelf --version-info /tmp/edm-recovery-marker-armhf |
+             awk '/Name: GLIBC_/ {
+               for (i = 1; i <= NF; i++) {
+                 if ($i ~ /^GLIBC_[0-9]+[.][0-9]+$/) {
+                   split(substr($i, 7), v, ".");
+                   if (v[1] + 0 > 2 || (v[1] + 0 == 2 && v[2] + 0 > 31)) {
+                     print "FAIL: required " $i " exceeds EX4100 glibc 2.31";
+                     bad = 1;
+                   }
+                 }
+               }
+             } END { exit bad ? 1 : 0 }'; then
+            exit 1
+          fi
+          echo '=== ARM cross-toolchain libc version ==='
+          arm-linux-gnueabihf-gcc -dumpmachine
+          echo 'NOTE: ELF metadata does not prove compatibility with NAS libc'
+          rm -f /tmp/edm-recovery-marker-armhf
+
+  root-authorization-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Run isolated root-only registry and discovery tests
+        run: |
+          set -eu
+          sudo php -r 'if (!function_exists("posix_geteuid") || posix_geteuid() !== 0) { fwrite(STDERR, "Root-required tests cannot run\\n"); exit(1); }'
+          sudo php app/development/tests/registered_operation_inspection_test.php
+          sudo php app/development/tests/authorized_operation_inspection_test.php
+          sudo php app/development/tests/authorized_operation_discovery_failure_test.php
+
+  browser-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install test-only DOM implementation
+        run: npm install --no-save --no-package-lock jsdom@26
+      - name: Test incremental inventory updates
+        run: node app/development/tests/inventory_browser_test.cjs
+      - name: Test whole-disk confirmation preview
+        run: node app/development/tests/whole_disk_confirmation_browser_test.cjs

@@ -1,0 +1,147 @@
+#!/bin/sh
+# Destructive whole-disk LUKS2 + ext4 formatter.
+# NOT wired to the web UI: integration and NAS testing are still required.
+# Usage: helper /dev/sdX ID SYSFS_PATH SECTORS PARTITION_SNAPSHOT
+# Passphrase is supplied on stdin, never in arguments.
+set -eu
+fail() { echo "ERROR: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || fail "Root privileges required."
+[ "$#" -eq 5 ] || fail "Expected disk and four confirmed identity fields."
+disk=$1
+case "$disk" in /dev/sd*) letters=${disk#/dev/sd} ;; *) fail "Invalid disk." ;; esac
+case "$letters" in ''|*[!a-z]*) fail "Whole USB disk required." ;; esac
+check="$(dirname "$0")/encdiskmanager-whole-disk-helper"
+[ -r "$check" ] || fail "Preflight helper unavailable."
+# Revalidate the selected device, its partitions and all mounts immediately
+# before any destructive command. No external caller may skip this check.
+sh "$check" check "$disk" "$2" "$3" "$4" "$5" >/dev/null ||
+    fail "USB disk identity or busy-state check failed."
+
+crypt=/usr/local/modules/usr/sbin/cryptsetup
+[ -x "$crypt" ] || fail "cryptsetup unavailable."
+find_executable() {
+    for dir in /sbin /usr/sbin /bin /usr/bin /usr/local/sbin /usr/local/bin; do
+        [ ! -x "$dir/$1" ] || { printf '%s\n' "$dir/$1"; return 0; }
+    done
+    return 1
+}
+gdisk=$(find_executable gdisk) || fail "gdisk unavailable."
+mkfs=$(find_executable mkfs.ext4 || find_executable mke2fs) ||
+    fail "ext4 formatter unavailable."
+[ -x /usr/bin/blockdev ] || fail "blockdev unavailable."
+# Read the passphrase before erasing anything. Reject empty or oversized input.
+# A temporary file is necessary because both luksFormat and open consume stdin.
+# It is created in root-only runtime memory and deleted on exit.
+umask 077
+[ -d /run ] || fail "/run unavailable."
+key=$(mktemp /run/encdiskmanager-key.XXXXXX) || fail "Cannot create key buffer."
+mapper=''
+cleanup() {
+    if [ -n "$mapper" ]; then "$crypt" close "$mapper" >/dev/null 2>&1 || true; fi
+    rm -f "$key"
+}
+# Signals terminate the operation; the exit trap handles cleanup once.
+trap cleanup 0
+trap 'exit 1' 1 2 3 15
+# head reads until EOF or the byte limit; unlike dd count=1, it does not
+# treat a short pipe read as the complete passphrase.
+head -c 4097 > "$key" || fail "Cannot read passphrase."
+[ -s "$key" ] || fail "Empty passphrase."
+[ "$(wc -c < "$key")" -le 4096 ] || fail "Passphrase too long."
+# Recheck after receiving the secret, immediately before partitioning.
+sh "$check" check "$disk" "$2" "$3" "$4" "$5" >/dev/null ||
+    fail "USB disk changed while awaiting passphrase."
+# Replace the partition table with one GPT Linux partition spanning the disk.
+# All existing partitions must disappear before any LUKS operation begins.
+# gdisk is supplied with WD My Cloud OS5; sfdisk is not. Feed the same
+# prompts tested interactively on the EX4100. A failed gdisk exit stops
+# before any LUKS operation; subsequent checks verify the new partition.
+# o: new GPT, y: confirm, n: partition 1, default start/end, 8300: Linux,
+# w: write, y: final confirmation.
+printf 'o\ny\nn\n1\n\n\n8300\nw\ny\n' | "$gdisk" "$disk" >/dev/null ||
+    fail "Partition table creation failed."
+/usr/bin/blockdev --rereadpt "$disk" || fail "Kernel partition refresh failed."
+partition="${disk}1"
+# The kernel may need a moment to expose the replacement partition.
+# Wait briefly, but reject unexpected leftover partitions immediately.
+attempt=0
+while :; do
+    partition_count=0
+    for entry in "/sys/class/block/${disk#/dev/}"/"${disk#/dev/}"[0-9]*; do
+        [ -f "$entry/partition" ] || continue
+        partition_count=$((partition_count + 1))
+        [ "${entry##*/}" = "${disk#/dev/}1" ] ||
+            fail "Unexpected partition remains after repartitioning."
+    done
+    if [ "$partition_count" -eq 1 ] && [ -b "$partition" ]; then
+        break
+    fi
+    attempt=$((attempt + 1))
+    [ "$attempt" -lt 10 ] ||
+        fail "Expected partition did not appear after repartitioning."
+    sleep 1
+done
+[ -b "$partition" ] || fail "New partition is not available."
+partition_sys="/sys/class/block/${partition#/dev/}"
+[ -f "$partition_sys/partition" ] ||
+    fail "Expected new partition is missing from sysfs."
+parent=$( /usr/bin/readlink -f "$partition_sys" ) ||
+    fail "Cannot resolve new partition."
+disk_sys=$( /usr/bin/readlink -f "/sys/class/block/${disk#/dev/}" ) ||
+    fail "Cannot resolve selected disk."
+case "$parent" in
+    "$disk_sys"/*) ;;
+    *) fail "New partition does not belong to selected USB disk." ;;
+esac
+[ "$(cat "$partition_sys/partition")" = 1 ] ||
+    fail "Expected first partition was not created."
+# Verify gdisk's default 2048-sector alignment and full usable GPT span.
+# The backup GPT reserves one header sector plus 16 KiB of entries at
+# the end of the disk. Read the kernel's partition geometry, not blkid's
+# potentially stale filesystem signature, before formatting anything.
+logical=$(cat "$disk_sys/queue/logical_block_size") ||
+    fail "Cannot read disk logical sector size."
+[ "$logical" = 512 ] || fail "Only 512-byte logical sectors are supported."
+case "$4" in ''|*[!0-9]*) fail "Invalid confirmed disk sector count." ;; esac
+[ "$4" -gt 4096 ] || fail "Disk is too small for the expected layout."
+[ "$(cat "$disk_sys/size")" = "$4" ] ||
+    fail "Disk capacity changed after repartitioning."
+expected_end=$(( $4 - 34 ))
+expected_size=$(( expected_end - 2048 + 1 ))
+[ "$(cat "$partition_sys/start")" = 2048 ] ||
+    fail "Unexpected partition starting sector."
+[ "$(cat "$partition_sys/size")" = "$expected_size" ] ||
+    fail "Unexpected partition size after GPT creation."
+"$crypt" luksFormat --type luks2 --batch-mode --key-file "$key" "$partition" ||
+    fail "LUKS2 format failed."
+uuid=$("$crypt" luksUUID "$partition") || fail "LUKS UUID unavailable."
+case "$uuid" in
+    *[!a-fA-F0-9-]*|'') fail "Invalid LUKS UUID." ;;
+esac
+new_mapper="edm_$(printf '%s' "$uuid" | tr -d '-' | tr 'A-F' 'a-f')"
+# Never close an existing mapping if opening our new mapping fails.
+[ ! -e "/dev/mapper/$new_mapper" ] ||
+    fail "A mapping with this name already exists."
+"$crypt" open --type luks --key-file "$key" "$partition" "$new_mapper" ||
+    fail "LUKS open failed."
+mapper=$new_mapper
+# Neither ext4 formatting nor closing the mapping needs the passphrase.
+# Discard the temporary key immediately after the second cryptsetup use.
+rm -f "$key" || fail "Could not remove temporary passphrase."
+case "$mkfs" in
+    */mke2fs) "$mkfs" -t ext4 -F "/dev/mapper/$mapper" ;;
+    *) "$mkfs" -F "/dev/mapper/$mapper" ;;
+esac || fail "ext4 format failed."
+# Mount the newly formatted volume using the same convention as the
+# table's Mount action. Never reuse an existing directory or mount.
+mountpoint="/mnt/$mapper"
+[ ! -e "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
+    fail "Mountpoint already exists; refusing to reuse it."
+mkdir "$mountpoint" || fail "Could not create mountpoint."
+if ! /bin/mount -t ext4 "/dev/mapper/$mapper" "$mountpoint"; then
+    rmdir "$mountpoint" 2>/dev/null || true
+    fail "ext4 filesystem created, but mounting failed."
+fi
+# A successfully mounted mapping must not be closed by the exit trap.
+mapper=''
+printf 'WARNING: %s is unlocked and mounted at %s. Unmount and Lock it using the table buttons when finished.\n' "$disk" "$mountpoint"
