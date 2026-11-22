@@ -82,7 +82,7 @@ jobs:
           test "$(find "$out" -maxdepth 1 -name 'EncDiskManager_0.8.7_*.tar.gz' | wc -l)" -eq 2
           for archive in "$out"/*.tar.gz; do
             gzip -t "$archive"
-            tar -tzf "$archive" | grep -q 'web/usb-operation.php'
+            tar -tzf "$archive" | grep 'web/usb-operation.php' >/dev/null
           done
           python3 - "$out" <<'PY'
           import io
