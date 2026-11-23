@@ -2,7 +2,7 @@
 
 **EncDiskManager (Encrypted Disk Manager)** is a web-based utility for managing LUKS-encrypted USB storage on **WD My Cloud OS5** NAS devices.
 
-It discovers attached USB disks, lets you unlock and mount encrypted volumes, and provides a controlled way to encrypt a whole USB disk with an ext4 filesystem.
+Written in PHP and using out-of-box utilities on the NAS, it discovers attached USB disks, lets you unlock and mount encrypted volumes, and provides a controlled way to encrypt a whole USB disk with LUKS encryption and have an ext4 filesystem overlaid.
 
 **Current version:** 0.8.7 — developed and tested on the WD My Cloud EX4100.
 
@@ -115,6 +115,7 @@ Download and securely retain a configuration backup before upgrading or removing
 - Registration names and mount directories cannot currently be edited after registration through the UI.
 - Disks are not automatically unlocked and mounted merely because they are reconnected.
 - This software performs privileged storage operations. Use it only on hardware and data you are prepared to recover from backups.
+- This does *NOT* prevent the NAS from showing a red LED on attaching the LUKS/ext4 disk, nor prevent the 'Unable to mount USB Device' message displayed by OS5, which must be removed manually. 
 
 ## Development
 
@@ -148,3 +149,14 @@ The GitHub Actions workflows run additional syntax and fixture checks. Tests do 
 - [Source code](https://github.com/EventuallyFixed/EncDiskManager)
 - [Version 0.8.7 installation packages](releases/0.8.7/)
 - [Issues and suggestions](https://github.com/EventuallyFixed/EncDiskManager/issues)
+
+# Screenshots
+
+## Disk attached, unlocked, and mounted.
+<img width="1442" height="738" alt="image" src="https://github.com/user-attachments/assets/07d64529-540d-4a6a-b620-736a2f9321c0" />
+
+## Disk Registration
+<img width="513" height="670" alt="image" src="https://github.com/user-attachments/assets/35e17388-971a-4004-a28c-c66fea3e22f1" />
+
+## Settings
+<img width="1442" height="738" alt="image" src="https://github.com/user-attachments/assets/aa4d1c97-c9ae-4078-b70b-1ebdec777f6f" />
