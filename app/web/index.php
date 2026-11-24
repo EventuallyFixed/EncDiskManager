@@ -189,6 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
                     $directory = edm_auth_data_path();
                     $uuid = $request['luks_uuid'];
                     edm_unlock_key_with_lock($directory, function () use ($directory, $uuid) {
+                        edm_configuration_require_unmounted($uuid);
                         edm_registry_set_key_preference($directory . '/disks.json', $uuid, false);
                         edm_unlock_key_remove($directory, $uuid);
                     });
@@ -211,11 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
                 edm_unlock_key_with_lock($directory, function () use ($directory, $uuid, $validated) {
                     edm_registry_save($directory . '/disks.json', null, function ($registry) use ($directory, $uuid, $validated) {
                         edm_configuration_registration_preflight($validated, $registry);
-                        $live = edm_discover_usb_inventory();
-                        if (!is_array($live['sysEntries']) || !is_readable('/proc/self/mountinfo')
-                            || !edm_registration_can_delete($uuid, $live['devices'])) {
-                            throw new RuntimeException('Unmount the disk before deleting its registration, or wait for disk state to become available.');
-                        }
+                        edm_configuration_require_unmounted($uuid);
                         edm_unlock_key_remove($directory, $uuid);
                         $registry['disks'] = array_values(array_filter($registry['disks'], function ($disk) use ($uuid) {
                             return strcasecmp($disk['luks_uuid'], $uuid) !== 0;
@@ -482,6 +479,8 @@ try {
             <?php foreach ($inventoryRows as $row):
                 $disk = $row['device'];
                 $status = $row['status'];
+                $canConfigure = $row['registered'] && is_readable('/proc/self/mountinfo')
+                    && edm_configuration_available($row['luks_uuid'], $devices, $wholeDiskInventory);
                 $mountFolder = $row['registered'] && $status !== 'Encrypted — Mounted'
                     ? '/mnt/' . $row['mount_folder'] : '—';
             ?>
@@ -490,14 +489,14 @@ try {
                         <button type="button" class="register-disk" data-uuid="<?php echo h($row['luks_uuid']); ?>"
                             data-name="<?php echo h($row['name']); ?>" data-status="<?php echo h($row['status']); ?>"
                             <?php echo !$row['registered'] && $disk !== null && !empty($disk['luks']) && $row['luks_uuid'] !== '' ? '' : 'disabled'; ?>>Register</button>
-                            <button type="button" class="configure-disk" <?php echo $row['registered'] ? '' : 'disabled'; ?>
+                            <button type="button" class="configure-disk" <?php echo $canConfigure ? '' : 'disabled'; ?>
                                 data-uuid="<?php echo h($row['luks_uuid']); ?>"
                                 data-name="<?php echo h($row['name']); ?>"
                                 data-folder="<?php echo h($row['mount_folder']); ?>"
                                 data-store-key="<?php echo !empty($row['store_unlock_key']) ? '1' : '0'; ?>"
                                 data-status="<?php echo h($row['status']); ?>"
-                                data-can-delete="<?php echo $row['registered'] && is_readable('/proc/self/mountinfo') && edm_registration_can_delete($row['luks_uuid'], $devices) ? '1' : '0'; ?>"
-                                title="Edit registered disk configuration">Configure</button>
+                                data-can-configure="<?php echo $canConfigure ? '1' : '0'; ?>"
+                                title="<?php echo $canConfigure ? 'Edit registered disk configuration' : 'Unmount all partitions on this disk before configuring it'; ?>">Configure</button>
                         <?php foreach (array('Unlock', 'Mount', 'Unmount', 'Lock') as $action): ?>
                             <button type="button" disabled title="<?php echo h($action . ': not yet available in this development build'); ?>"><?php echo h($action); ?></button>
                         <?php endforeach; ?>
@@ -540,7 +539,7 @@ try {
     </dialog>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
         <h2 id="disk-config-title">Disk configuration</h2>
-        <p class="muted" id="config-preview-note">Change the registered name at any time. Unmount the disk before changing its mount directory. Changes apply to future mounts; disk contents and stored keys are not changed.</p>
+        <p class="muted" id="config-preview-note">Unmount all partitions on the USB disk before changing its configuration. Changes apply to future mounts; disk contents and stored keys are not changed.</p>
         <p id="registration-note" hidden>Registration does not change the current mount or disk contents. The configured directory is used for future mounts.</p>
         <p><strong>LUKS UUID:</strong> <code id="config-uuid"></code></p>
         <p><strong>Connection:</strong> <span id="config-status"></span></p>
@@ -771,7 +770,7 @@ function edmMarkUnplugUnsafe() {
             document.querySelector('#disk-config-form [name=config_action]').value = registering ? 'register' : 'edit';
             document.querySelector('#disk-config-form button[type=submit]').textContent = registering ? 'Register' : 'Save changes';
             var deleteButton = document.getElementById('config-delete-registration');
-            deleteButton.disabled = registering || button.dataset.canDelete !== '1';
+            deleteButton.disabled = registering || button.dataset.canConfigure !== '1';
             deleteButton.title = deleteButton.disabled ? 'Available only for unmounted registrations with known disk state' : 'Remove registration without erasing the disk';
             document.getElementById('config-delete-confirmation').disabled = true;
             document.getElementById('config-preview-note').hidden = registering;
@@ -784,9 +783,7 @@ function edmMarkUnplugUnsafe() {
                 : button.dataset.storeKey === '1' ? 'Key storage is enabled, but no key is saved yet.'
                 : 'No stored unlock key.';
             document.getElementById('config-name').readOnly = false;
-            var folder = document.getElementById('config-folder');
-            folder.readOnly = !registering && button.dataset.canDelete !== '1';
-            folder.title = folder.readOnly ? 'Unmount the disk or wait for live disk state before editing the mount directory' : '';
+            document.getElementById('config-folder').readOnly = false;
             document.getElementById('config-uuid').textContent = button.getAttribute('data-uuid');
             document.getElementById('config-form-uuid').value = button.getAttribute('data-uuid');
             document.getElementById('config-status').textContent = button.getAttribute('data-status');
@@ -929,7 +926,7 @@ function edmMarkUnplugUnsafe() {
                 button.textContent = mode === 'register' ? 'Register' : 'Configure';
                 actionCell.insertBefore(button, actionCell.firstChild);
             }
-            button.disabled = mode === 'configure' ? !item.registered :
+            button.disabled = mode === 'configure' ? !item.registered || item.can_configure !== true || operationBusy :
                 item.registered || item.connection !== 'connected' ||
                 !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(item.uuid);
             button.dataset.uuid = item.uuid;
@@ -937,7 +934,10 @@ function edmMarkUnplugUnsafe() {
             button.dataset.folder = item.folder;
             button.dataset.storeKey = item.store_unlock_key === true ? '1' : '0';
             button.dataset.keyAvailable = item.stored_key_available ? '1' : '0';
-            button.dataset.canDelete = item.can_delete_registration === true && !operationBusy ? '1' : '0';
+            button.dataset.canConfigure = item.can_configure === true && !operationBusy ? '1' : '0';
+            if (mode === 'configure') button.title = button.disabled
+                ? 'Unmount all partitions on this disk before configuring it, or wait for live disk state'
+                : 'Edit registered disk configuration';
             button.dataset.status = item.status;
         });
 
@@ -1239,7 +1239,7 @@ function edmMarkUnplugUnsafe() {
                     if (!item || typeof item.key !== 'string' || !item.key ||
                         seen[item.key] || !['connected', 'disconnected'].includes(item.connection) ||
                         typeof item.registered !== 'boolean' ||
-                        typeof item.can_delete_registration !== 'boolean' ||
+                        typeof item.can_configure !== 'boolean' ||
                          typeof item.parent_disk !== 'string' ||
                         ['name', 'device', 'status', 'type', 'uuid', 'mount', 'folder', 'mapper'].some(function (field) {
                             return typeof item[field] !== 'string';
@@ -1290,7 +1290,9 @@ function edmMarkUnplugUnsafe() {
                 edmMarkUnplugUnsafe();
                 // Do not allow actions based on a stale disk state.
                 Array.prototype.forEach.call(table.querySelectorAll('.configure-disk'), function (button) {
-                    button.dataset.canDelete = '0';
+                    button.dataset.canConfigure = '0';
+                    button.disabled = true;
+                    button.title = 'Disk state unavailable; wait for inventory to refresh';
                 });
                 Array.prototype.forEach.call(table.querySelectorAll('button[data-operation], .whole-disk-preview-button'), function (button) {
                     button.disabled = true;

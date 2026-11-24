@@ -20,10 +20,13 @@ const uuid = '12345678-1234-1234-1234-123456789abc';
 Object.assign(button.dataset, {uuid, name: 'Backup', folder: 'backup', storeKey: '1', keyAvailable: '1'});
 for (const [status, canEdit] of [['Disconnected', true], ['Encrypted — Locked', true],
     ['Encrypted — Unlocked', true], ['Encrypted — Mounted', false], ['State unknown', false]]) {
-    Object.assign(button.dataset, {status, canDelete: canEdit ? '1' : '0'});
+    Object.assign(button.dataset, {status, canConfigure: canEdit ? '1' : '0'});
+    button.disabled = !canEdit;
     button.click();
+    assert.equal(dialog.open, canEdit, status);
+    if (!canEdit) continue;
     assert.equal(doc.querySelector('#config-name').readOnly, false, status);
-    assert.equal(doc.querySelector('#config-folder').readOnly, !canEdit, status);
+    assert.equal(doc.querySelector('#config-folder').readOnly, false, status);
     assert.equal(form.elements.config_action.value, 'edit');
     assert.equal(new window.FormData(form).has('remove_unlock_key'), false, 'ordinary Save preserves key');
     dialog.close();
@@ -31,6 +34,8 @@ for (const [status, canEdit] of [['Disconnected', true], ['Encrypted — Locked'
 let submitted = false;
 form.submit = () => { submitted = true; };
 window.confirm = () => true;
+button.disabled = false;
+button.dataset.canConfigure = '1';
 button.click();
 doc.querySelector('#config-remove-key').click();
 assert.equal(submitted, true);
@@ -46,3 +51,26 @@ assert.equal(form.elements.config_action.value, 'register');
 assert.equal(doc.querySelector('#config-folder').readOnly, false);
 assert.equal(doc.querySelector('#config-remove-key').disabled, true);
 console.log('PASS: configuration fields, mounted restrictions, key removal and registration');
+
+const renderStart = source.indexOf('    function updateRow(row, item) {');
+const renderEnd = source.indexOf('    function sortRows()', renderStart);
+const render = new Function('document', 'operationBusy', source.slice(renderStart, renderEnd) + '\nreturn updateRow;')(doc, false);
+const row = doc.querySelector('tr');
+for (let n = 0; n < 6; n++) row.appendChild(doc.createElement('td'));
+for (const action of ['Unlock','Mount','Unmount','Lock']) {
+    const control = doc.createElement('button');
+    control.textContent = action;
+    row.cells[0].appendChild(control);
+}
+dialog.close();
+for (const [status, canConfigure] of [['Encrypted — Locked', true], ['Encrypted — Locked', false], ['Encrypted — Mounted', false], ['Encrypted — Unlocked', true], ['Disconnected', true]]) {
+    render(row, {connection: status === 'Disconnected' ? 'disconnected' : 'connected',
+        registered: true, name: 'Backup', device: '/dev/sdb1', status, type: 'crypto_LUKS',
+        uuid, mount: '/mnt/backup', folder: 'backup', mapper: '', can_configure: canConfigure,
+        actions: {unlock:false,mount:false,unmount:false,lock:false,encrypt:false}});
+    assert.equal(button.disabled, !canConfigure, 'actual row renderer follows whole-disk configuration availability');
+    button.click();
+    assert.equal(dialog.open, canConfigure, 'disabled Configure cannot open dialog');
+    dialog.close();
+}
+console.log('PASS: Configure follows whole-disk mount state and re-enables after unmount');

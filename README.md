@@ -112,7 +112,7 @@ Download and securely retain a configuration backup before upgrading or removing
 - **Safe to unplug** is based on the application's current disk discovery and activity checks. It is not permission to disconnect a disk that another process is still using.
 - Unmounting an encrypted filesystem does not close its LUKS mapping. Always **Lock** separately.
 - A stored unlock key improves convenience but makes the encrypted disk accessible to someone who gains sufficient control of the NAS.
-- **Configure** lets you edit a registered disk's name at any time and its mount directory when disconnected, locked or unlocked but unmounted. The new directory must be unique and unused. Saving does not move a live mount, change disk contents or remove a stored key.
+- **Configure** lets you edit a registered disk's name and mount directory only when disconnected or when every partition on its physical USB disk is unmounted. Configure is disabled if any partition is mounted. The new directory must be unique and unused. Saving does not move a live mount, change disk contents or remove a stored key.
 - Disks are not automatically unlocked and mounted merely because they are reconnected.
 - This software performs privileged storage operations. Use it only on hardware and data you are prepared to recover from backups.
 - This does *NOT* prevent the NAS from showing a red LED on attaching the LUKS/ext4 disk, nor prevent the 'Unable to mount USB Device' message displayed by OS5, which must be removed manually. 

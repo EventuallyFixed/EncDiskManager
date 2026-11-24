@@ -57,8 +57,8 @@ try {
     require_once __DIR__ . '/../lib/unlock_key.php';
     require_once __DIR__ . '/../lib/configuration_authorization.php';
     foreach ($result as &$item) {
-        $item['can_delete_registration'] = $item['registered'] && is_readable('/proc/self/mountinfo')
-            && edm_registration_can_delete($item['uuid'], $snapshot['devices']);
+        $item['can_configure'] = $item['registered'] && is_readable('/proc/self/mountinfo')
+            && edm_configuration_available($item['uuid'], $snapshot['devices'], $whole);
         $item['stored_key_available'] = $item['registered'] && $item['store_unlock_key']
             && edm_unlock_key_read(edm_auth_data_path(), $item['uuid']) !== null;
         $deviceName = $item['connection'] === 'connected'
