@@ -4,7 +4,7 @@
 
 Written in PHP and using out-of-box utilities on the NAS, it discovers attached USB disks, lets you unlock and mount encrypted volumes, and provides a controlled way to encrypt a whole USB disk with LUKS encryption and have an ext4 filesystem overlaid.
 
-**Current version:** 1.0.0 — developed and tested on the WD My Cloud EX4100.
+**Development version:** 1.0.1 — developed for the WD My Cloud EX4100. Latest published stable release: 1.0.0.
 
 > [!WARNING]
 > **Encrypt + ext4 permanently erases and repartitions the entire selected USB disk.** All existing partitions and data on that disk will be lost. Back up anything important and check the selected device carefully before confirming.
@@ -112,7 +112,7 @@ Download and securely retain a configuration backup before upgrading or removing
 - **Safe to unplug** is based on the application's current disk discovery and activity checks. It is not permission to disconnect a disk that another process is still using.
 - Unmounting an encrypted filesystem does not close its LUKS mapping. Always **Lock** separately.
 - A stored unlock key improves convenience but makes the encrypted disk accessible to someone who gains sufficient control of the NAS.
-- Registration names and mount directories cannot currently be edited after registration through the UI.
+- **Configure** lets you edit a registered disk's name at any time and its mount directory when disconnected, locked or unlocked but unmounted. The new directory must be unique and unused. Saving does not move a live mount, change disk contents or remove a stored key.
 - Disks are not automatically unlocked and mounted merely because they are reconnected.
 - This software performs privileged storage operations. Use it only on hardware and data you are prepared to recover from backups.
 - This does *NOT* prevent the NAS from showing a red LED on attaching the LUKS/ext4 disk, nor prevent the 'Unable to mount USB Device' message displayed by OS5, which must be removed manually. 

@@ -59,3 +59,70 @@ function edm_registration_can_delete($uuid, $devices)
     // No matching device means the registration is disconnected.
     return true;
 }
+
+/** Change only the registered name and mount folder. Check live state only
+ * when the folder changes; renaming a mounted disk is metadata-only. */
+function edm_configuration_edit_registry($request, $registry, $canChangeFolder)
+{
+    $target = edm_configuration_registration_preflight($request, $registry);
+    if ($target['mount_folder'] !== $request['mount_folder']
+        && (!is_callable($canChangeFolder) || $canChangeFolder($target['luks_uuid'], $request['mount_folder']) !== true)) {
+        throw new RuntimeException('Unmount the disk before changing its mount directory. The new directory must be unused and disk state must be known.');
+    }
+    require_once __DIR__ . '/registry_operations.php';
+    return edm_registry_update_disk($registry, $target['luks_uuid'],
+        $request['name'], $request['mount_folder']);
+}
+
+/** Read-only policy for a changed mount folder. Accept disconnected, locked,
+ * and unlocked/unmounted registrations; reject mounted or uncertain state. */
+function edm_configuration_mount_folder_edit_allowed($uuid, $deviceSnapshot, $mapperSnapshot, $mountInfo)
+{
+    if (!is_array($deviceSnapshot) || !is_array($mapperSnapshot)
+        || ($deviceSnapshot['complete'] ?? false) !== true
+        || ($mapperSnapshot['complete'] ?? false) !== true
+        || !isset($deviceSnapshot['devices'], $mapperSnapshot['mappers'])
+        || !is_array($mountInfo)) return false;
+    require_once __DIR__ . '/registration_snapshot_consistency.php';
+    $devices = $deviceSnapshot['devices'];
+    $mappers = $mapperSnapshot['mappers'];
+    if (!edm_registration_snapshots_consistent($devices, $mappers)) return false;
+
+    $mounted = array();
+    foreach ($mountInfo as $line) {
+        $fields = explode(' ', $line);
+        if (!isset($fields[2]) || !preg_match('/^[0-9]+:[0-9]+$/D', $fields[2])) return false;
+        $mounted[$fields[2]] = true;
+    }
+    $target = null;
+    foreach ($devices as $device) {
+        if (strcasecmp($device['uuid'], $uuid) !== 0) continue;
+        if ($target !== null || empty($device['luks']) || !isset($device['mount'], $device['dev_id'])
+            || $device['mount'] !== '' || isset($mounted[$device['dev_id']])) return false;
+        $target = $device;
+    }
+    foreach ($mappers as $mapper) {
+        if (strcasecmp($mapper['source_uuid'], $uuid) !== 0) continue;
+        if ($target === null || !in_array($target['name'], $mapper['parents'], true)
+            || !isset($mapper['dev_id']) || !preg_match('/^[0-9]+:[0-9]+$/D', $mapper['dev_id'])
+            || isset($mounted[$mapper['dev_id']])) return false;
+    }
+    return true;
+}
+
+/** Called while holding the same lock as the live Unlock/Mount operations,
+ * and inside the atomic registry update. No directory is created or moved. */
+function edm_configuration_can_change_mount_folder($uuid, $folder)
+{
+    require_once __DIR__ . '/authoritative_usb_discovery.php';
+    require_once __DIR__ . '/kernel_mapper_discovery.php';
+    $mountInfo = @file('/proc/self/mountinfo', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    $devices = edm_authoritative_usb_discovery();
+    $mappers = edm_discover_kernel_mappers();
+    if (!is_array($mountInfo) || $mountInfo !== @file('/proc/self/mountinfo', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
+        || !edm_configuration_mount_folder_edit_allowed($uuid, $devices, $mappers, $mountInfo)) return false;
+    // The existing mount helper requires a new, unused destination.
+    $path = '/mnt/' . $folder;
+    clearstatcache(true, $path);
+    return !file_exists($path) && !is_link($path);
+}

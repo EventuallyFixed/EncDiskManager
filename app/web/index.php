@@ -226,10 +226,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
                 header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
                 exit;
             }
-            $currentRegistry = edm_registry_load(edm_auth_data_path() . '/disks.json');
-            edm_configuration_registration_preflight($validated, $currentRegistry);
-            $configValidationNotice = 'Configuration request validated for ' . $validated['luks_uuid']
-                . '. No changes were saved: live disk-state verification is not yet enabled.';
+            require_once __DIR__ . '/../lib/unlock_key.php';
+            $directory = edm_auth_data_path();
+            edm_unlock_key_with_lock($directory, function () use ($directory, $validated) {
+                edm_registry_save($directory . '/disks.json', null, function ($registry) use ($validated) {
+                    return edm_configuration_edit_registry($validated, $registry,
+                        'edm_configuration_can_change_mount_folder');
+                });
+            });
+            $configValidationNotice = 'Disk configuration saved.';
         } catch (Throwable $exception) {
             http_response_code(400);
             $configValidationError = 'Invalid configuration request: ' . $exception->getMessage();
@@ -491,7 +496,8 @@ try {
                                 data-folder="<?php echo h($row['mount_folder']); ?>"
                                 data-store-key="<?php echo !empty($row['store_unlock_key']) ? '1' : '0'; ?>"
                                 data-status="<?php echo h($row['status']); ?>"
-                                title="View registered disk configuration">Configure</button>
+                                data-can-delete="<?php echo $row['registered'] && is_readable('/proc/self/mountinfo') && edm_registration_can_delete($row['luks_uuid'], $devices) ? '1' : '0'; ?>"
+                                title="Edit registered disk configuration">Configure</button>
                         <?php foreach (array('Unlock', 'Mount', 'Unmount', 'Lock') as $action): ?>
                             <button type="button" disabled title="<?php echo h($action . ': not yet available in this development build'); ?>"><?php echo h($action); ?></button>
                         <?php endforeach; ?>
@@ -534,8 +540,8 @@ try {
     </dialog>
     <dialog id="disk-config-dialog" aria-labelledby="disk-config-title">
         <h2 id="disk-config-title">Disk configuration</h2>
-        <p class="muted" id="config-preview-note">A stored key or an unmounted disk registration can be removed even when the disk is disconnected. Name and mount directory editing are not yet enabled.</p>
-        <p id="registration-note" hidden>Registration does not change the current mount or disk contents. The configured directory is saved for future mount support.</p>
+        <p class="muted" id="config-preview-note">Change the registered name at any time. Unmount the disk before changing its mount directory. Changes apply to future mounts; disk contents and stored keys are not changed.</p>
+        <p id="registration-note" hidden>Registration does not change the current mount or disk contents. The configured directory is used for future mounts.</p>
         <p><strong>LUKS UUID:</strong> <code id="config-uuid"></code></p>
         <p><strong>Connection:</strong> <span id="config-status"></span></p>
         <form method="post" id="disk-config-form">
@@ -548,12 +554,13 @@ try {
         <label for="config-folder">Unique mount directory under /mnt</label>
         <input id="config-folder" name="mount_folder" type="text" maxlength="48" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,47}" required>
         <div id="config-key-options">
-            <label><input type="checkbox" id="config-remove-key" name="remove_unlock_key" value="1"> Remove stored unlock key</label>
+            <input type="hidden" id="config-remove-key-request" name="remove_unlock_key" value="1" disabled>
+            <button type="button" id="config-remove-key" disabled>Remove stored unlock key</button>
             <p class="muted" id="config-key-status"></p>
             <p class="muted">Save a key in the Unlock dialogue. Removing a key here removes the local copy, not its LUKS keyslot.</p>
         </div>
         <div class="dialog-actions">
-            <button type="submit">Validate changes (no save)</button>
+            <button type="submit">Save changes</button>
             <button type="button" id="config-delete-registration" disabled>Delete registration</button>
             <button type="button" id="close-disk-config">Close</button>
         </div>
@@ -576,7 +583,7 @@ try {
             An open encrypted volume is shown separately when its device-mapper
             relationship to a detected USB partition can be established. Unlock,
             Mount, Unmount and Lock are available only for eligible disk states.
-            A stored key allows Mount to unlock automatically. Before unplugging a disk,
+            A stored key allows Unlock without re-entering the recovery passphrase. Before unplugging a disk,
             click Unmount and then Lock separately, even if a key is stored.
             Whole-disk encryption permanently erases the selected USB disk.
         </section>
@@ -761,8 +768,8 @@ function edmMarkUnplugUnsafe() {
             if (!button || button.disabled || !document.getElementById('disk-inventory').contains(button)) return;
             var registering = button.classList.contains('register-disk');
             document.getElementById('disk-config-title').textContent = registering ? 'Register disk' : 'Disk configuration';
-            document.querySelector('#disk-config-form [name=config_action]').value = registering ? 'register' : 'key_preference';
-            document.querySelector('#disk-config-form button[type=submit]').textContent = registering ? 'Register' : 'Save';
+            document.querySelector('#disk-config-form [name=config_action]').value = registering ? 'register' : 'edit';
+            document.querySelector('#disk-config-form button[type=submit]').textContent = registering ? 'Register' : 'Save changes';
             var deleteButton = document.getElementById('config-delete-registration');
             deleteButton.disabled = registering || button.dataset.canDelete !== '1';
             deleteButton.title = deleteButton.disabled ? 'Available only for unmounted registrations with known disk state' : 'Remove registration without erasing the disk';
@@ -771,13 +778,15 @@ function edmMarkUnplugUnsafe() {
             document.getElementById('registration-note').hidden = !registering;
             document.getElementById('config-key-options').hidden = registering;
             document.getElementById('config-remove-key').disabled = registering || button.dataset.storeKey !== '1';
-            document.getElementById('config-remove-key').checked = false;
+            document.getElementById('config-remove-key-request').disabled = true;
             document.getElementById('config-key-status').textContent = button.dataset.keyAvailable === '1'
                 ? 'A stored key is available on this NAS.'
                 : button.dataset.storeKey === '1' ? 'Key storage is enabled, but no key is saved yet.'
                 : 'No stored unlock key.';
-            document.getElementById('config-name').readOnly = !registering;
-            document.getElementById('config-folder').readOnly = !registering;
+            document.getElementById('config-name').readOnly = false;
+            var folder = document.getElementById('config-folder');
+            folder.readOnly = !registering && button.dataset.canDelete !== '1';
+            folder.title = folder.readOnly ? 'Unmount the disk or wait for live disk state before editing the mount directory' : '';
             document.getElementById('config-uuid').textContent = button.getAttribute('data-uuid');
             document.getElementById('config-form-uuid').value = button.getAttribute('data-uuid');
             document.getElementById('config-status').textContent = button.getAttribute('data-status');
@@ -786,6 +795,14 @@ function edmMarkUnplugUnsafe() {
                 ? 'edm_' + button.dataset.uuid.toLowerCase().replace(/-/g, '')
                 : button.getAttribute('data-folder');
             dialog.showModal();
+        });
+        document.getElementById('config-remove-key').addEventListener('click', function () {
+            if (this.disabled) return;
+            if (!window.confirm('Remove the locally stored unlock key? Keep your original passphrase. Unsaved name or directory changes will not be saved.')) return;
+            var form = document.getElementById('disk-config-form');
+            document.getElementById('config-remove-key-request').disabled = false;
+            form.querySelector('[name=config_action]').value = 'key_preference';
+            form.submit();
         });
         document.getElementById('config-delete-registration').addEventListener('click', function () {
             if (this.disabled) return;
