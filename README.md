@@ -15,7 +15,7 @@ Written in PHP and using out-of-box utilities on the NAS, it discovers attached 
 > 
 > **The WD NAS has a process that scans for connected disks.**
 > > On disconnecting at the wrong time the result can be seen as high CPU usage.
-> > I have found that reconnecting the disk will normally reverse that high CPU usage, and a pause and disconnect a some seconds later normally works OK.
+> > I have found that reconnecting the disk will normally reverse that high CPU usage, and a pause and disconnect some seconds later normally works to have low CPU usage after the disconnect.
 > > Sometimes this results in the NAS no longer detecting any further USB disks connected until after a reboot.
 > > 
 > > To this day - and after several years - I have not lost any data as a result, but you should be aware that data loss is a possibility - use at your own risk.
