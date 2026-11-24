@@ -7,7 +7,18 @@ Written in PHP and using out-of-box utilities on the NAS, it discovers attached 
 **Current version:** 1.0.1 — developed and tested on the WD My Cloud EX4100.
 
 > [!WARNING]
-> **Encrypt + ext4 permanently erases and repartitions the entire selected USB disk.** All existing partitions and data on that disk will be lost. Back up anything important and check the selected device carefully before confirming.
+> **Encrypt + ext4 permanently erases and repartitions the entire selected USB disk.**
+> > All existing partitions and data on that disk will be lost. Back up anything important and check the selected device carefully before confirming.
+> 
+> **The WD NAS has a warning that says an attached disk is not recognised.**
+> > On connecting the encrypted disk the LED flashes blue for a period, then turns a steady red, and clicking the USB symbol in the WD Admin landing page gives a message that the disk is not recognised. This message must be manually cleared, and the red LED turns blue on disconnecting the unrecognised disk.
+> 
+> **The WD NAS has a process that scans for connected disks.**
+> > On disconnecting at the wrong time the result can be seen as high CPU usage.
+> > I have found that reconnecting the disk will normally reverse that high CPU usage, and a pause and disconnect a some seconds later normally works OK.
+> > Sometimes this results in the NAS no longer detecting any further USB disks connected until after a reboot.
+> > 
+> > To this day - and after several years - I have not lost any data as a result, but you should be aware that data loss is a possibility - use at your own risk.
 
 ## Features
 
@@ -115,7 +126,7 @@ Download and securely retain a configuration backup before upgrading or removing
 - **Configure** lets you edit a registered disk's name and mount directory only when disconnected or when every partition on its physical USB disk is unmounted. Configure is disabled if any partition is mounted. The new directory must be unique and unused. Saving does not move a live mount, change disk contents or remove a stored key.
 - Disks are not automatically unlocked and mounted merely because they are reconnected.
 - This software performs privileged storage operations. Use it only on hardware and data you are prepared to recover from backups.
-- This does *NOT* prevent the NAS from showing a red LED on attaching the LUKS/ext4 disk, nor prevent the 'Unable to mount USB Device' message displayed by OS5, which must be removed manually. 
+- The WD NAS may have other operations that could interfere with these, resulting in unintended data loss.
 
 ## Development
 
