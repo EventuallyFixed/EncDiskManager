@@ -33,7 +33,7 @@ function edm_configuration_request($input)
             throw new RuntimeException('Invalid disk display name.');
         }
         if (!is_string($folder)
-            || !preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]{0,47}$/', $folder)) {
+            || !preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]{0,47}$/D', $folder)) {
             throw new RuntimeException('Invalid mount folder.');
         }
         if (array_key_exists('confirmation', $input)) {

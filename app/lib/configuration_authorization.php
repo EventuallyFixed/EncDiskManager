@@ -119,7 +119,7 @@ function edm_configuration_can_change_mount_folder($uuid, $folder)
     $mountInfo = @file('/proc/self/mountinfo', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     $devices = edm_authoritative_usb_discovery();
     $mappers = edm_discover_kernel_mappers();
-    if (!is_array($mountInfo) || $mountInfo !== @file('/proc/self/mountinfo', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
+    if (!is_array($mountInfo) || !$mountInfo || $mountInfo !== @file('/proc/self/mountinfo', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES)
         || !edm_configuration_mount_folder_edit_allowed($uuid, $devices, $mappers, $mountInfo)) return false;
     // The existing mount helper requires a new, unused destination.
     $path = '/mnt/' . $folder;

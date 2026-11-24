@@ -43,6 +43,9 @@ foreach (array(array('mount_folder' => 'ARCHIVE'), array('name' => 'Archive')) a
 check(rejects(function () use ($edit) {
     edm_configuration_request(array_merge($edit, array('mount_folder' => '../HD')));
 }), 'Unsafe folder rejected');
+check(rejects(function () use ($edit) {
+    edm_configuration_request(array_merge($edit, array('mount_folder' => "backup\n")));
+}), 'Trailing newline in mount folder rejected');
 $device = array('name' => 'sdb1', 'dev_id' => '8:17', 'uuid' => $uuid, 'luks' => true, 'mount' => '');
 $mapper = array('name' => 'edm_test', 'device' => 'dm-0', 'dev_id' => '253:0',
     'source_uuid' => $uuid, 'parents' => array('sdb1'));
