@@ -1,0 +1,160 @@
+name: Publish EncDiskManager v1.0.1
+
+on:
+  push:
+    branches:
+      - release/v1.0.1
+
+permissions:
+  contents: write
+
+jobs:
+  package-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout reviewed release source
+        uses: actions/checkout@v4
+        with:
+          ref: de940da9f0efc830b16d723f8519cfc6fa5db179
+
+      - name: Verify release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sed -n 's/^Version: //p' app/apkg.rc)" = "1.0.1"
+          test "$(git rev-parse HEAD)" = "de940da9f0efc830b16d723f8519cfc6fa5db179"
+          git fetch --tags origin
+          if git show-ref --verify --quiet refs/tags/v1.0.1; then
+            echo "Release tag already exists; refusing to overwrite"
+            exit 1
+          fi
+
+      - name: Validate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          find app -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php development/tests/usb-operation-request.php
+          php development/tests/disk-action-availability.php
+          php app/development/tests/disk_configuration_edit_test.php
+
+      - name: Validate stored-key browser actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock jsdom@26
+          node app/development/tests/stored_key_actions_browser_test.cjs
+          node app/development/tests/disk_configuration_browser_test.cjs
+
+      - name: Fetch pinned WD NAS app builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/paul-norman/WD-NAS-App-Builder.git "$RUNNER_TEMP/wd-builder"
+          git -C "$RUNNER_TEMP/wd-builder" checkout --detach 68b51bc0a9e25d6f0c41e6facd7b4dc4c8c27e61
+
+      - name: Stage production application
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/wd-builder/apps/EncDiskManager"
+          mkdir -p "$target"
+          cp -a app/. "$target/"
+          rm -rf "$target/development"
+          test -f "$target/web/usb-operation.php"
+          test "$(sed -n 's/^Version: //p' "$target/apkg.rc")" = "1.0.1"
+
+      - name: Build packages for all supported NAS models
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/wd-builder"
+          ./build.sh EncDiskManager
+
+      - name: Verify release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/wd-builder/packages/EncDiskManager/1.0.1"
+          test -s "$out/EncDiskManager_1.0.1_WDMyCloudEX4100.bin"
+          test -s "$out/EncDiskManager_1.0.1_armhf.tar.gz"
+          test -s "$out/EncDiskManager_1.0.1_amd64.tar.gz"
+          test "$(find "$out" -maxdepth 1 -name 'EncDiskManager_1.0.1_*.bin' | wc -l)" -eq 10
+          test "$(find "$out" -maxdepth 1 -name 'EncDiskManager_1.0.1_*.tar.gz' | wc -l)" -eq 2
+          for archive in "$out"/*.tar.gz; do
+            gzip -t "$archive"
+            tar -tzf "$archive" | grep 'web/usb-operation.php' >/dev/null
+          done
+          python3 - "$out" <<'PY'
+          import io
+          import pathlib
+          import sys
+          import tarfile
+
+          out = pathlib.Path(sys.argv[1])
+          for path in sorted(out.glob('*.bin')):
+              raw = path.read_bytes()
+              offset = raw.find(b'\x1f\x8b\x08')
+              if offset < 0:
+                  raise SystemExit(f'No gzip payload in {path.name}')
+              with tarfile.open(fileobj=io.BytesIO(raw[offset:]), mode='r:gz') as archive:
+                  names = archive.getnames()
+                  if not any(name.endswith('/web/usb-operation.php') for name in names):
+                      raise SystemExit(f'Missing updated endpoint in {path.name}')
+              print(f'PASS: {path.name} has a valid app payload')
+          PY
+          (cd "$out" && sha256sum ./*.bin ./*.tar.gz > SHA256SUMS.txt)
+          cat "$out/SHA256SUMS.txt"
+
+      - name: Check EX4100 payload matches reviewed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$RUNNER_TEMP/wd-builder/packages/EncDiskManager/1.0.1" <<'PY'
+          import io, pathlib, sys, tarfile
+          out = pathlib.Path(sys.argv[1])
+          raw = (out / 'EncDiskManager_1.0.1_WDMyCloudEX4100.bin').read_bytes()
+          offset = raw.find(b'\x1f\x8b\x08')
+          assert offset >= 0
+          with tarfile.open(fileobj=io.BytesIO(raw[offset:]), mode='r:gz') as archive:
+              for path in ('apkg.rc', 'web/index.php', 'web/inventory.php', 'lib/configuration_authorization.php'):
+                  names = [name for name in archive.getnames() if name.endswith('/' + path)]
+                  assert len(names) == 1, path
+                  assert archive.extractfile(names[0]).read() == (pathlib.Path('app') / path).read_bytes(), path
+                  print('PASS: ' + path)
+          PY
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/wd-builder/packages/EncDiskManager/1.0.1"
+          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
+          ## EncDiskManager 1.0.1
+
+          Edit existing disk registrations without deleting and re-registering them.
+
+          - Change the registered name and mount directory while the physical USB disk is fully unmounted, or when the registered disk is disconnected.
+          - Configure is disabled whenever any partition on the same physical disk is mounted, including mounted encrypted mappings.
+          - Server-side checks reject configuration changes when the disk is mounted or its state is uncertain.
+          - Saving preserves the LUKS UUID, registration, stored unlock key and disk contents. A changed mount directory is used for future mounts.
+          - Removing the stored unlock key is a separate explicit action.
+
+          Automated validation and EX4100 Configure behaviour testing passed.
+
+          **Upgrade:** Install the .bin package matching your WD My Cloud OS5 NAS model. Back up configuration and disk data first. Minimum firmware: 5.27.157.
+
+          EX4100 installer: `EncDiskManager_1.0.1_WDMyCloudEX4100.bin`.
+
+          Only v1.0.1 packages and their SHA-256 checksums are attached. Other NAS models have not all been independently tested on physical hardware.
+
+          **Warning:** Encrypt + ext4 permanently erases the selected physical USB disk.
+          NOTES
+          gh release create v1.0.1 "$out"/*.bin "$out"/*.tar.gz "$out/SHA256SUMS.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "de940da9f0efc830b16d723f8519cfc6fa5db179" \
+            --title "EncDiskManager 1.0.1 — Disk configuration editing" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --latest
