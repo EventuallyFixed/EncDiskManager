@@ -4,7 +4,7 @@
 
 Written in PHP and using out-of-box utilities on the NAS, it discovers attached USB disks, lets you unlock and mount encrypted volumes, and provides a controlled way to encrypt a whole USB disk with LUKS encryption and have an ext4 filesystem overlaid.
 
-**Current version:** 1.0.0 — developed and tested on the WD My Cloud EX4100.
+**Current version:** 1.0.1 — developed and tested on the WD My Cloud EX4100.
 
 > [!WARNING]
 > **Encrypt + ext4 permanently erases and repartitions the entire selected USB disk.** All existing partitions and data on that disk will be lost. Back up anything important and check the selected device carefully before confirming.
@@ -28,11 +28,11 @@ The interface refreshes disk information automatically. Disk operations also rec
 - **Developed and tested on:** WD My Cloud EX4100 (ARMHF)
 - **Storage:** externally attached USB disks; the application is not intended to manage the NAS's internal system disks.
 
-Installable packages for several other WD My Cloud models are available in the [GitHub release](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.0.0). Those models have not all been independently validated on physical hardware.
+Installable packages for several other WD My Cloud models are available in the [GitHub release](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.0.1). Those models have not all been independently validated on physical hardware.
 
 ## Installation
 
-1. Download the `.bin` package matching your NAS model from the [v1.0.0 GitHub release](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.0.0).
+1. Download the `.bin` package matching your NAS model from the [v1.0.1 GitHub release](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.0.1).
 2. On the NAS, open the WD My Cloud dashboard and use the Apps page's manual installation option to install the package.
 3. Launch **Encrypted Disk Manager** from the NAS dashboard, using **HTTPS**.
 4. On first use, retrieve the one-time administrator setup code over SSH, then use it to create an administrator password.
@@ -48,7 +48,7 @@ Run this in an appropriately privileged SSH session on your NAS. Keep the code p
 The EX4100 installer is named:
 
 ```text
-EncDiskManager_1.0.0_WDMyCloudEX4100.bin
+EncDiskManager_1.0.1_WDMyCloudEX4100.bin
 ```
 
 **Do not install an archive or package intended for a different NAS model.**
@@ -112,7 +112,7 @@ Download and securely retain a configuration backup before upgrading or removing
 - **Safe to unplug** is based on the application's current disk discovery and activity checks. It is not permission to disconnect a disk that another process is still using.
 - Unmounting an encrypted filesystem does not close its LUKS mapping. Always **Lock** separately.
 - A stored unlock key improves convenience but makes the encrypted disk accessible to someone who gains sufficient control of the NAS.
-- Registration names and mount directories cannot currently be edited after registration through the UI.
+- **Configure** lets you edit a registered disk's name and mount directory only when disconnected or when every partition on its physical USB disk is unmounted. Configure is disabled if any partition is mounted. The new directory must be unique and unused. Saving does not move a live mount, change disk contents or remove a stored key.
 - Disks are not automatically unlocked and mounted merely because they are reconnected.
 - This software performs privileged storage operations. Use it only on hardware and data you are prepared to recover from backups.
 - This does *NOT* prevent the NAS from showing a red LED on attaching the LUKS/ext4 disk, nor prevent the 'Unable to mount USB Device' message displayed by OS5, which must be removed manually. 
@@ -147,7 +147,7 @@ The GitHub Actions workflows run additional syntax and fixture checks. Tests do 
 ## Project links
 
 - [Source code](https://github.com/EventuallyFixed/EncDiskManager)
-- [Version 1.0.0 installation packages](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.0.0)
+- [Version 1.0.1 installation packages](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.0.1)
 - [Issues and suggestions](https://github.com/EventuallyFixed/EncDiskManager/issues)
 
 # Screenshots
