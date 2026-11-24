@@ -16,14 +16,14 @@ jobs:
       - name: Checkout reviewed release source
         uses: actions/checkout@v4
         with:
-          ref: c97b1905a9df8370fef1ccfc9641913697f52351
+          ref: d70c705fd4210c0c3481078acbe96dbb758aacc0
 
       - name: Verify release identity
         shell: bash
         run: |
           set -euo pipefail
           test "$(sed -n 's/^Version: //p' app/apkg.rc)" = "1.0.1"
-          test "$(git rev-parse HEAD)" = "c97b1905a9df8370fef1ccfc9641913697f52351"
+          test "$(git rev-parse HEAD)" = "d70c705fd4210c0c3481078acbe96dbb758aacc0"
           git fetch --tags origin
           if git show-ref --verify --quiet refs/tags/v1.0.1; then
             echo "Release tag already exists; refusing to overwrite"
