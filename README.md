@@ -153,10 +153,10 @@ The GitHub Actions workflows run additional syntax and fixture checks. Tests do 
 # Screenshots
 
 ## Disk attached, unlocked, and mounted.
-<img width="1442" height="738" alt="image" src="https://github.com/user-attachments/assets/07d64529-540d-4a6a-b620-736a2f9321c0" />
+<img width="1442" height="738" alt="Storage" src="https://github.com/user-attachments/assets/8ff10a48-0feb-41be-9618-113752a901e8" />
 
 ## Disk Registration
-<img width="513" height="670" alt="image" src="https://github.com/user-attachments/assets/35e17388-971a-4004-a28c-c66fea3e22f1" />
+<img width="513" height="670" alt="DiskConf" src="https://github.com/user-attachments/assets/a562e0ac-40e4-41d6-a84e-634bfd6519dd" />
 
 ## Settings
-<img width="1442" height="738" alt="image" src="https://github.com/user-attachments/assets/aa4d1c97-c9ae-4078-b70b-1ebdec777f6f" />
+<img width="786" height="786" alt="image" src="https://github.com/user-attachments/assets/9c574bcc-8a32-4716-90f0-a2d70c82bb55" />
