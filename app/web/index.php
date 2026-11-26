@@ -325,6 +325,17 @@ try {
     .disk-actions { min-width: 220px; }
     .disk-actions button { margin: 2px; padding: 5px; }
     .disk-actions button:disabled { opacity: .5; cursor: not-allowed; }
+    .disk-actions button.operation-running { opacity: 1; cursor: wait; }
+    .operation-running::before {
+        content: ''; display: inline-block; width: .8em; height: .8em;
+        border: 2px solid currentColor; border-right-color: transparent;
+        border-radius: 50%; margin-right: .35em; vertical-align: middle;
+        animation: operation-spin .8s linear infinite;
+    }
+    @keyframes operation-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+        .operation-running::before { animation: none; }
+    }
     .unplug-status { display: block; margin: 4px 2px 0; font-size: .85rem; color: #b42318; }
     .unplug-status.is-safe { color: #18743a; }
     .configure-disk { border: 1px solid #aebac1; background: #fff; border-radius: 4px; color: #075f91; cursor: pointer; }
@@ -860,6 +871,9 @@ function edmMarkUnplugUnsafe() {
     pollNotice.setAttribute('role', 'status');
     pollNotice.className = 'muted';
     table.parentNode.insertBefore(pollNotice, table);
+    var operationNotice = document.createElement('p');
+    operationNotice.setAttribute('role', 'status');
+    table.parentNode.insertBefore(operationNotice, table);
     function currentConnection() {
         var selected = tabs.filter(function (tab) {
             return tab.getAttribute('aria-selected') === 'true';
@@ -1107,7 +1121,7 @@ function edmMarkUnplugUnsafe() {
             // Derive a deterministic, app-owned mapper name from the LUKS UUID.
             // Never reuse the legacy backupdisk mapping.
             if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(row.dataset.uuid)) {
-                window.alert('The disk has no valid LUKS UUID.');
+                operationNotice.textContent = 'The disk has no valid LUKS UUID.';
                 return;
             }
             mapper = 'edm_' + row.dataset.uuid.replace(/-/g, '').toLowerCase();
@@ -1120,9 +1134,8 @@ function edmMarkUnplugUnsafe() {
             credentials = await requestUnlockPassphrase(device, action,
                 row.dataset.registered === '1' && row.dataset.storeKey !== '1');
             if (credentials === null) return;
-        } else if (!window.confirm('Perform ' + action + ' on ' + device + '?')) {
-            return;
         }
+        if (operationBusy || button.disabled || !button.isConnected) return;
         var csrf = document.querySelector('input[name="csrf_token"]');
         if (!csrf) return;
         var body = new URLSearchParams();
@@ -1137,8 +1150,14 @@ function edmMarkUnplugUnsafe() {
         }
         credentials = null;
         operationBusy = true;
+        var originalLabel = button.textContent;
+        var progress = {unlock: 'Unlocking', mount: 'Mounting', unmount: 'Unmounting', lock: 'Locking'}[action];
+        button.classList.add('operation-running');
+        button.setAttribute('aria-busy', 'true');
+        button.textContent = progress + '…';
+        operationNotice.textContent = progress + ' ' + device + '…';
         edmMarkUnplugUnsafe();
-        Array.prototype.forEach.call(table.querySelectorAll('button[data-operation]'), function (item) {
+        Array.prototype.forEach.call(table.querySelectorAll('button[data-operation], .configure-disk, .whole-disk-preview-button'), function (item) {
             item.disabled = true;
         });
         fetch('usb-operation.php', {
@@ -1150,11 +1169,15 @@ function edmMarkUnplugUnsafe() {
                 if (!response.ok || !result.ok) throw new Error(result.error || 'Operation failed');
             });
         }).then(function () {
-            window.alert('Operation completed.');
+            operationNotice.textContent = '';
         }).catch(function (error) {
-            window.alert(error.message);
+            operationNotice.textContent = action + ' failed on ' + device + ': ' + error.message;
         }).then(function () {
+            button.classList.remove('operation-running');
+            button.removeAttribute('aria-busy');
+            button.textContent = originalLabel;
             operationBusy = false;
+            // Keep controls disabled until a fresh inventory restores valid actions.
             pollInventory();
         });
     });
@@ -1218,7 +1241,7 @@ function edmMarkUnplugUnsafe() {
     }
     var polling = false;
     function pollInventory() {
-        if (polling || document.hidden || (dialog && dialog.open)) return;
+        if (polling || operationBusy || document.hidden || (dialog && dialog.open)) return;
         polling = true;
         fetch('inventory.php', {credentials: 'same-origin', cache: 'no-store'})
             .then(function (response) {
@@ -1226,7 +1249,7 @@ function edmMarkUnplugUnsafe() {
                 return response.json();
             })
             .then(function (snapshot) {
-                if (dialog && dialog.open) return;
+                if (operationBusy || (dialog && dialog.open)) return;
                 if (!snapshot || !Array.isArray(snapshot.rows)) throw new Error('Invalid inventory');
                 var body = table.tBodies[0];
                 var existing = Object.create(null);
