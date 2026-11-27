@@ -83,19 +83,35 @@ case "$action" in
         verify_open
         mapper_sys=$(mapper_sys_path) || exit 1
         mounted_id "$mapper_sys" && fail "Mapping already mounted."
-        # Do not mount over an existing directory or unrelated filesystem.
-        [ ! -e "$mountpoint" ] && [ ! -L "$mountpoint" ] ||
-            fail "Mountpoint already exists; refusing to reuse it."
-        mkdir "$mountpoint"
+        # Never cover an existing mount, even if its root is empty.
+        if awk -v target="$mountpoint" '$5 == target { found=1 } END { exit !found }' /proc/self/mountinfo; then
+            echo "Mountpoint already mounted." >&2
+            exit 21
+        fi
+        created=0
+        if [ -L "$mountpoint" ]; then
+            exit 23
+        elif [ -e "$mountpoint" ]; then
+            [ -d "$mountpoint" ] || exit 23
+            # Include hidden entries; unmatched globs are ignored.
+            for entry in "$mountpoint"/* "$mountpoint"/.[!.]* "$mountpoint"/..?*; do
+                if [ -e "$entry" ] || [ -L "$entry" ]; then
+                    exit 22
+                fi
+            done
+        else
+            mkdir "$mountpoint"
+            created=1
+        fi
         # Refuse non-ext4 payloads, including arbitrary data on a LUKS mapping.
         fs_type=$(/usr/bin/blkid -o value -s TYPE "$mapperdev" 2>/dev/null) ||
             fs_type=''
         if [ "$fs_type" != ext4 ]; then
-            rmdir "$mountpoint" 2>/dev/null || true
+            if [ "$created" = 1 ]; then rmdir "$mountpoint" 2>/dev/null || true; fi
             fail "Unlocked container does not contain ext4."
         fi
         if ! /bin/mount -t ext4 "$mapperdev" "$mountpoint"; then
-            rmdir "$mountpoint" 2>/dev/null || true
+            if [ "$created" = 1 ]; then rmdir "$mountpoint" 2>/dev/null || true; fi
             fail "Mount failed."
         fi
         ;;
