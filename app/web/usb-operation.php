@@ -220,9 +220,22 @@ try {
         $folder = $entry !== null ? $entry['mount_folder'] : $mapper;
         $exit = edm_run_usb_helper($helper, $action, $device, $mapper, $passphrase,
             $action === 'mount' ? $folder : null);
+        if ($action === 'mount') {
+            $errors = array(
+                21 => 'A filesystem is already mounted at /mnt/' . $folder . '.',
+                22 => 'Mount directory /mnt/' . $folder . ' is not empty.',
+                23 => 'Mount path /mnt/' . $folder . ' is not a regular directory.'
+            );
+            if (isset($errors[$exit])) {
+                throw new DomainException($errors[$exit]);
+            }
+        }
         if ($exit !== 0) throw new RuntimeException('Disk operation failed.');
     });
     echo json_encode(array('ok' => true));
+} catch (DomainException $exception) {
+    http_response_code(409);
+    echo json_encode(array('ok' => false, 'error' => $exception->getMessage()));
 } catch (Throwable $exception) {
     http_response_code(503);
     echo json_encode(array('ok' => false, 'error' => 'Operation unavailable.'));
