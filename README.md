@@ -1,4 +1,4 @@
-# EncDiskManager
+# Encrypted Disk Manager
 
 **EncDiskManager (Encrypted Disk Manager)** is a web-based utility for managing LUKS-encrypted USB storage on **WD My Cloud OS5** NAS devices.
 
