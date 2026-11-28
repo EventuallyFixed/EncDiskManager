@@ -24,3 +24,8 @@
 # Stops the app from running
 #  - When no index page is defined in apkg.rc, the disable button is greyed out
 # -----------------------------------------------------------------------------
+
+if ! sh "${APP_PATH}/bin/usbmount-overlay" stop; then
+    log "ERROR: USB automount suppression could not be disabled."
+    exit 1
+fi
