@@ -1,0 +1,78 @@
+#!/bin/sh
+
+set -eu
+TARGET=/usr/local/modules/wd/usr/sbin/usbmount
+BASE=/usr/local/tmp/encdiskmanager
+WRAPPER="$BASE/usbmount"
+ORIGINAL="$BASE/usbmount.original"
+SOURCE="$(dirname "$0")/usbmount-wrapper"
+
+fail()
+{
+    echo "usbmount-overlay: $*" >&2
+    exit 1
+}
+
+overlay()
+{
+    awk -v target="$TARGET" '$5 == target {print $4}' /proc/self/mountinfo
+}
+
+owned()
+{
+    [ "$1" = "/encdiskmanager/usbmount" ] &&
+        [ -f "$WRAPPER" ] &&
+        [ "$TARGET" -ef "$WRAPPER" ]
+}
+
+CURRENT="$(overlay)" || fail "Cannot inspect mount table"
+
+case "${1:-}" in
+    start)
+        if [ -n "$CURRENT" ]; then
+            owned "$CURRENT" || fail "Another overlay is active"
+            [ -x "$ORIGINAL" ] || fail "Original executable missing"
+            echo "EDM overlay already active"
+            exit 0
+        fi
+        [ "$(readlink -f /usr/sbin/usbmount)" = "$TARGET" ] ||
+            fail "Unexpected WD executable path"
+        [ -f "$TARGET" ] && [ -x "$TARGET" ] ||
+            fail "WD executable unavailable"
+        [ ! -L "$BASE" ] || fail "Runtime directory is a symlink"
+        umask 077
+        mkdir -p "$BASE"
+        [ "$(stat -c %u "$BASE")" = 0 ] &&
+            [ "$(stat -c %a "$BASE")" = 700 ] ||
+            fail "Unsafe runtime directory"
+        rm -f "$WRAPPER" "$ORIGINAL"
+        cp "$TARGET" "$ORIGINAL"
+        cp "$SOURCE" "$WRAPPER"
+        chmod 700 "$ORIGINAL" "$WRAPPER"
+        cmp -s "$TARGET" "$ORIGINAL" || fail "Original copy verification failed"
+        mount --bind "$WRAPPER" "$TARGET"
+        echo "EDM overlay applied"
+        ;;
+    stop)
+        if [ -z "$CURRENT" ]; then
+            echo "No overlay active"
+            exit 0
+        fi
+        owned "$CURRENT" || fail "Refusing to remove another overlay"
+        umount "$TARGET"
+        # Keep the original available to any wrapper invocation already running.
+        echo "EDM overlay removed"
+        ;;
+    status)
+        if [ -z "$CURRENT" ]; then
+            echo "No overlay active"
+        elif owned "$CURRENT"; then
+            echo "EDM overlay active"
+        else
+            echo "Another overlay active"
+        fi
+        ;;
+    *)
+        fail "Usage: $0 start|stop|status"
+        ;;
+esac
