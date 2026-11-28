@@ -58,7 +58,13 @@ case "${1:-}" in
             echo "No overlay active"
             exit 0
         fi
-        owned "$CURRENT" || fail "Refusing to remove another overlay"
+        if ! owned "$CURRENT"; then
+            case "$CURRENT" in
+                *"/encdiskmanager/usbmount"*) fail "Cannot verify EDM overlay ownership" ;;
+            esac
+            echo "Another overlay active; leaving it untouched"
+            exit 0
+        fi
         umount "$TARGET"
         # Keep the original available to any wrapper invocation already running.
         echo "EDM overlay removed"
