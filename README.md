@@ -41,7 +41,7 @@ EDM uses a temporary bind mount over the WD `usbmount` executable, retaining a c
 
 The overlay has been functionally tested on the EX4100. It filters individual whole USB disk requests, including unregistered LUKS disks; a disk containing any LUKS partition is skipped as a whole. Internal SATA and RAID devices are outside the filter.
 
-Limitations: WD bulk `all` and `scanall` requests retain native behaviour. USB mounting before EDM starts is not suppressed. Lifecycle operations must not be run concurrently. Other NAS models may use different executable paths or runtime layouts. Existing WD USB hotplug issues may still occur.
+Limitations: WD bulk `all` and `scanall` requests retain native behaviour. USB mounting before EDM starts is not suppressed. Reboot testing on the EX4100 confirmed automatic overlay restoration both with USB disks disconnected and with them already connected. When a LUKS disk is connected during startup, WD may display an **Unable to Mount USB Device** warning before EDM starts. This warning was observed during testing; once EDM was running, encrypted disk operations and native unencrypted USB mounting worked normally. EDM deliberately does not modify the WD boot sequence to prevent this warning. Lifecycle operations must not be run concurrently. Other NAS models may use different executable paths or runtime layouts. Existing WD USB hotplug issues may still occur.
 
 ## Compatibility
 
