@@ -323,6 +323,8 @@ try {
     .sort-heading { border: 0; background: transparent; font: inherit; font-weight: bold; cursor: pointer; padding: 0; text-align: left; }
     .sort-heading:focus-visible { outline: 2px solid #075f91; outline-offset: 3px; }
     .disk-actions { min-width: 220px; }
+    .operation-error { width: 0; color: #b00020; }
+    .operation-error span { display: block; width: max-content; overflow-wrap: anywhere; padding-top: 4px; }
     .disk-actions button { margin: 2px; padding: 5px; }
     .disk-actions button:disabled { opacity: .5; cursor: not-allowed; }
     .disk-actions button.operation-running { opacity: 1; cursor: wait; }
@@ -871,9 +873,21 @@ function edmMarkUnplugUnsafe() {
     pollNotice.setAttribute('role', 'status');
     pollNotice.className = 'muted';
     table.parentNode.insertBefore(pollNotice, table);
-    var operationNotice = document.createElement('p');
-    operationNotice.setAttribute('role', 'status');
-    table.parentNode.insertBefore(operationNotice, table);
+    function showOperationError(row, message) {
+        var notice = row.cells[0].querySelector('.operation-error');
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.className = 'operation-error';
+            notice.setAttribute('role', 'alert');
+            notice.appendChild(document.createElement('span'));
+            row.cells[0].appendChild(notice);
+        }
+        var content = notice.firstChild;
+        content.style.maxWidth = Math.max(row.cells[0].clientWidth,
+            row.cells[2].getBoundingClientRect().right - notice.getBoundingClientRect().left - 8) + 'px';
+        content.textContent = message;
+        notice.hidden = !message;
+    }
     function currentConnection() {
         var selected = tabs.filter(function (tab) {
             return tab.getAttribute('aria-selected') === 'true';
@@ -1121,7 +1135,7 @@ function edmMarkUnplugUnsafe() {
             // Derive a deterministic, app-owned mapper name from the LUKS UUID.
             // Never reuse the legacy backupdisk mapping.
             if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(row.dataset.uuid)) {
-                operationNotice.textContent = 'The disk has no valid LUKS UUID.';
+                showOperationError(row, 'The disk has no valid LUKS UUID.');
                 return;
             }
             mapper = 'edm_' + row.dataset.uuid.replace(/-/g, '').toLowerCase();
@@ -1155,7 +1169,7 @@ function edmMarkUnplugUnsafe() {
         button.classList.add('operation-running');
         button.setAttribute('aria-busy', 'true');
         button.textContent = progress + '…';
-        operationNotice.textContent = progress + ' ' + device + '…';
+        showOperationError(row, '');
         edmMarkUnplugUnsafe();
         Array.prototype.forEach.call(table.querySelectorAll('button[data-operation], .configure-disk, .whole-disk-preview-button'), function (item) {
             item.disabled = true;
@@ -1169,9 +1183,9 @@ function edmMarkUnplugUnsafe() {
                 if (!response.ok || !result.ok) throw new Error(result.error || 'Operation failed');
             });
         }).then(function () {
-            operationNotice.textContent = '';
+            showOperationError(row, '');
         }).catch(function (error) {
-            operationNotice.textContent = action + ' failed on ' + device + ': ' + error.message;
+            showOperationError(row, error.message);
         }).then(function () {
             button.classList.remove('operation-running');
             button.removeAttribute('aria-busy');
