@@ -48,5 +48,10 @@ if [ -e "$PRESERVE_MARKER" ] || [ -L "$PRESERVE_MARKER" ]; then
     log "Verified temporary configuration backup; proceeding with upgrade replacement."
 fi
 
+if ! sh "${APP_PATH}/bin/usbmount-overlay" stop; then
+    log "ERROR: USB automount overlay removal failed."
+    exit 1
+fi
+
 log "Removing all files from: ${APP_PATH}";
 rm -rf "${APP_PATH}";

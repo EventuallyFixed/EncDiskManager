@@ -33,3 +33,8 @@ if [ -f "${APP_PATH}/lib/recover_restore.php" ]; then
         exit 1
     fi
 fi
+
+# Suppress WD automount of LUKS USB disks while EDM is enabled.
+if ! sh "${APP_PATH}/bin/usbmount-overlay" start; then
+    log "WARNING: USB automount suppression could not be enabled."
+fi

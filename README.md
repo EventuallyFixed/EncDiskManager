@@ -4,13 +4,13 @@
 
 Written in PHP and using out-of-box utilities on the NAS, it discovers attached USB disks, lets you unlock and mount encrypted volumes, and provides a controlled way to encrypt a whole USB disk with LUKS encryption and have an ext4 filesystem overlaid.
 
-**Current version:** 1.0.2 — developed and tested on the WD My Cloud EX4100.
+**Current version:** 1.1.0 — developed on the WD My Cloud EX4100.
 
 > [!WARNING]
 > **Encrypt + ext4 permanently erases and repartitions the entire selected USB disk.**
 > > All existing partitions and data on that disk will be lost. Back up anything important and check the selected device carefully before confirming.
 > 
-> **The WD NAS has a warning that says an attached disk is not recognised.**
+> **WD may report an attached encrypted disk as not recognised if automount suppression is inactive or bypassed.**
 > > On connecting the encrypted disk the LED flashes blue for a period, then turns a steady red, and clicking the USB symbol in the WD Admin landing page gives a message that the disk is not recognised. This message must be manually cleared, and the red LED turns blue on disconnecting the unrecognised disk.
 > 
 > **The WD NAS has a process that scans for connected disks.**
@@ -22,6 +22,7 @@ Written in PHP and using out-of-box utilities on the NAS, it discovers attached 
 
 ## Features
 
+- **Selective USB automount suppression:** while EDM is enabled, individual WD USB mount requests for disks containing LUKS are intercepted; unencrypted USB disks retain native WD mounting.
 - **USB disk inventory:** shows connected USB disks, partitions, encrypted mappings, capacity, mount points and connection state.
 - **Whole-disk encryption:** creates a GPT partition table, a LUKS2-encrypted partition and an ext4 filesystem, then mounts the new volume.
 - **Disk operations:** Unlock, Mount, Unmount and Lock are offered according to the current disk state.
@@ -32,6 +33,14 @@ Written in PHP and using out-of-box utilities on the NAS, it discovers attached 
 
 The interface refreshes disk information automatically. Disk operations also recheck live state before proceeding.
 
+## USB automount suppression
+
+EDM uses a temporary bind mount over the WD `usbmount` executable, retaining a copy of the original in `/usr/local/tmp/encdiskmanager`. No permanent WD firmware files are modified. EDM starts the overlay when enabled and removes it when stopped or uninstalled. If activation fails, EDM logs a warning and remains usable.
+
+The overlay has been functionally tested on the EX4100. It filters individual whole USB disk requests, including unregistered LUKS disks; a disk containing any LUKS partition is skipped as a whole. Internal SATA and RAID devices are outside the filter.
+
+Limitations: WD bulk `all` and `scanall` requests retain native behaviour. USB mounting before EDM starts is not suppressed. Lifecycle operations must not be run concurrently. Other NAS models may use different executable paths or runtime layouts. Existing WD USB hotplug issues may still occur.
+
 ## Compatibility
 
 - **Platform:** WD My Cloud OS5
@@ -39,11 +48,11 @@ The interface refreshes disk information automatically. Disk operations also rec
 - **Developed and tested on:** WD My Cloud EX4100 (ARMHF)
 - **Storage:** externally attached USB disks; the application is not intended to manage the NAS's internal system disks.
 
-Installable packages for several other WD My Cloud models are available in the [GitHub release](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.0.2). Those models have not all been independently validated on physical hardware.
+Installable packages for several other WD My Cloud models are available in the [GitHub release](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.1.0). Those models have not all been independently validated on physical hardware.
 
 ## Installation
 
-1. Download the `.bin` package matching your NAS model from the [v1.0.2 GitHub release](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.0.2).
+1. Download the `.bin` package matching your NAS model from the [v1.1.0 GitHub release](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.1.0).
 2. On the NAS, open the WD My Cloud dashboard and use the Apps page's manual installation option to install the package.
 3. Launch **Encrypted Disk Manager** from the NAS dashboard, using **HTTPS**.
 4. On first use, retrieve the one-time administrator setup code over SSH, then use it to create an administrator password.
@@ -59,7 +68,7 @@ Run this in an appropriately privileged SSH session on your NAS. Keep the code p
 The EX4100 installer is named:
 
 ```text
-EncDiskManager_1.0.2_WDMyCloudEX4100.bin
+EncDiskManager_1.1.0_WDMyCloudEX4100.bin
 ```
 
 **Do not install an archive or package intended for a different NAS model.**
@@ -160,7 +169,7 @@ The GitHub Actions workflows run additional syntax and fixture checks. Tests do 
 ## Project links
 
 - [Source code](https://github.com/EventuallyFixed/EncDiskManager)
-- [Version 1.0.2 installation packages](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.0.2)
+- [Version 1.1.0 installation packages](https://github.com/EventuallyFixed/EncDiskManager/releases/tag/v1.1.0)
 - [Issues and suggestions](https://github.com/EventuallyFixed/EncDiskManager/issues)
 
 # Screenshots
