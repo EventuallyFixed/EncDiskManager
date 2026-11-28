@@ -1,5 +1,5 @@
 Package: EncDiskManager
-Version: 1.0.2
+Version: 1.1.0
 Packager: Local
 Description: Encrypted Disk Manager for LUKS-encrypted USB storage on WD My Cloud OS5
 Icon: logo.svg
