@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
 const source = fs.readFileSync('app/web/index.php', 'utf8');
 const renderer = source.slice(source.indexOf('    function updateRow(row, item) {'), source.indexOf('    function sortRows()'));
+const errorRenderer = source.slice(source.indexOf('    function showOperationError('), source.indexOf('    function currentConnection()'));
 const start = source.indexOf("    table.addEventListener('click', async function (event) {");
 const end = source.indexOf('    // Show an open mapper', start);
 assert.ok(start >= 0 && end > start && renderer.length > 0);
@@ -23,7 +24,7 @@ async function check(action, before, after, fail = false, manual = false, cancel
     actions:Object.fromEntries(['unlock','mount','unmount','lock'].map(a => [a, enabled.includes(a)]))
   });
   const api = new Function('document','table','operationNotice','fetch','requestUnlockPassphrase','edmMarkUnplugUnsafe','refresh',
-    'var operationBusy = false;\n' + renderer + '\n' + source.slice(start,end) +
+    'var operationBusy = false;\n' + renderer + '\n' + errorRenderer + '\n' + source.slice(start,end) +
     '\nfunction pollInventory(){ refresh(); }\nreturn {updateRow, busy:()=>operationBusy};'
   )(document,table,notice,fetch,async()=>{prompts++;return cancel?null:{passphrase:'test'};},()=>{},()=>{refreshes++;});
   const buttons = () => [...row.querySelectorAll('[data-operation]')];
@@ -51,10 +52,14 @@ async function check(action, before, after, fail = false, manual = false, cancel
   assert.equal(button.textContent,label);
   assert.equal(button.classList.contains('operation-running'),false);
   assert.equal(button.hasAttribute('aria-busy'),false);
-  assert.equal(fail?notice.textContent.includes('test failure'):notice.textContent==='',true);
+  const error = row.cells[0].querySelector('.operation-error');
+  assert.equal(error.textContent, fail ? 'test failure' : '');
+  assert.equal(error.hidden, !fail);
+  assert.equal(error.getAttribute('role'), 'alert');
   states([]);
   api.updateRow(row,item(after));
   states(after);
+  assert.equal(error.hidden, !fail);
   assert.equal(row.querySelector('.configure-disk').disabled,true);
   dom.window.close();
 }
