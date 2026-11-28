@@ -1,0 +1,41 @@
+#!/bin/sh
+
+ORIGINAL=/usr/local/tmp/encdiskmanager/usbmount.original
+
+is_luks_disk()
+{
+    local disk="$1"
+    local dev
+
+    for dev in "/dev/$disk" "/dev/$disk"[0-9]*; do
+        [ -b "$dev" ] || continue
+
+        if [ "$(/usr/bin/blkid -p -s TYPE -o value "$dev" 2>/dev/null)" = "crypto_LUKS" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# Only intercept individual USB whole-disk requests.
+# Bulk requests retain native behaviour until separately supported.
+case "$1" in
+    sd[a-z]*)
+        case "${1#sd}" in
+            *[!a-z]*) ;;
+            *)
+                case "$(readlink -f "/sys/block/$1")" in
+                    /sys/devices/*/usb[0-9]*/*)
+                        if is_luks_disk "$1"; then
+                            /usr/sbin/led usb hotplug_done
+                            exit 0
+                        fi
+                        ;;
+                esac
+                ;;
+        esac
+        ;;
+esac
+
+exec "$ORIGINAL" "$@"
