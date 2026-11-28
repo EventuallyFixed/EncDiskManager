@@ -10,13 +10,15 @@ Written in PHP and using out-of-box utilities on the NAS, it discovers attached 
 > **Encrypt + ext4 permanently erases and repartitions the entire selected USB disk.**
 > > All existing partitions and data on that disk will be lost. Back up anything important and check the selected device carefully before confirming.
 > 
-> **WD may report an attached encrypted disk as not recognised if automount suppression is inactive or bypassed.**
-> > On connecting the encrypted disk the LED flashes blue for a period, then turns a steady red, and clicking the USB symbol in the WD Admin landing page gives a message that the disk is not recognised. This message must be manually cleared, and the red LED turns blue on disconnecting the unrecognised disk.
+> **The WD functionality to auto-mount an encrypted disk has been bypassed.**
+> > On switching on the Encrypted Disk Manager application in the Apps page, an overlay is applied that overrides the standard WD disk mounting logic. This ought to prevent the message in the Admin landing page to say that the disk is not recognised, and the LED turning red. In testing other disks used the WD logic and LUKS encrypted disks use the Encrypted Disk Manager process instead.
 > 
 > **The WD NAS has a process that scans for connected disks.**
 > > On disconnecting at the wrong time the result can be seen as high CPU usage.
 > > I have found that reconnecting the disk will normally reverse that high CPU usage, and a pause and disconnect some seconds later normally works to have low CPU usage after the disconnect.
 > > Sometimes this results in the NAS no longer detecting any further USB disks connected until after a reboot.
+> >
+> > The change above is aimed to prevent this behaviour.
 > > 
 > > To this day - and after several years - I have not lost any data as a result, but you should be aware that data loss is a possibility - use at your own risk.
 
